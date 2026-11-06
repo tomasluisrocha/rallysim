@@ -1,0 +1,30 @@
+# build output
+build/
+out/
+cmake-build-*/
+
+# Visual Studio and other editors
+.vs/
+*.user
+.vscode/
+.idea/
+
+# compiled files and debug symbols
+*.exe
+*.obj
+*.o
+*.pdb
+*.ilk
+*.lib
+a.out
+
+# local CMake settings
+CMakeUserPresets.json
+
+# generated and scratch files
+*.log
+tree.txt
+__pycache__/
+
+# telemetry output
+*.csv
