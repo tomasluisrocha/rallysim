@@ -1,9 +1,11 @@
-"""Top-down replay of a simulator CSV: path, heading and force vectors.
+"""Top-down replay of a simulator CSV: path, heading, and the force acting on a rigid body.
 
-Reads the telemetry only; it never touches the physics.
+Reads the telemetry only; it never touches the physics. It works on rigid-body files (quat and
+force columns) and on bicycle files (yaw, steer, speed and a_lat columns). A rigid body gets a
+red force arrow; a bicycle gets a front wheel turned by the steer angle.
 
   py tools/topdown.py run.csv                 interactive window with a time slider
-  py tools/topdown.py run.csv --static        whole path with force arrows every N rows
+  py tools/topdown.py run.csv --static        whole path with arrows every N rows
   py tools/topdown.py run.csv --save out.png  write the static view to a file
 """
 import argparse
@@ -13,22 +15,30 @@ import matplotlib
 import numpy as np
 import pandas as pd
 
-BODY_LENGTH = 4.0  # m, drawn rectangle
-BODY_WIDTH = 1.8   # m
+BODY_LENGTH = 4.0   # m, drawn rectangle
+BODY_WIDTH = 1.8    # m
+WHEEL_LENGTH = 1.0  # m, drawn front wheel (bicycle files only)
 
-REQUIRED = ["pos.x", "pos.y", "quat.w", "quat.x", "quat.y", "quat.z", "force.x", "force.y"]
+RIGID_BODY = ["pos.x", "pos.y", "quat.w", "quat.x", "quat.y", "quat.z", "force.x", "force.y"]
+BICYCLE = ["pos.x", "pos.y", "yaw", "steer", "speed", "a_lat"]
 
 
 def load(path):
     df = pd.read_csv(path, comment="#")
-    missing = [c for c in REQUIRED if c not in df.columns]
-    if missing:
-        sys.exit(f"{path}: missing columns {missing}. Run the simulator that writes force columns.")
-    return df
+    if all(c in df.columns for c in RIGID_BODY) or all(c in df.columns for c in BICYCLE):
+        return df
+    sys.exit(f"{path}: not a rigid-body file (needs {RIGID_BODY}) or a bicycle file (needs {BICYCLE}).")
+
+
+def is_bicycle(df):
+    return "yaw" in df.columns
 
 
 def heading(df):
     """Direction of the body x axis in the world frame, projected on the ground (unit vectors)."""
+    if is_bicycle(df):
+        yaw = df["yaw"].to_numpy()
+        return np.cos(yaw), np.sin(yaw)
     w, x, y, z = (df[f"quat.{c}"].to_numpy() for c in "wxyz")
     hx = 1 - 2 * (y * y + z * z)
     hy = 2 * (x * y + w * z)
@@ -45,6 +55,14 @@ def body_outline(px, py, hx, hy):
     corners = [(a, b), (a, -b), (-a, -b), (-a, b), (a, b)]
     return ([px + c * lx + d * sx for c, d in corners],
             [py + c * ly + d * sy for c, d in corners])
+
+
+def wheel_segment(px, py, yaw, steer):
+    """End points of the front wheel: centred on the nose of the body, turned by `steer` from the heading."""
+    hx, hy = np.cos(yaw), np.sin(yaw)
+    cx, cy = px + hx * BODY_LENGTH / 2, py + hy * BODY_LENGTH / 2
+    wx, wy = np.cos(yaw + steer) * WHEEL_LENGTH / 2, np.sin(yaw + steer) * WHEEL_LENGTH / 2
+    return [cx - wx, cx + wx], [cy - wy, cy + wy]
 
 
 def arrow_scale(df, step):
@@ -66,21 +84,28 @@ def setup_axes(plt, df, title):
 
 
 def draw_static(plt, df, path, step):
-    fig, ax = setup_axes(plt, df, f"{path}: force vectors every {step} rows")
+    fig, ax = setup_axes(plt, df, f"{path}: every {step} rows")
     hx, hy = heading(df)
     idx = np.arange(0, len(df), step)
     px, py = df["pos.x"].to_numpy()[idx], df["pos.y"].to_numpy()[idx]
     ax.plot(px, py, "o", ms=3, color="tab:blue", zorder=3)
     ax.quiver(px, py, hx[idx], hy[idx], angles="xy", scale_units="xy", scale=1 / 1.2,
               width=0.003, color="0.25", zorder=2, label="heading (1.2 m)")
-    k = arrow_scale(df, step)
-    if k > 0:
-        fx, fy = df["force.x"].to_numpy()[idx], df["force.y"].to_numpy()[idx]
-        ax.quiver(px, py, fx * k, fy * k, angles="xy", scale_units="xy", scale=1,
-                  width=0.004, color="tab:red", zorder=4,
-                  label=f"force x-y ({1 / k:.0f} N per metre of arrow)")
+
+    if is_bicycle(df):
+        yaw, steer = df["yaw"].to_numpy()[idx], df["steer"].to_numpy()[idx]
+        for i in range(len(idx)):
+            ax.plot(*wheel_segment(px[i], py[i], yaw[i], steer[i]), color="black", lw=3,
+                    solid_capstyle="butt", zorder=5, label="front wheel" if i == 0 else None)
     else:
-        ax.text(0.5, 0.92, "no horizontal force in this run", transform=ax.transAxes, ha="center")
+        k = arrow_scale(df, step)
+        if k > 0:
+            fx, fy = df["force.x"].to_numpy()[idx], df["force.y"].to_numpy()[idx]
+            ax.quiver(px, py, fx * k, fy * k, angles="xy", scale_units="xy", scale=1,
+                      width=0.004, color="tab:red", zorder=4,
+                      label=f"force x-y ({1 / k:.0f} N per metre of arrow)")
+        else:
+            ax.text(0.5, 0.92, "no horizontal force in this run", transform=ax.transAxes, ha="center")
     ax.legend(loc="best")
     return fig
 
@@ -91,15 +116,25 @@ def draw_slider(plt, df, path, step):
     fig, ax = setup_axes(plt, df, path)
     fig.subplots_adjust(bottom=0.2)
     hx, hy = heading(df)
-    k = arrow_scale(df, step)
     px, py = df["pos.x"].to_numpy(), df["pos.y"].to_numpy()
-    fx, fy = df["force.x"].to_numpy(), df["force.y"].to_numpy()
     t = df["time"].to_numpy() if "time" in df.columns else np.arange(len(df))
+    bicycle = is_bicycle(df)
 
     body, = ax.plot([], [], color="tab:blue", lw=2, zorder=3)
     trail, = ax.plot([], [], color="tab:blue", lw=1.5, zorder=2)
-    arrow = ax.annotate("", xy=(0, 0), xytext=(0, 0),
-                        arrowprops=dict(arrowstyle="-|>", color="tab:red", lw=2), zorder=4)
+
+    if bicycle:
+        yaw, steer = df["yaw"].to_numpy(), df["steer"].to_numpy()
+        speed, a_lat = df["speed"].to_numpy(), df["a_lat"].to_numpy()
+        wheel, = ax.plot([], [], color="black", lw=4, solid_capstyle="butt", zorder=5, label="front wheel")
+    else:
+        k = arrow_scale(df, step)
+        fx, fy = df["force.x"].to_numpy(), df["force.y"].to_numpy()
+        arrow = ax.annotate("", xy=(0, 0), xytext=(0, 0),
+                            arrowprops=dict(arrowstyle="-|>", color="tab:red", lw=2), zorder=4)
+        ax.plot([], [], color="tab:red", lw=2,
+                label=f"force x-y ({1 / k:.0f} N per metre)" if k > 0 else "force x-y (none)")
+    ax.legend(loc="upper right")
     slider = Slider(fig.add_axes([0.12, 0.04, 0.76, 0.03]), "row", 0, len(df) - 1,
                     valinit=0, valstep=1)
 
@@ -107,9 +142,14 @@ def draw_slider(plt, df, path, step):
         i = int(slider.val)
         body.set_data(*body_outline(px[i], py[i], hx[i], hy[i]))
         trail.set_data(px[: i + 1], py[: i + 1])
-        arrow.xy = (px[i] + fx[i] * k, py[i] + fy[i] * k)
-        arrow.set_position((px[i], py[i]))
-        ax.set_title(f"{path}   t = {t[i]:.3f} s   force = ({fx[i]:.0f}, {fy[i]:.0f}) N")
+        if bicycle:
+            wheel.set_data(*wheel_segment(px[i], py[i], yaw[i], steer[i]))
+            ax.set_title(f"{path}   t = {t[i]:.3f} s   steer = {np.degrees(steer[i]):+.1f} deg   "
+                         f"speed = {speed[i]:.1f} m/s   a_lat = {a_lat[i]:+.2f} m/s^2")
+        else:
+            arrow.xy = (px[i] + fx[i] * k, py[i] + fy[i] * k)
+            arrow.set_position((px[i], py[i]))
+            ax.set_title(f"{path}   t = {t[i]:.3f} s   force = ({fx[i]:.0f}, {fy[i]:.0f}) N")
         fig.canvas.draw_idle()
 
     slider.on_changed(update)
