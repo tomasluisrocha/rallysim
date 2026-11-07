@@ -6,7 +6,7 @@ plus one for the final state. The simulator writes it; the tools in `tools/` onl
 ## File layout
 
 ```
-# schema=1 dt=0.001 units: step[count] time[s] pos.x[m] ...
+# schema=2 dt=0.001 units: step[count] time[s] pos.x[m] ...
 step,time,pos.x,...
 0,0,0,...
 ```
@@ -88,10 +88,29 @@ velocity of the CG in the car's own frame, and the axle slip angles and lateral 
 | 11 | `yaw_rate` | rad/s | Angular velocity about the vertical axis |
 | 12 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
 | 13 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
-| 14 | `alpha_f` | rad | Slip angle of the front axle |
-| 15 | `alpha_r` | rad | Slip angle of the rear axle |
-| 16 | `fy_f` | N | Lateral force of the front axle, sideways to the wheels |
-| 17 | `fy_r` | N | Lateral force of the rear axle |
+| 14 | `axle.front.slipAngle` | rad | Slip angle of the front axle: wheel heading minus the direction of travel |
+| 15 | `axle.rear.slipAngle` | rad | Slip angle of the rear axle |
+| 16 | `axle.front.Fy` | N | Lateral force of the front axle, sideways to the wheels |
+| 17 | `axle.rear.Fy` | N | Lateral force of the rear axle |
+| 18 | `wheel.FL.Fz` | N | Vertical load on the front-left wheel, with load transfer |
+| 19 | `wheel.FR.Fz` | N | Front-right wheel |
+| 20 | `wheel.RL.Fz` | N | Rear-left wheel |
+| 21 | `wheel.RR.Fz` | N | Rear-right wheel |
+| 22 | `axle.front.grip` | N | Largest force the front axle can take: the sum of mu(Fz) Fz over its wheels |
+| 23 | `axle.rear.grip` | N | Rear axle |
+| 24 | `axle.rear.Fx` | N | Longitudinal force the rear axle passed to the road: `drive_force` limited by `axle.rear.grip` |
+
+The four `wheel.*.Fz` columns are the wheel loads with the longitudinal transfer (from the traction-limited
+`drive_force`) and the lateral transfer (from the forward speed times `yaw_rate`), shared between the axles by
+`front_transfer_share`. They always add up to the weight: when a wheel lifts, the other wheel of its axle carries the
+whole axle, and when an axle lifts the other one carries the whole car.
+
+`axle.*.grip` uses those loads with load sensitivity: the friction coefficient of each tyre falls as its load rises,
+so moving load between the two wheels of an axle lowers the axle's grip. `axle.front.Fy` is limited by
+`axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
+
+Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
+names above, so a plot script can build a name from an axle or wheel label (book, section 11.1).
 
 The columns from `steer` on belong to the step that starts from that row's state. The slip angles use a
 forward speed of at least `kMinForwardSpeed` (1 m/s), so below that `u` and the slip angles do not

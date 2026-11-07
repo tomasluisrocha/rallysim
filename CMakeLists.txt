@@ -75,19 +75,27 @@ add_executable(test_golden_bicycle tests/test_golden_bicycle.cpp)
 target_link_libraries(test_golden_bicycle PRIVATE rallysim_core)
 add_test(NAME golden_bicycle COMMAND test_golden_bicycle)
 
- 
+
 add_executable(test_single_track tests/test_single_track.cpp)
 target_link_libraries(test_single_track PRIVATE rallysim_core)
 add_test(NAME single_track COMMAND test_single_track)
- 
+
 add_executable(test_single_track_script tests/test_single_track_script.cpp)
 target_link_libraries(test_single_track_script PRIVATE rallysim_core)
 add_test(NAME single_track_script COMMAND test_single_track_script)
- 
+
 add_executable(test_single_track_telemetry tests/test_single_track_telemetry.cpp)
 target_link_libraries(test_single_track_telemetry PRIVATE rallysim_core)
 add_test(NAME single_track_telemetry COMMAND test_single_track_telemetry)
- 
+
 add_executable(test_single_track_behaviour tests/test_single_track_behaviour.cpp)
 target_link_libraries(test_single_track_behaviour PRIVATE rallysim_core)
 add_test(NAME single_track_behaviour COMMAND test_single_track_behaviour)
+
+add_executable(test_fixed_step tests/test_fixed_step.cpp)
+target_link_libraries(test_fixed_step PRIVATE rallysim_core)
+add_test(NAME fixed_step COMMAND test_fixed_step)
+
+add_executable(test_golden_single_track tests/test_golden_single_track.cpp)
+target_link_libraries(test_golden_single_track PRIVATE rallysim_core)
+add_test(NAME golden_single_track COMMAND test_golden_single_track)

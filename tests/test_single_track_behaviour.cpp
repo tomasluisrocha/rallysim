@@ -219,10 +219,14 @@ int main()
         }
     }
 
-    // Friction-limited cornering: far more steer than the grip can follow. The lateral force on the
-    // body never exceeds mu m g, the front axle ends at its limit, and the settled lateral
-    // acceleration is mu g cos(steer): with the front axle saturated, the yaw balance gives the rear
-    // axle lf / lr times the front force, and the total sideways force is Fyf cos(steer) L / lr.
+    // Friction-limited cornering: far more steer than the grip can follow, at a held speed. The
+    // sideways force on the body never exceeds mu m g, and the front axle ends at its limit. With
+    // the front axle saturated, the yaw balance gives the rear axle lf / lr times the front force
+    // cos(steer), so the total sideways force is Fyf cos(steer) L / lr and the settled lateral
+    // acceleration is
+    //   a_y = mu cos(steer) (g - a_x h / lr)
+    // The speed controller has to push forward to cancel the pull of the steered front tyre, and that
+    // acceleration a_x moves load to the rear, which lowers the front limit: load transfer at work.
     {
         struct setup
         {
@@ -232,6 +236,7 @@ int main()
         {
             single_track_params q = p;
             q.friction_coefficient = c.mu;
+            q.load_sensitivity = 0; // the closed form below has grip = mu Fz; sensitivity is tested after this block
             const single_track_run r = constant_steer(q, 15.0, c.steer, 20000);
 
             const Real limit = c.mu * q.chassis.mass * kGravity;
@@ -248,17 +253,48 @@ int main()
             std::snprintf(what, sizeof what, "mu %.1f, steer %.1f: the sideways force never exceeds mu m g", c.mu, c.steer);
             check_true(what, worst_force <= limit + 1e-6);
 
-            const body_velocity vel = velocity_in_body(s);
-            const axle_pair loads = axle_loads(q);
-            const axle_pair fy = lateral_forces(q, slip_angles(q, vel, c.steer), loads);
+            const single_track_input in = driver_input(r, s, r.steps * r.dt);
+            const single_track_forces f = evaluate(s, q, in);
+            const Real a_x = f.a_x;
+            const body_velocity vel = f.vel;
+            const axle_pair loads = axle_loads(q, a_x);
             std::snprintf(what, sizeof what, "mu %.1f, steer %.1f: the front axle is at its friction limit", c.mu, c.steer);
-            check_near(what, fy.front, c.mu * loads.front, 1e-6);
+            check_near(what, f.fy.front, c.mu * loads.front, 1e-6);
+
+            std::snprintf(what, sizeof what, "mu %.1f, steer %.1f: the speed controller pushes forward (load moves to the rear)", c.mu, c.steer);
+            check_true(what, a_x > 0.5 && loads.front < axle_loads(q).front);
 
             const Real a_y = std::hypot(vel.u, vel.v) * vel.r;
-            const Real expected = c.mu * kGravity * std::cos(c.steer);
-            std::snprintf(what, sizeof what, "mu %.1f, steer %.1f: settled lateral acceleration = mu g cos(steer), within 1%%", c.mu, c.steer);
+            const Real expected = c.mu * std::cos(c.steer) * (kGravity - a_x * q.cg_height / q.lr);
+            std::snprintf(what, sizeof what, "mu %.1f, steer %.1f: settled lateral acceleration = mu cos(steer) (g - a_x h / lr), within 1%%", c.mu, c.steer);
             check_true(what, std::fabs(a_y / expected - 1.0) < 0.01);
         }
+    }
+
+    // Load sensitivity at the limit: lateral load transfer lowers the grip of the axle that carries it,
+    // so it cuts the cornering limit, and moving the transfer to the front (front_transfer_share up, like a
+    // stiffer front anti-roll bar) makes a front-limited car reach a lower lateral acceleration. Below the
+    // limit nothing changes, because the cornering stiffness does not depend on the load.
+    {
+        auto settled_a_y = [&](Real sensitivity, Real share, Real steer)
+        {
+            single_track_params q = p;
+            q.load_sensitivity = sensitivity;
+            q.front_transfer_share = share;
+            const rigid_body_state s = run(constant_steer(q, 15.0, steer, 20000));
+            const body_velocity vel = velocity_in_body(s);
+            return std::hypot(vel.u, vel.v) * vel.r;
+        };
+
+        const Real off = settled_a_y(0.0, 0.5, 0.3), on = settled_a_y(0.2, 0.5, 0.3);
+        check_true("sensitivity: load transfer lowers the cornering limit", on < off - 0.05);
+
+        // 0.5 and 0.7 keep this car front-limited; at 0.3 the rear loses enough grip to become the limit
+        const Real front_share = settled_a_y(0.2, 0.7, 0.3), even_share = settled_a_y(0.2, 0.5, 0.3);
+        check_true("sensitivity: more transfer on the front axle, lower limit for a front-limited car",
+                   front_share < even_share - 0.05);
+
+        check_near("sensitivity: no effect in the linear range", settled_a_y(0.2, 0.7, 0.02), settled_a_y(0.0, 0.5, 0.02), 1e-9);
     }
 
     return finish("single_track_behaviour");

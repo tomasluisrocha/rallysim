@@ -9,7 +9,7 @@
 
 namespace rallysim
 {
-    inline constexpr int kTelemetrySchema = 1;
+    inline constexpr int kTelemetrySchema = 2; // 2: single-track axle and wheel columns renamed to dotted paths
 
     // Writes one CSV row per physics step. See docs/telemetry_schema.md for the format.
     class telemetry_writer

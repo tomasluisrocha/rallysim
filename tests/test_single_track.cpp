@@ -115,6 +115,173 @@ int main()
         check_true("loads: rear is heavier (CG closer to the rear axle)", w.rear > w.front);
     }
 
+    // load transfer: braking moves load to the front axle, accelerating to the rear, m a_x h / L
+    {
+        const Real shift = p.chassis.mass * 3.0 * p.cg_height / p.wheelbase(); // at |a_x| = 3 m/s^2
+        const axle_pair rest = axle_loads(p, 0.0);
+        const axle_pair accel = axle_loads(p, 3.0);
+        const axle_pair brake = axle_loads(p, -3.0);
+
+        check_true("transfer: a_x = 0 is the static split", rest.front == axle_loads(p).front && rest.rear == axle_loads(p).rear);
+        check_near("transfer: accelerating, the front loses m a_x h / L", accel.front, rest.front - shift, 1e-9);
+        check_near("transfer: accelerating, the rear gains the same", accel.rear, rest.rear + shift, 1e-9);
+        check_near("transfer: braking, the front gains m a_x h / L", brake.front, rest.front + shift, 1e-9);
+        check_near("transfer: braking, the rear loses the same", brake.rear, rest.rear - shift, 1e-9);
+        check_near("transfer: the loads always add up to the weight", brake.front + brake.rear, weight, 1e-9);
+
+        // braking at 1 g with the 0.5 m CG: about 2354 N moves to the front
+        const axle_pair hard = axle_loads(p, -kGravity);
+        check_near("transfer: braking at 1 g moves m g h / L", hard.front - rest.front, p.chassis.mass * kGravity * 0.5 / 2.5, 1e-9);
+
+        // a taller CG moves proportionally more load
+        single_track_params tall = p;
+        tall.cg_height = 1.0;
+        check_near("transfer: twice the CG height, twice the transfer",
+                   axle_loads(tall, -3.0).front - rest.front, 2 * shift, 1e-9);
+
+        // the grip follows the load: braking raises the front grip and lowers the rear one
+        const axle_pair grip_rest = axle_grip(p, loads_per_wheel(p, 0.0, 0.0));
+        const axle_pair grip_brake = axle_grip(p, loads_per_wheel(p, -3.0, 0.0));
+        check_true("transfer: braking raises the front grip and lowers the rear one",
+                   grip_brake.front > grip_rest.front && grip_brake.rear < grip_rest.rear);
+
+        // an extreme acceleration cannot make an axle load negative: the front lifts and the rear carries
+        // the whole car (with a negative load the friction limits would be upside down)
+        const axle_pair wheelie = axle_loads(p, 100.0);
+        check_near("transfer: wheelie, the front axle carries nothing", wheelie.front, 0.0, 1e-9);
+        check_near("transfer: wheelie, the rear axle carries the weight", wheelie.rear, weight, 1e-9);
+        const axle_pair stoppie = axle_loads(p, -100.0);
+        check_near("transfer: stoppie, the rear axle carries nothing", stoppie.rear, 0.0, 1e-9);
+        check_near("transfer: stoppie, the front axle carries the weight", stoppie.front, weight, 1e-9);
+    }
+
+    // load sensitivity: the friction coefficient falls as the load rises, so an axle with its load
+    // shared unevenly between its wheels has less grip than with it shared evenly
+    {
+        const Real mu0 = p.friction_coefficient, k = p.load_sensitivity, fz0 = p.nominal_wheel_load;
+        check_near("sensitivity: mu at the nominal load is mu0", peak_friction(p, fz0), mu0, 1e-12);
+        check_near("sensitivity: mu at twice the nominal load", peak_friction(p, 2 * fz0), mu0 * (1 - k), 1e-12);
+        check_near("sensitivity: mu at no load", peak_friction(p, 0.0), mu0 * (1 + k), 1e-12);
+        check_near("sensitivity: mu never goes below zero", peak_friction(p, 100 * fz0), 0.0, 1e-12);
+
+        // grip of one wheel is mu(fz) fz = mu0 (fz (1 + k) - k fz^2 / fz0); moving d from one wheel to the
+        // other of an axle loses 2 mu0 k d^2 / fz0 of grip
+        const Real d = 1000.0;
+        const wheel_loads even{3000, 3000, 3000, 3000};
+        const wheel_loads uneven{3000 - d, 3000 + d, 3000, 3000};
+        const axle_pair g_even = axle_grip(p, even), g_uneven = axle_grip(p, uneven);
+        check_near("sensitivity: grip of an evenly loaded axle", g_even.front, 2 * mu0 * fz0, 1e-9);
+        check_near("sensitivity: moving d between the wheels loses 2 mu0 k d^2 / fz0",
+                   g_even.front - g_uneven.front, 2 * mu0 * k * d * d / fz0, 1e-9);
+        check_near("sensitivity: the other axle is untouched", g_uneven.rear, g_even.rear, 1e-12);
+
+        // with no sensitivity the grip is mu times the load, however it is shared
+        single_track_params flat = p;
+        flat.load_sensitivity = 0;
+        check_near("sensitivity off: grip = mu Fz", axle_grip(flat, uneven).front, 6000.0, 1e-9);
+        flat.friction_coefficient = 0.5;
+        check_near("sensitivity off: half the friction coefficient, half the grip", axle_grip(flat, uneven).front, 3000.0, 1e-9);
+
+        // the side that takes more of the lateral transfer loses more grip: in a turn, a front share of 1
+        // leaves the front axle with less grip and the rear with more than a share of 0
+        single_track_params front_heavy = p, rear_heavy = p;
+        front_heavy.front_transfer_share = 1.0;
+        rear_heavy.front_transfer_share = 0.0;
+        const axle_pair gf = axle_grip(front_heavy, loads_per_wheel(front_heavy, 0.0, 6.0));
+        const axle_pair gr = axle_grip(rear_heavy, loads_per_wheel(rear_heavy, 0.0, 6.0));
+        check_true("sensitivity: more transfer on the front, less front grip", gf.front < gr.front);
+        check_true("sensitivity: and more rear grip", gf.rear > gr.rear);
+    }
+
+    // traction limit of the rear-drive axle: F = mu (W lf / L + F h / L) at the limit
+    {
+        const Real mu = p.friction_coefficient, L = p.wheelbase(), h = p.cg_height;
+        const Real forward = mu * weight * p.lf / (L - mu * h);
+        const Real backward = mu * weight * p.lf / (L + mu * h);
+        check_near("traction: a small force is passed unchanged", traction_limited_force(p, 500.0), 500.0, 1e-12);
+        check_near("traction: accelerating, limit mu W lf / (L - mu h)", traction_limited_force(p, 1e6), forward, 1e-9);
+        check_near("traction: braking, limit mu W lf / (L + mu h)", traction_limited_force(p, -1e6), -backward, 1e-9);
+        check_near("traction: at the limit the force equals mu times the rear load it causes",
+                   forward, mu * axle_loads(p, forward / p.chassis.mass).rear, 1e-9);
+        check_near("traction: a_x estimate uses the limited force",
+                   longitudinal_acceleration(p, single_track_input{0.0, 1e6}), forward / p.chassis.mass, 1e-12);
+    }
+
+    // lateral acceleration estimate: forward speed times yaw rate, positive when turning left
+    {
+        check_near("a_y: u * r", lateral_acceleration(body_velocity{20, 0.5, 0.2}), 4.0);
+        check_near("a_y: negative when turning right", lateral_acceleration(body_velocity{20, 0, -0.2}), -4.0);
+        check_near("a_y: zero on a straight", lateral_acceleration(body_velocity{20, 0, 0}), 0.0);
+    }
+
+    // loads per wheel: the longitudinal transfer between the axles, then the lateral transfer between the sides
+    {
+        const Real w = weight;
+        const auto sum = [](const wheel_loads &l)
+        { return l.front_left + l.front_right + l.rear_left + l.rear_right; };
+
+        // no acceleration: static loads, left and right equal
+        const wheel_loads rest = loads_per_wheel(p, 0.0, 0.0);
+        check_near("wheels: at rest the front wheels are equal", rest.front_left, rest.front_right);
+        check_near("wheels: at rest the rear wheels are equal", rest.rear_left, rest.rear_right);
+        check_near("wheels: at rest each front wheel carries half the front axle", rest.front_left, axle_loads(p).front / 2, 1e-9);
+        check_near("wheels: at rest the loads add up to the weight", sum(rest), w, 1e-9);
+
+        // a left turn at a_y = 4: m a_y h / t = 1600 N goes from the left side to the right, half through each axle
+        const Real total = p.chassis.mass * 4.0 * p.cg_height / p.track_width;
+        const wheel_loads left = loads_per_wheel(p, 0.0, 4.0);
+        check_near("wheels: left turn, front left loses its share", left.front_left, rest.front_left - 0.5 * total, 1e-9);
+        check_near("wheels: left turn, front right gains it", left.front_right, rest.front_right + 0.5 * total, 1e-9);
+        check_near("wheels: left turn, rear left loses its share", left.rear_left, rest.rear_left - 0.5 * total, 1e-9);
+        check_near("wheels: left turn, rear right gains it", left.rear_right, rest.rear_right + 0.5 * total, 1e-9);
+        check_near("wheels: left turn, the right side is heavier by 2 m a_y h / t",
+                   (left.front_right + left.rear_right) - (left.front_left + left.rear_left), 2 * total, 1e-9);
+        check_near("wheels: left turn, the loads add up to the weight", sum(left), w, 1e-9);
+
+        // right turn mirrors it
+        const wheel_loads right = loads_per_wheel(p, 0.0, -4.0);
+        check_near("wheels: mirror, front", right.front_left, left.front_right, 1e-9);
+        check_near("wheels: mirror, front other side", right.front_right, left.front_left, 1e-9);
+        check_near("wheels: mirror, rear", right.rear_left, left.rear_right, 1e-9);
+        check_near("wheels: mirror, rear other side", right.rear_right, left.rear_left, 1e-9);
+
+        // the front share decides how the transfer is split between the axles
+        single_track_params front_only = p, rear_only = p;
+        front_only.front_transfer_share = 1.0;
+        rear_only.front_transfer_share = 0.0;
+        const wheel_loads f = loads_per_wheel(front_only, 0.0, 4.0);
+        check_near("wheels: share 1, the rear wheels stay equal", f.rear_left, f.rear_right, 1e-9);
+        check_near("wheels: share 1, the front takes all of it", f.front_right - f.front_left, 2 * total, 1e-9);
+        const wheel_loads r = loads_per_wheel(rear_only, 0.0, 4.0);
+        check_near("wheels: share 0, the front wheels stay equal", r.front_left, r.front_right, 1e-9);
+        check_near("wheels: share 0, the rear takes all of it", r.rear_right - r.rear_left, 2 * total, 1e-9);
+
+        // a taller CG or a narrower track moves proportionally more
+        single_track_params tall = p, narrow = p;
+        tall.cg_height = 1.0;
+        narrow.track_width = 0.75;
+        check_near("wheels: twice the CG height, twice the transfer",
+                   loads_per_wheel(tall, 0.0, 4.0).front_right - rest.front_right, 2 * 0.5 * total, 1e-9);
+        check_near("wheels: half the track, twice the transfer",
+                   loads_per_wheel(narrow, 0.0, 4.0).front_right - rest.front_right, 2 * 0.5 * total, 1e-9);
+
+        // braking and cornering together: each axle keeps the load it has with the longitudinal transfer
+        const wheel_loads both = loads_per_wheel(p, -5.0, 4.0);
+        const axle_pair axle = axle_loads(p, -5.0);
+        check_near("wheels: braking in a turn, the front axle load", both.front_left + both.front_right, axle.front, 1e-9);
+        check_near("wheels: braking in a turn, the rear axle load", both.rear_left + both.rear_right, axle.rear, 1e-9);
+        check_near("wheels: braking in a turn, the loads add up to the weight", sum(both), w, 1e-9);
+
+        // a lot of lateral acceleration lifts the inner front wheel (3000 N of transfer on a 2825 N half axle);
+        // the outer wheel carries the whole axle, the weight is kept, and no wheel goes negative
+        const wheel_loads lift = loads_per_wheel(p, 0.0, 15.0);
+        check_near("wheels: lifted inner front wheel carries nothing", lift.front_left, 0.0, 1e-9);
+        check_near("wheels: the outer front wheel carries the whole axle", lift.front_right, axle_loads(p).front, 1e-9);
+        check_true("wheels: the rear inner wheel has not lifted at this acceleration", lift.rear_left > 0);
+        check_near("wheels: lift keeps the weight", sum(lift), w, 1e-9);
+        check_near("wheels: the rear axle is untouched by the front lift", lift.rear_right - lift.rear_left, 2 * 0.5 * (p.chassis.mass * 15.0 * p.cg_height / p.track_width), 1e-9);
+    }
+
     // velocity in the body frame: the same world velocity is forward or sideways depending on heading
     {
         const body_velocity a = velocity_in_body(car(0.0, 10.0, 0.0, 0.0));
@@ -170,28 +337,41 @@ int main()
 
     // lateral forces
     {
-        const axle_pair loads = axle_loads(p);
+        const axle_pair grip = axle_grip(p, loads_per_wheel(p, 0.0, 0.0));
 
-        const axle_pair none = lateral_forces(p, axle_pair{0, 0}, loads);
+        const axle_pair none = lateral_forces(p, axle_pair{0, 0}, grip);
         check_true("force: zero slip gives zero force", none.front == 0.0 && none.rear == 0.0);
 
-        const axle_pair lin = lateral_forces(p, axle_pair{0.01, -0.02}, loads);
+        const axle_pair lin = lateral_forces(p, axle_pair{0.01, -0.02}, grip);
         check_near("force: linear range, front", lin.front, 60000 * 0.01, 1e-9);
         check_near("force: linear range, rear (negative slip, negative force)", lin.rear, 70000 * -0.02, 1e-9);
 
-        const axle_pair sat = lateral_forces(p, axle_pair{0.5, -0.5}, loads);
-        check_near("force: front saturates at mu Fz", sat.front, loads.front, 1e-9);
-        check_near("force: rear saturates at -mu Fz", sat.rear, -loads.rear, 1e-9);
+        const axle_pair sat = lateral_forces(p, axle_pair{0.5, -0.5}, grip);
+        check_near("force: front saturates at its grip", sat.front, grip.front, 1e-9);
+        check_near("force: rear saturates at minus its grip", sat.rear, -grip.rear, 1e-9);
 
-        // continuous at the limit: the slip angle where C alpha = mu Fz gives exactly mu Fz
-        const axle_pair knee = lateral_forces(p, axle_pair{loads.front / 60000, 0}, loads);
-        check_near("force: continuous at the friction limit", knee.front, loads.front, 1e-9);
+        // continuous at the limit: the slip angle where C alpha = grip gives exactly the grip
+        const axle_pair knee = lateral_forces(p, axle_pair{grip.front / 60000, 0}, grip);
+        check_near("force: continuous at the friction limit", knee.front, grip.front, 1e-9);
+    }
 
-        // grip is mu times load: half the friction coefficient halves the limit
-        single_track_params slippery = p;
-        slippery.friction_coefficient = 0.5;
-        const axle_pair half = lateral_forces(slippery, axle_pair{0.5, 0.5}, loads);
-        check_near("force: half the friction coefficient, half the limit", half.front, 0.5 * loads.front, 1e-9);
+    // evaluate: the rear axle shares its grip between the drive force and the side force
+    {
+        const rigid_body_state s = car(0.0, 20.0, -2.5, 0.0); // sliding right: both axles saturate
+        const single_track_forces plain = evaluate(s, p, single_track_input{0.0, 0.0});
+        const single_track_forces driven = evaluate(s, p, single_track_input{0.0, 3000.0});
+        check_near("circle: with no drive the rear side force is the whole grip", plain.fy.rear, plain.grip.rear, 1e-9);
+        check_near("circle: the drive force passes unchanged below the grip", driven.fx_rear, 3000.0, 1e-12);
+        check_near("circle: Fx^2 + Fy^2 = grip^2 on the rear axle",
+                   driven.fx_rear * driven.fx_rear + driven.fy.rear * driven.fy.rear,
+                   driven.grip.rear * driven.grip.rear, 1e-6);
+
+        // a drive force beyond the grip is cut to the grip, and leaves nothing for the side force
+        const single_track_forces spin = evaluate(s, p, single_track_input{0.0, 1e6});
+        check_near("circle: the drive force is limited by the rear grip", spin.fx_rear, spin.grip.rear, 1e-9);
+        check_near("circle: wheelspin leaves no side grip", spin.fy.rear, 0.0, 1e-9);
+        const single_track_forces lock = evaluate(s, p, single_track_input{0.0, -1e6});
+        check_near("circle: so is a braking force", lock.fx_rear, -lock.grip.rear, 1e-9);
     }
 
     // wrench: frames, lever arms and gravity
@@ -219,6 +399,24 @@ int main()
                    p.lf * fy.front * std::cos(steer) - p.lr * fy.rear, 1e-9);
         check_near("wrench: general, no roll torque", c.torque.x, 0.0, 1e-9);
         check_near("wrench: general, no pitch torque", c.torque.y, 0.0, 1e-9);
+
+        // braking: the wrench uses the loads with transfer. Both axles are saturated here (sideways speed
+        // of -2.5 m/s at 20 m/s), so the force on the body is the sum of the limits at those loads; the
+        // rear axle also brakes, so its side force is what the braking force leaves (friction circle).
+        {
+            const Real steer2 = 0.5, drive = -3000.0;
+            const rigid_body_state t = car(0.0, 20.0, -2.5, 0.0);
+            const wrench e = single_track_wrench(t, p, single_track_input{steer2, drive});
+            const axle_pair grip = axle_grip(p, loads_per_wheel(p, drive / p.chassis.mass, 0.0));
+            const Real rear_side = std::sqrt(grip.rear * grip.rear - drive * drive);
+            check_true("wrench: braking raises the front grip", grip.front > axle_grip(p, loads_per_wheel(p, 0, 0)).front);
+            check_near("wrench: braking, force along the car = braking force - Fyf sin(steer)", to_body(t.q, e.force).x,
+                       drive - grip.front * std::sin(steer2), 1e-9);
+            check_near("wrench: braking, sideways force from the shifted loads", e.force.y,
+                       grip.front * std::cos(steer2) + rear_side, 1e-9);
+            check_near("wrench: braking, yaw moment from the shifted loads", e.torque.z,
+                       p.lf * grip.front * std::cos(steer2) - p.lr * rear_side, 1e-9);
+        }
 
         // steering left from a straight line pushes the nose left: positive yaw moment, positive sideways force
         const wrench d = single_track_wrench(car(0.0, 20.0, 0.0, 0.0), p, single_track_input{0.05, 0.0});
@@ -269,21 +467,22 @@ int main()
         check_near("mirror: yaw rate", a.omega.z, -b.omega.z);
     }
 
-    // friction: a hard steer at speed drives the front axle into its limit, and no force ever exceeds it
+    // friction: a hard steer at speed drives the front axle into its limit, and no force ever exceeds the
+    // grip it has at that moment (with load transfer and load sensitivity)
     {
         rigid_body_state s = single_track_initial(20.0);
-        const axle_pair loads = axle_loads(p);
-        Real peak_front = 0, peak_rear = 0;
+        bool front_reached = false, within = true;
         for (int i = 0; i < 2000; ++i)
         {
-            const Real steer = applied_steer(p, 0.4);
-            const axle_pair fy = lateral_forces(p, slip_angles(p, velocity_in_body(s), steer), loads);
-            peak_front = std::max(peak_front, std::fabs(fy.front));
-            peak_rear = std::max(peak_rear, std::fabs(fy.rear));
-            step(s, p, single_track_input{0.4, 0.0}, dt);
+            const single_track_input in{0.4, 400.0};
+            const single_track_forces f = evaluate(s, p, in);
+            front_reached = front_reached || std::fabs(f.fy.front) >= f.grip.front - 1e-9;
+            within = within && std::fabs(f.fy.front) <= f.grip.front + 1e-9 &&
+                     std::hypot(f.fx_rear, f.fy.rear) <= f.grip.rear + 1e-6;
+            step(s, p, in, dt);
         }
-        check_near("friction: front force reaches mu Fz", peak_front, loads.front, 1e-9);
-        check_true("friction: rear force never exceeds mu Fz", peak_rear <= loads.rear + 1e-9);
+        check_true("friction: the front force reaches the front grip", front_reached);
+        check_true("friction: no axle force ever exceeds its grip", within);
     }
 
     // steer is limited to max_steer
