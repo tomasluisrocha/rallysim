@@ -66,3 +66,7 @@ add_test(NAME bicycle COMMAND test_bicycle)
 add_executable(test_input_script tests/test_input_script.cpp)
 target_link_libraries(test_input_script PRIVATE rallysim_core)
 add_test(NAME input_script COMMAND test_input_script)
+
+add_executable(test_bicycle_telemetry tests/test_bicycle_telemetry.cpp)
+target_link_libraries(test_bicycle_telemetry PRIVATE rallysim_core)
+add_test(NAME bicycle_telemetry COMMAND test_bicycle_telemetry)

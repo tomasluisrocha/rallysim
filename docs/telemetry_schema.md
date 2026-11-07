@@ -47,6 +47,27 @@ Axes follow ISO 8855: x forward, y left, z up. All values are SI.
 Force and torque in a row are the ones that were applied by the step that starts from that row's state.
 The last row has no step after it, so it holds the force and torque the script gives at the final time.
 
+## Columns (kinematic bicycle)
+
+The file layout is the same. Each model has its own set of columns, so read the header to see which one a file has.
+
+| # | Name | Unit | Meaning |
+|---|---|---|---|
+| 1 | `step` | count | Step index, starting at 0 |
+| 2 | `time` | s | `step * dt` |
+| 3 | `pos.x` | m | Centre of gravity, world frame |
+| 4 | `pos.y` | m | |
+| 5 | `yaw` | rad | Heading of the body, counter-clockwise from +x |
+| 6 | `speed` | m/s | Speed of the CG, along its direction of travel |
+| 7 | `steer` | rad | Front wheel angle the model used (limited to max_steer), positive = left |
+| 8 | `accel` | m/s^2 | Acceleration command along the heading |
+| 9 | `beta` | rad | Sideslip: angle between the heading and the velocity of the CG |
+| 10 | `yaw_rate` | rad/s | Rate of change of `yaw` |
+| 11 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
+
+`steer`, `accel`, `beta`, `yaw_rate` and `a_lat` belong to the step that starts from that row's state.
+The kinematic model is valid while `|a_lat|` stays below about `0.5 * mu * g` (mu: road friction), so compare the two when reading a run.
+
 ## Rules
 
 - Look columns up by name, never by position.

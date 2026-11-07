@@ -53,8 +53,7 @@ namespace rallysim
 
     inline void step(bicycle_state &state, const bicycle_params &params, const bicycle_input &input, Real dt)
     {
-        const Real L = params.wheelbase();
-        assert(L > 0);
+        assert(params.wheelbase() > 0);
         const Real steer = applied_steer(params, input.steer);
         // speed first
         state.v += input.accel * dt;
