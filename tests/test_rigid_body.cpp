@@ -84,15 +84,28 @@ int main()
         const Real dt = 0.001;
         rigid_body_params p;
         p.mass = 2.0;
+
+        // Zero net force: a body that is already moving keeps its velocity and goes in a straight line.
         rigid_body_state s;
+        s.pos = {1.0, -1.0, 2.0};
+        s.vel = {3.0, -2.0, 0.5};
         for (int i = 0; i < 2000; ++i)
             step(s, p, hover(p), dt);
-        check_vec("force cancelling gravity: velocity stays zero", s.vel, vec3{0, 0, 0}, 1e-9);
+        check_vec("zero force: velocity stays constant", s.vel, vec3{3.0, -2.0, 0.5}, 1e-9);
+        check_vec("zero force: position = x0 + v t", s.pos, vec3{1.0 + 6.0, -1.0 - 4.0, 2.0 + 1.0}, 1e-9);
 
+        // Constant force: a = F/m. Semi-implicit Euler gives x = 0.5 a t^2 + 0.5 a t dt exactly,
+        // the same first-order term as in free fall.
+        rigid_body_state r;
         for (int i = 0; i < 1000; ++i)
-            step(s, p, hover(p, vec3{10.0, 0, 0}), dt); // 10 N / 2 kg = 5 m/s^2 along x
-        check_near("constant force: v = F/m t", s.vel.x, 5.0, 1e-9);
-        check_near("constant force: no y or z velocity", s.vel.y + s.vel.z, 0.0, 1e-9);
+            step(r, p, hover(p, vec3{10.0, 4.0, 0}), dt); // 5 m/s^2 along x, 2 m/s^2 along y
+        const Real t = 1000 * dt;
+        check_near("constant force: v.x = F/m t", r.vel.x, 5.0 * t, 1e-9);
+        check_near("constant force: v.y = F/m t", r.vel.y, 2.0 * t, 1e-9);
+        check_near("constant force: v.z stays zero", r.vel.z, 0.0, 1e-9);
+        check_near("constant force: x = 0.5 a t^2 + 0.5 a t dt", r.pos.x, 0.5 * 5.0 * t * t + 0.5 * 5.0 * t * dt, 1e-9);
+        check_near("constant force: y = 0.5 a t^2 + 0.5 a t dt", r.pos.y, 0.5 * 2.0 * t * t + 0.5 * 2.0 * t * dt, 1e-9);
+        check_near("constant force: z stays zero", r.pos.z, 0.0, 1e-9);
     }
 
     // --- Test 3: constant torque about a principal axis --------------------------------------
@@ -107,6 +120,13 @@ int main()
         check_near("constant torque: omega.x stays 0", s.omega.x, 0.0);
         check_near("constant torque: omega.y stays 0", s.omega.y, 0.0);
         check_near("constant torque: norm(q) = 1", norm(s.q), 1.0);
+
+        // The angle turned is 0.5 alpha t^2 + 0.5 alpha t dt (omega is updated before q).
+        // Measured error of the orientation is 2e-7; 1e-6 is the limit used here.
+        const Real alpha = 2.0, t = 1000 * dt;
+        const Real angle = 0.5 * alpha * t * t + 0.5 * alpha * t * dt;
+        check_vec("constant torque: orientation = angle about z", rotate(s.q, vec3{1, 0, 0}),
+                  vec3{std::cos(angle), std::sin(angle), 0}, 1e-6);
     }
 
     // --- Test 4: torque-free spin about a principal axis -------------------------------------
@@ -120,6 +140,14 @@ int main()
             step(s, p, hover(p), dt);
         check_vec("principal-axis spin: omega unchanged", s.omega, vec3{0, 0, 5.0});
         check_near("principal-axis spin: norm(q) = 1", norm(s.q), 1.0);
+
+        // Orientation after 1 s at 5 rad/s (5 rad turned). Measured error 1e-5; 5e-5 is the limit.
+        rigid_body_state r;
+        r.omega = {0, 0, 5.0};
+        for (int i = 0; i < 1000; ++i)
+            step(r, p, hover(p), dt);
+        check_vec("principal-axis spin: orientation = omega t", rotate(r.q, vec3{1, 0, 0}),
+                  vec3{std::cos(5.0), std::sin(5.0), 0}, 5e-5);
     }
 
     // --- Test 5: off-axis spin --------------------------------------------------------------
