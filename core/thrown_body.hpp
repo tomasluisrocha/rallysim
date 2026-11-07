@@ -2,14 +2,17 @@
 #include "core/rigid_body.hpp"
 #include "core/rigid_body_telemetry.hpp"
 #include "core/telemetry.hpp"
+#include "core/wrench_script.hpp"
 
 namespace rallysim
 {
-    inline wrench wrench_at(long i, const rigid_body_params &p)
+    inline wrench_script thrown_body_script(const rigid_body_params &p)
     {
-        const bool hovering = i < 1000; // cancel gravity for the first 1000 frames
-        return wrench{vec3{0, 0, hovering ? p.mass * kGravity : 0.0},
-                      vec3{0, 0, 50.0}};
+        const wrench hover{vec3{0, 0, p.mass * kGravity}, vec3{0, 0, 50.0}};
+        const wrench coast{vec3{0, 0, 0}, vec3{0, 0, 50.0}};
+        wrench_script s;
+        s.keys = {{0.0, hover}, {0.999, hover}, {1.0, coast}};
+        return s;
     }
 
     // runs the thrown-body scenario and returns the final state
@@ -21,6 +24,7 @@ namespace rallysim
         rigid_body_params p;
         p.mass = 1200.0;
         p.inertia = {500.0, 1800.0, 2000.0};
+        const wrench_script script = thrown_body_script(p);
 
         rigid_body_state s;
         s.pos = {0, 0, 1};
@@ -31,7 +35,7 @@ namespace rallysim
         {
             if (writer)
                 writer->row(rigid_body_row(i, dt, s));
-            step(s, p, wrench_at(i, p), dt);
+            step(s, p, sample(script, i * dt), dt);
         }
         if (writer)
             writer->row(rigid_body_row(steps, dt, s));

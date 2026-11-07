@@ -50,3 +50,7 @@ add_test(NAME rigid_body_telemetry COMMAND test_rigid_body_telemetry)
 add_executable(test_golden tests/test_golden.cpp)
 target_link_libraries(test_golden PRIVATE rallysim_core)
 add_test(NAME golden COMMAND test_golden)
+
+add_executable(test_wrench_script tests/test_wrench_script.cpp)
+target_link_libraries(test_wrench_script PRIVATE rallysim_core)
+add_test(NAME wrench_script COMMAND test_wrench_script)
