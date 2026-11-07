@@ -58,3 +58,11 @@ add_test(NAME wrench_script COMMAND test_wrench_script)
 add_executable(test_wrench tests/test_wrench.cpp)
 target_link_libraries(test_wrench PRIVATE rallysim_core)
 add_test(NAME wrench COMMAND test_wrench)
+
+add_executable(test_bicycle tests/test_bicycle.cpp)
+target_link_libraries(test_bicycle PRIVATE rallysim_core)
+add_test(NAME bicycle COMMAND test_bicycle)
+
+add_executable(test_input_script tests/test_input_script.cpp)
+target_link_libraries(test_input_script PRIVATE rallysim_core)
+add_test(NAME input_script COMMAND test_input_script)
