@@ -24,7 +24,7 @@ static Real angular_momentum_drift(Real dt, Real seconds)
     auto world_L = [&](const rigid_body_state &st)
     {
         const vec3 Iw{p.inertia.x * st.omega.x, p.inertia.y * st.omega.y, p.inertia.z * st.omega.z};
-        return rotate(st.q, Iw);
+        return to_world(st.q, Iw);
     };
     const vec3 L0 = world_L(s);
     Real worst = 0;
@@ -125,7 +125,7 @@ int main()
         // Measured error of the orientation is 2e-7; 1e-6 is the limit used here.
         const Real alpha = 2.0, t = 1000 * dt;
         const Real angle = 0.5 * alpha * t * t + 0.5 * alpha * t * dt;
-        check_vec("constant torque: orientation = angle about z", rotate(s.q, vec3{1, 0, 0}),
+        check_vec("constant torque: orientation = angle about z", to_world(s.q, vec3{1, 0, 0}),
                   vec3{std::cos(angle), std::sin(angle), 0}, 1e-6);
     }
 
@@ -146,7 +146,7 @@ int main()
         r.omega = {0, 0, 5.0};
         for (int i = 0; i < 1000; ++i)
             step(r, p, hover(p), dt);
-        check_vec("principal-axis spin: orientation = omega t", rotate(r.q, vec3{1, 0, 0}),
+        check_vec("principal-axis spin: orientation = omega t", to_world(r.q, vec3{1, 0, 0}),
                   vec3{std::cos(5.0), std::sin(5.0), 0}, 5e-5);
     }
 

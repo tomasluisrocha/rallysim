@@ -5,9 +5,7 @@
 
 using namespace rallysim;
 
-
 static const Real pi = 3.14159265358979323846;
-
 
 // Rotates (1,0,0) with nsteps of integrate at 1 rad/s about z, for a total rotation of `angle`,
 // and returns the error against the exact answer (cos, sin, 0).
@@ -17,7 +15,7 @@ static Real integrate_error(Real angle, int nsteps)
     quat q;
     for (int i = 0; i < nsteps; ++i)
         q = integrate(q, vec3{0, 0, 1}, dt);
-    const vec3 r = rotate(q, vec3{1, 0, 0});
+    const vec3 r = to_world(q, vec3{1, 0, 0});
     return norm(r - vec3{std::cos(angle), std::sin(angle), 0});
 }
 
@@ -63,23 +61,23 @@ int main()
     check_quat("non-unit axis same as unit axis", from_axis_angle(vec3{0, 0, 5}, pi / 2), qz90);
     check_near("from_axis_angle has norm 1", norm(from_axis_angle(vec3{3, -4, 12}, 1.234)), 1.0);
 
-    // rotate: identity, the sign cases, and length preserved
-    check_vec("identity rotate", rotate(id, vec3{1, 2, 3}), vec3{1, 2, 3});
-    check_vec("z90: x -> y", rotate(qz90, vec3{1, 0, 0}), vec3{0, 1, 0});
-    check_vec("z90: y -> -x", rotate(qz90, vec3{0, 1, 0}), vec3{-1, 0, 0});
-    check_vec("x90: y -> z", rotate(qx90, vec3{0, 1, 0}), vec3{0, 0, 1});
-    check_vec("x90: z -> -y", rotate(qx90, vec3{0, 0, 1}), vec3{0, -1, 0});
-    check_vec("y90: z -> x", rotate(qy90, vec3{0, 0, 1}), vec3{1, 0, 0});
-    check_vec("z90 leaves z axis alone", rotate(qz90, vec3{0, 0, 1}), vec3{0, 0, 1});
-    check_near("rotate preserves length", norm(rotate(q1, vec3{1, 2, 3})), norm(vec3{1, 2, 3}));
+    // to_world: identity, the sign cases, and length preserved
+    check_vec("identity to_world", to_world(id, vec3{1, 2, 3}), vec3{1, 2, 3});
+    check_vec("z90: x -> y", to_world(qz90, vec3{1, 0, 0}), vec3{0, 1, 0});
+    check_vec("z90: y -> -x", to_world(qz90, vec3{0, 1, 0}), vec3{-1, 0, 0});
+    check_vec("x90: y -> z", to_world(qx90, vec3{0, 1, 0}), vec3{0, 0, 1});
+    check_vec("x90: z -> -y", to_world(qx90, vec3{0, 0, 1}), vec3{0, -1, 0});
+    check_vec("y90: z -> x", to_world(qy90, vec3{0, 0, 1}), vec3{1, 0, 0});
+    check_vec("z90 leaves z axis alone", to_world(qz90, vec3{0, 0, 1}), vec3{0, 0, 1});
+    check_near("to_world preserves length", norm(to_world(q1, vec3{1, 2, 3})), norm(vec3{1, 2, 3}));
 
-    // rotate_inverse and composition
+    // to_body and composition
     {
         const vec3 v{1, -2, 3};
-        check_vec("rotate_inverse undoes rotate", rotate_inverse(q1, rotate(q1, v)), v);
-        check_vec("z90 inverse: y -> x", rotate_inverse(qz90, vec3{0, 1, 0}), vec3{1, 0, 0});
-        check_vec("rotate(a*b) = rotate(a, rotate(b))", rotate(qx90 * qy90, v),
-                  rotate(qx90, rotate(qy90, v)));
+        check_vec("to_body undoes to_world", to_body(q1, to_world(q1, v)), v);
+        check_vec("z90 inverse: y -> x", to_body(qz90, vec3{0, 1, 0}), vec3{1, 0, 0});
+        check_vec("to_world(a*b) = to_world(a, to_world(b))", to_world(qx90 * qy90, v),
+                  to_world(qx90, to_world(qy90, v)));
     }
 
     // integrate: 1000 steps of 1 ms at 1 rad/s about z.
@@ -89,7 +87,7 @@ int main()
         for (int i = 0; i < 1000; ++i)
             q = integrate(q, vec3{0, 0, 1}, 0.001);
         check_near("integrate keeps norm 1", norm(q), 1.0);
-        check_vec("integrate: 1 rad about z", rotate(q, vec3{1, 0, 0}),
+        check_vec("integrate: 1 rad about z", to_world(q, vec3{1, 0, 0}),
                   vec3{std::cos(1.0), std::sin(1.0), 0}, 1e-6);
     }
     // integrate converges: halving dt must clearly shrink the error
@@ -108,7 +106,7 @@ int main()
         quat q;
         for (int i = 0; i < 1000; ++i)
             q = integrate(q, vec3{1, 0, 0}, 0.001); // 1 rad/s about x
-        check_vec("integrate about x: y -> (0, cos1, sin1)", rotate(q, vec3{0, 1, 0}),
+        check_vec("integrate about x: y -> (0, cos1, sin1)", to_world(q, vec3{0, 1, 0}),
                   vec3{0, std::cos(1.0), std::sin(1.0)}, 1e-6);
     }
     // integrate uses a BODY-frame angular velocity: starting from a rotated orientation,

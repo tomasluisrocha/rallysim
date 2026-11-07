@@ -1,8 +1,10 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <iterator>
 #include <vector>
-#include "core/wrench.hpp"  
+#include "core/wrench.hpp"
 
 namespace rallysim
 {
@@ -34,19 +36,21 @@ namespace rallysim
     inline wrench sample(const wrench_script &script, Real t)
     {
         assert(is_valid(script));
-        const std::vector<keyframe> &k = script.keys;
+        const auto &k = script.keys;
 
         if (t <= k.front().t)
             return k.front().w;
         if (t >= k.back().t)
             return k.back().w;
 
-        std::size_t i = 1;
-        while (k[i].t < t)
-            ++i; // now k[i-1].t < t <= k[i].t
+        auto it = std::lower_bound(k.begin(), k.end(), t,
+                                   [](const keyframe &kf, Real val)
+                                   { return kf.t < val; });
 
+        std::size_t i = std::distance(k.begin(), it);
         const Real f = (t - k[i - 1].t) / (k[i].t - k[i - 1].t);
-        const Real g = 1.0 - f;
+        const Real g = static_cast<Real>(1) - f;
+
         return wrench{g * k[i - 1].w.force + f * k[i].w.force,
                       g * k[i - 1].w.torque + f * k[i].w.torque};
     }

@@ -97,7 +97,7 @@ int main()
     {
         wrench a, b;
         add_force_at(a, id, vec3{0, 0, 10}, vec3{0, 1, 0});                      // lift on left side
-        add_force_at(b, z90, rotate(z90, vec3{0, 0, 10}), vec3{0, 1, 0});        // same force, body turned
+        add_force_at(b, z90, to_world(z90, vec3{0, 0, 10}), vec3{0, 1, 0});        // same force, body turned
         check_vec("same push, rotated body: same body-frame torque", a.torque, b.torque);
     }
 
@@ -115,7 +115,7 @@ int main()
         {
             wrench w;
             add_force_at(w, s.q, vec3{0, 0, p.mass * kGravity}, vec3{0, 0, 0});      // cancel gravity
-            add_force_at(w, s.q, rotate(s.q, vec3{8, 0, 0}), vec3{0, 0.5, 0});       // body-frame push
+            add_force_at(w, s.q, to_world(s.q, vec3{8, 0, 0}), vec3{0, 0.5, 0});       // body-frame push
             step(s, p, w, dt);
         }
         check_near("end to end: omega.z = tau / I * t", s.omega.z, -1.0, 1e-9);

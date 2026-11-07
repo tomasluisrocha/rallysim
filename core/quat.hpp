@@ -73,16 +73,17 @@ namespace rallysim
         return quat{std::cos(half), v.x, v.y, v.z};
     }
 
-    inline vec3 rotate(const quat &q, const vec3 &v)
+    inline vec3 to_world(const quat &q, const vec3 &v)
     {
-        const quat v_q{0, v.x, v.y, v.z};
-        const quat r = q * v_q * conj(q);
-        return vec3{r.x, r.y, r.z};
+        const vec3 u{q.x, q.y, q.z};
+        const vec3 uv = cross(u, v);
+        const vec3 uuv = cross(u, uv);
+        return v + static_cast<Real>(2) * (q.w * uv + uuv);
     }
 
-    inline vec3 rotate_inverse(const quat &q, const vec3 &v)
+    inline vec3 to_body(const quat &q, const vec3 &v)
     {
-        return rotate(conj(q), v);
+        return to_world(conj(q), v);
     }
 
     inline quat integrate(const quat &q, const vec3 &omega_body, Real dt)

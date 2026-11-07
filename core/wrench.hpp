@@ -17,7 +17,7 @@ namespace rallysim
     inline void add_force_at(wrench &w, const quat &q, const vec3 &force_world, const vec3 &point_body)
     {
         w.force += force_world;
-        w.torque += cross(point_body, rotate_inverse(q, force_world));
+        w.torque += cross(point_body, to_body(q, force_world));
     }
 
     // Adds a pure torque (body frame), for example an engine reaction.
