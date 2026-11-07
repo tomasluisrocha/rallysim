@@ -2,6 +2,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include "core/telemetry.hpp"
 #include "vehicle/four_wheel.hpp"
 
 namespace rallysim
@@ -27,6 +28,20 @@ namespace rallysim
             for (const std::string &field : wheel_fields())
                 c.push_back(std::string("wheel.") + wheel_label(i) + "." + field);
         return c;
+    }
+
+    // The car's geometry and tyre grip for line 1 of the file, so a viewer can draw it to scale and work out how
+    // much of each tyre's grip is in use: grip = mu (1 - k (Fz - Fz0) / Fz0) Fz.
+    inline telemetry_meta four_wheel_meta(const four_wheel_params &p)
+    {
+        return {{"model", 4}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_front}, {"track_rear", p.track_rear},
+                {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass},
+                {"wheel_radius", p.wheel.radius},
+                {"mu_front", p.front_tyre.friction_coefficient}, {"k_front", p.front_tyre.load_sensitivity},
+                {"fz0_front", p.front_tyre.nominal_load},
+                {"mu_rear", p.rear_tyre.friction_coefficient}, {"k_rear", p.rear_tyre.load_sensitivity},
+                {"fz0_rear", p.rear_tyre.nominal_load},
+                {"drive_split_front", p.drive_brake.drive_split_front}};
     }
 
     inline std::vector<std::string> four_wheel_units()

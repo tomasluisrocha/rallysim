@@ -59,6 +59,22 @@ int main()
 
     std::remove(path.c_str());
 
+    // constant facts about the run (the car's geometry) go on line 1 as key=value, between dt and the units
+    {
+        const std::string meta_path = "telemetry_meta_test_output.csv";
+        {
+            telemetry_writer w(meta_path, 0.001, {"step"}, {"count"}, {{"lf", 1.3}, {"track_front", 1.5}});
+            w.row({0});
+        }
+        std::ifstream f(meta_path, std::ios::binary);
+        std::string line;
+        std::getline(f, line);
+        f.close();
+        std::remove(meta_path.c_str());
+        check_true("meta: line 1 still starts with the schema and dt", line.rfind("# schema=2 dt=0.001 ", 0) == 0);
+        check_true("meta: key=value pairs before the units", line.find(" lf=1.3 track_front=1.5 units: step[count]") != std::string::npos);
+    }
+
     {
         telemetry_writer bad("no_such_folder_xyz/out.csv", 0.001, {"a"}, {"m"});
         check_true("unwritable path reports not ok", !bad.ok());

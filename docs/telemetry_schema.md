@@ -11,11 +11,33 @@ step,time,pos.x,...
 0,0,0,...
 ```
 
-- Line 1 is a comment: the schema number, the time step `dt` in seconds, and the unit of every column.
+- Line 1 is a comment: the schema number, the time step `dt` in seconds, optional `key=value` facts about the run
+  (see below), and the unit of every column.
 - Line 2 is the header: dotted column names, comma separated.
 - Every following line is one row of numbers.
 - Numbers are written with 17 significant digits, so a value reads back as exactly the same double.
 - Lines end with `\n` only, on every platform.
+
+## Facts on line 1
+
+Constant facts that are not columns go on line 1 as `key=value`, between `dt` and `units:`, so a viewer can draw
+the car to scale without knowing the C++ defaults. Readers that skip comment lines (pandas with `comment="#"`)
+ignore them, and adding keys needs no schema change.
+
+| Key | Unit | Written by | Meaning |
+|---|---|---|---|
+| `model` | - | bicycle (1), single-track (2), four-wheel (4) | Which model wrote the file |
+| `lf`, `lr` | m | all three | CG to front and rear axle |
+| `max_steer` | rad | all three | Steer limit |
+| `track_front`, `track_rear` | m | single-track, four-wheel | Distance between the contact patches of an axle |
+| `cg_height` | m | single-track, four-wheel | CG above the ground |
+| `mass` | kg | single-track, four-wheel | Car mass |
+| `wheel_radius` | m | four-wheel | Rolling radius |
+| `mu_front`, `k_front`, `fz0_front` | -, -, N | four-wheel | Front tyre grip: `mu (1 - k (Fz - Fz0) / Fz0) Fz` |
+| `mu_rear`, `k_rear`, `fz0_rear` | -, -, N | four-wheel | Rear tyre grip |
+| `drive_split_front` | - | four-wheel | Share of the drive torque on the front axle |
+
+Files written before these keys existed have none; `tools/topdown.py` then draws the default car.
 
 ## Columns (rigid body)
 

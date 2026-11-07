@@ -26,7 +26,7 @@ static bool write_rigid_body(const scripted_run &scenario, const std::string &pa
 
 static bool write_bicycle(const bicycle_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, bicycle_columns(), bicycle_units());
+    telemetry_writer writer(path, scenario.dt, bicycle_columns(), bicycle_units(), bicycle_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -35,7 +35,7 @@ static bool write_bicycle(const bicycle_run &scenario, const std::string &path)
 
 static bool write_single_track(const single_track_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, single_track_columns(), single_track_units());
+    telemetry_writer writer(path, scenario.dt, single_track_columns(), single_track_units(), single_track_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -44,7 +44,7 @@ static bool write_single_track(const single_track_run &scenario, const std::stri
 
 static bool write_four_wheel(const four_wheel_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, four_wheel_columns(), four_wheel_units());
+    telemetry_writer writer(path, scenario.dt, four_wheel_columns(), four_wheel_units(), four_wheel_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);

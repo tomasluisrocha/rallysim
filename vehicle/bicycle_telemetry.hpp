@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include "core/telemetry.hpp"
 #include "vehicle/bicycle.hpp"
 
 namespace rallysim
@@ -9,6 +10,12 @@ namespace rallysim
     {
         return {"step", "time", "pos.x", "pos.y", "yaw", "speed",
                 "steer", "accel", "beta", "yaw_rate", "a_lat"};
+    }
+
+    // The car's geometry for line 1 of the file, so a viewer can draw it to scale.
+    inline telemetry_meta bicycle_meta(const bicycle_params &p)
+    {
+        return {{"model", 1}, {"lf", p.lf}, {"lr", p.lr}, {"max_steer", p.max_steer}};
     }
 
     inline std::vector<std::string> bicycle_units()

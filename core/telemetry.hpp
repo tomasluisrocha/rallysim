@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <string>
+#include <utility>
 #include <vector>
 #include "core/vec3.hpp"
 
@@ -11,13 +12,18 @@ namespace rallysim
 {
     inline constexpr int kTelemetrySchema = 2; // 2: single-track axle and wheel columns renamed to dotted paths
 
+    // Constant facts about the run that are not columns, such as the car's geometry, written as key=value on
+    // line 1 so a viewer can draw the car to scale. Keys have no spaces and no '='.
+    using telemetry_meta = std::vector<std::pair<std::string, Real>>;
+
     // Writes one CSV row per physics step. See docs/telemetry_schema.md for the format.
     class telemetry_writer
     {
     public:
         telemetry_writer(const std::string &path, Real dt,
                          const std::vector<std::string> &names,
-                         const std::vector<std::string> &units)
+                         const std::vector<std::string> &units,
+                         const telemetry_meta &meta = {})
             : columns_(names.size())
         {
             assert(names.size() == units.size());
@@ -29,7 +35,10 @@ namespace rallysim
 
             out_ << std::setprecision(17);
 
-            out_ << "# schema=" << kTelemetrySchema << " dt=" << dt << " units:";
+            out_ << "# schema=" << kTelemetrySchema << " dt=" << dt;
+            for (const auto &kv : meta)
+                out_ << ' ' << kv.first << '=' << kv.second;
+            out_ << " units:";
             for (std::size_t i = 0; i < names.size(); ++i)
                 out_ << ' ' << names[i] << '[' << units[i] << ']';
             out_ << '\n';

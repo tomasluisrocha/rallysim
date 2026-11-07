@@ -2,6 +2,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include "core/telemetry.hpp"
 #include "vehicle/single_track.hpp"
 
 namespace rallysim
@@ -13,6 +14,13 @@ namespace rallysim
                 "axle.front.slipAngle", "axle.rear.slipAngle", "axle.front.Fy", "axle.rear.Fy",
                 "wheel.FL.Fz", "wheel.FR.Fz", "wheel.RL.Fz", "wheel.RR.Fz",
                 "axle.front.grip", "axle.rear.grip", "axle.rear.Fx"};
+    }
+
+    // The car's geometry and grip for line 1 of the file, so a viewer can draw it to scale.
+    inline telemetry_meta single_track_meta(const single_track_params &p)
+    {
+        return {{"model", 2}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_width}, {"track_rear", p.track_width},
+                {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass}};
     }
 
     inline std::vector<std::string> single_track_units()
