@@ -46,3 +46,7 @@ add_test(NAME telemetry COMMAND test_telemetry)
 add_executable(test_rigid_body_telemetry tests/test_rigid_body_telemetry.cpp)
 target_link_libraries(test_rigid_body_telemetry PRIVATE rallysim_core)
 add_test(NAME rigid_body_telemetry COMMAND test_rigid_body_telemetry)
+
+add_executable(test_golden tests/test_golden.cpp)
+target_link_libraries(test_golden PRIVATE rallysim_core)
+add_test(NAME golden COMMAND test_golden)
