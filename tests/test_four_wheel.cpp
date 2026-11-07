@@ -144,15 +144,16 @@ int main()
         check_near("rolling: x = v t", s.body.pos.x, 100.0, 1e-9);
     }
 
-    // gentle drive on the rear wheels: every wheel's spin inertia adds to the mass, a = (T/R) / (m + 4 I / R^2)
+    // gentle drive on the rear wheels: every wheel's spin inertia adds to the mass, a = (T/R) / (m + 4 I / R^2).
+    // From 5 m/s, so the wheels stay below the speed where the power limit starts (33 rad/s, 10.5 m/s).
     {
-        four_wheel_state s = four_wheel_initial(p, 10.0);
-        const Real T = 600.0;
+        four_wheel_state s = four_wheel_initial(p, 5.0);
+        const Real throttle = 0.1, T = throttle * p.drive_brake.max_drive_torque; // 600 N m
         for (int i = 0; i < 2000; ++i)
-            step(s, p, four_wheel_input{0.0, T}, dt);
+            step(s, p, four_wheel_input{0.0, throttle}, dt);
         const Real R = p.wheel.radius, I = p.wheel.inertia;
         const Real expected = (T / R) / (p.chassis.mass + 4 * I / (R * R));
-        check_near("drive: a = (T/R) / (m + 4 I/R^2)", (velocity_in_body(s.body).u - 10.0) / 2.0, expected, 0.01 * expected);
+        check_near("drive: a = (T/R) / (m + 4 I/R^2)", (velocity_in_body(s.body).u - 5.0) / 2.0, expected, 0.01 * expected);
         check_true("drive: the rear wheels slip a little, the fronts roll", s.wheels[RL].slip_ratio > 0 && std::fabs(s.wheels[FL].slip_ratio) < 1e-3);
     }
 
@@ -183,7 +184,7 @@ int main()
         bool within = true, reached = false;
         for (int i = 0; i < 3000; ++i)
         {
-            const four_wheel_input in{0.4, 300.0};
+            const four_wheel_input in{0.4, 0.05};
             const four_wheel_forces f = evaluate(s, p, in);
             for (std::size_t w = 0; w < kWheels; ++w)
             {
@@ -201,16 +202,21 @@ int main()
     {
         const std::vector<std::string> names = four_wheel_columns(), units = four_wheel_units();
         const four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
-        const four_wheel_input in{0.05, 200.0};
+        const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in);
-        check_true("telemetry: 13 + 4 x 6 columns, units and values", names.size() == 37 && units.size() == 37 && row.size() == 37);
+        check_true("telemetry: 15 + 4 x 8 columns, units and values", names.size() == 47 && units.size() == 47 && row.size() == 47);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);
         const four_wheel_forces f = evaluate(s, p, in);
         check_column(names, row, "wheel.FR.Fz", f.fz[FR]);
         check_column(names, row, "wheel.RL.omega", s.wheels[RL].omega);
-        check_column(names, row, "drive_torque", 200.0);
+        check_column(names, row, "throttle", 0.2);
+        check_column(names, row, "brake", 0.1);
+        check_column(names, row, "handbrake", 0.3);
+        check_column(names, row, "wheel.RL.driveTorque", f.torque[RL].drive);
+        check_column(names, row, "wheel.RR.brakeTorque", f.torque[RR].brake);
+        check_column(names, row, "wheel.FL.driveTorque", 0.0); // rear drive
         check_column(names, row, "yaw_rate", 0.25, 1e-12);
         check_column(names, row, "beta", std::atan2(0.4, 12.0), 1e-12);
         for (const char *needed : {"pos.x", "pos.y", "yaw", "steer", "speed", "beta"})

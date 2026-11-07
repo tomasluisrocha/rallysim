@@ -13,20 +13,32 @@ namespace rallysim
         four_wheel_params params;
         four_wheel_state initial;
         four_wheel_script script;
-        Real hold_speed = 0; // m/s; if above zero, the speed controller replaces the script's drive torque
+        Real hold_speed = 0; // m/s; if above zero, the speed controller replaces the script's throttle and brake
         Real dt = 0.001;     // s, fixed step
         long steps = 0;
     };
 
-    // The commands for time t: the script, with the drive torque replaced by the speed controller
-    // (driver/speed_hold.hpp) when hold_speed is set. The controller asks for a force; the rear wheels get
-    // that force times the wheel radius as torque.
+    // The commands for time t: the script, with the throttle and brake replaced by the speed controller
+    // (driver/speed_hold.hpp) when hold_speed is set. The steer and the handbrake always come from the script.
+    // While the handbrake is up the controller lifts off the throttle, as a driver does (clutch in): otherwise
+    // the drive torque on the rear wheels would fight the handbrake.
     inline four_wheel_input driver_input(const four_wheel_run &r, const four_wheel_state &s, Real t)
     {
         four_wheel_input in = sample(r.script, t);
-        if (r.hold_speed > 0)
-            in.drive_torque = speed_hold_force(r.params.chassis.mass, r.hold_speed, velocity_in_body(s.body).u) *
-                              r.params.wheel.radius;
+        if (r.hold_speed > 0 && in.handbrake > 0)
+        {
+            in.throttle = 0;
+            in.brake = 0;
+        }
+        else if (r.hold_speed > 0)
+        {
+            const drive_brake_params &d = r.params.drive_brake;
+            const Real R = r.params.wheel.radius;
+            const pedals p = speed_hold_pedals(r.params.chassis.mass, r.hold_speed, velocity_in_body(s.body).u,
+                                               d.max_drive_torque / R, d.max_brake_torque / R);
+            in.throttle = p.throttle;
+            in.brake = p.brake;
+        }
         return in;
     }
 

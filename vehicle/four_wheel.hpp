@@ -4,14 +4,16 @@
 #include <cmath>
 #include <cstddef>
 #include "core/rigid_body.hpp"
+#include "vehicle/drive_brake.hpp"
 #include "vehicle/tyre.hpp"
 #include "vehicle/wheel.hpp"
 
 namespace rallysim
 {
-    // Four-wheel car, planar (book section 7.1, phase 4 step 3): four contact patches, each with its own wheel
-    // spin and tyre, on the rigid body with gravity cancelled so the car stays on the ground plane, as the
-    // single-track does. Normal loads still come from the quasi-static load transfer; springs come in step 6.
+    // Four-wheel car, planar (book section 7.1, phase 4 steps 3 and 4): four contact patches, each with its own
+    // wheel spin and tyre, on the rigid body with gravity cancelled so the car stays on the ground plane, as
+    // the single-track does. Driven by pedals through vehicle/drive_brake.hpp. Normal loads still come from the
+    // quasi-static load transfer; springs come in step 6.
 
     // Wheel order, the same everywhere: front-left, front-right, rear-left, rear-right.
     enum wheel_id : std::size_t
@@ -39,6 +41,7 @@ namespace rallysim
         wheel_params wheel;                                 // the same wheel at each corner
         tyre_params front_tyre{90000, 30000};               // half of the single-track front axle (60 kN/rad)
         tyre_params rear_tyre{90000, 35000};                // half of the single-track rear axle (70 kN/rad)
+        drive_brake_params drive_brake;                     // pedals to wheel torques; rear drive by default
 
         Real wheelbase() const { return lf + lr; }
         const tyre_params &tyre(std::size_t i) const { return is_front(i) ? front_tyre : rear_tyre; }
@@ -59,17 +62,27 @@ namespace rallysim
         std::array<wheel_state, kWheels> wheels{};
     };
 
+    // What the driver does: the steering wheel and three pedals (book section 11.1). The clutch comes with the
+    // gearbox in phase 7.
     struct four_wheel_input
     {
-        Real steer = 0;        // front wheel angle, rad (+left); both front wheels turn by it (no Ackermann yet)
-        Real drive_torque = 0; // total torque on the rear wheels (N m, +forward), shared equally; step 4 adds a split
+        Real steer = 0;     // front wheel angle, rad (+left); both front wheels turn by it (no Ackermann yet)
+        Real throttle = 0;  // 0 to 1
+        Real brake = 0;     // 0 to 1
+        Real handbrake = 0; // 0 to 1, rear wheels only
     };
+
+    inline pedals pedals_of(const four_wheel_input &in)
+    {
+        return {in.throttle, in.brake, in.handbrake};
+    }
 
     // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
     inline four_wheel_input lerp(const four_wheel_input &a, const four_wheel_input &b, Real f)
     {
         const Real g = static_cast<Real>(1) - f;
-        return {g * a.steer + f * b.steer, g * a.drive_torque + f * b.drive_torque};
+        return {g * a.steer + f * b.steer, g * a.throttle + f * b.throttle,
+                g * a.brake + f * b.brake, g * a.handbrake + f * b.handbrake};
     }
 
     // A car on the ground plane, pointing along +x, moving forward at `speed` with every wheel rolling freely.
@@ -92,12 +105,6 @@ namespace rallysim
         return is_front(i) ? steer : static_cast<Real>(0);
     }
 
-    // Torque on each wheel from the input: the drive torque shared between the two rear wheels.
-    inline Real drive_torque(std::size_t i, const four_wheel_input &in)
-    {
-        return is_front(i) ? static_cast<Real>(0) : static_cast<Real>(0.5) * in.drive_torque;
-    }
-
     // Velocity of a wheel's contact patch over the ground, in that wheel's frame (m/s): v_body + omega x r,
     // turned by the wheel's steer angle. In a left turn the right wheels move faster than the left ones.
     inline patch_velocity patch_velocity_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer)
@@ -108,17 +115,45 @@ namespace rallysim
         return {c * v.x + s * v.y, -s * v.x + c * v.y};
     }
 
-    // Longitudinal acceleration used for the load transfer: the drive force the rear wheels can pass to the
-    // road over the mass, with the rear-drive traction limit mu W lf / (L - mu h) at the rear tyre's nominal
-    // friction (as the single-track). Lateral acceleration: forward speed times yaw rate.
-    inline Real longitudinal_acceleration(const four_wheel_params &p, const four_wheel_input &in)
+    // Static axle loads moved by a longitudinal acceleration a_x: m a_x h / L from front to rear, never below zero.
+    inline void axle_loads(const four_wheel_params &p, Real a_x, Real &front, Real &rear)
     {
-        const Real mu = p.rear_tyre.friction_coefficient, h = p.cg_height, L = p.wheelbase();
-        const Real weight = p.chassis.mass * kGravity;
-        const Real all = mu * weight;
-        const Real forward = (L - mu * h > 0) ? std::min(mu * weight * p.lf / (L - mu * h), all) : all;
-        const Real backward = mu * weight * p.lf / (L + mu * h);
-        return std::clamp(in.drive_torque / p.wheel.radius, -backward, forward) / p.chassis.mass;
+        const Real weight = p.chassis.mass * kGravity, L = p.wheelbase();
+        const Real front_static = weight * p.lr / L, rear_static = weight * p.lf / L;
+        const Real shift = std::clamp(p.chassis.mass * a_x * p.cg_height / L, -rear_static, front_static);
+        front = front_static - shift;
+        rear = rear_static + shift;
+    }
+
+    // Longitudinal acceleration used for the load transfer, estimated from the wheel torques before the tyre
+    // forces are known. Each axle asks for (drive - brake) / R, the brakes pushing against the direction of
+    // travel; each axle can pass at most mu times its load, and that load depends on the acceleration. A few
+    // fixed-point passes settle it (each pass shrinks the error by mu h / L, about 0.2), which gives the
+    // traction limit of any drive split or brake bias: mu W lf / (L - mu h) for rear drive, mu W lr / (L + mu h)
+    // for front drive, mu W for four-wheel drive. Uses the tyres' nominal friction (no load sensitivity).
+    // Lateral acceleration is estimated separately, as forward speed times yaw rate.
+    //
+    // The brakes' direction fades out below kBrakeFadeSpeed: brakes holding a car at rest push nothing, and the
+    // estimate must not jump from front to rear the moment the car stops.
+    inline constexpr Real kBrakeFadeSpeed = 0.5; // m/s
+
+    inline Real longitudinal_acceleration(const four_wheel_params &p, const std::array<wheel_torque, kWheels> &t, Real u)
+    {
+        const Real against = -std::clamp(u / kBrakeFadeSpeed, static_cast<Real>(-1), static_cast<Real>(1));
+        const Real R = p.wheel.radius;
+        const Real front_ask = (t[FL].drive + t[FR].drive + against * (t[FL].brake + t[FR].brake)) / R;
+        const Real rear_ask = (t[RL].drive + t[RR].drive + against * (t[RL].brake + t[RR].brake)) / R;
+
+        Real a_x = 0;
+        for (int pass = 0; pass < 6; ++pass)
+        {
+            Real front, rear;
+            axle_loads(p, a_x, front, rear);
+            const Real front_max = p.front_tyre.friction_coefficient * front;
+            const Real rear_max = p.rear_tyre.friction_coefficient * rear;
+            a_x = (std::clamp(front_ask, -front_max, front_max) + std::clamp(rear_ask, -rear_max, rear_max)) / p.chassis.mass;
+        }
+        return a_x;
     }
 
     // Vertical load on each wheel (N), quasi-static, the same model as the single-track: static axle loads,
@@ -127,10 +162,9 @@ namespace rallysim
     // four always add up to the weight.
     inline std::array<Real, kWheels> four_wheel_loads(const four_wheel_params &p, Real a_x, Real a_y)
     {
-        const Real weight = p.chassis.mass * kGravity, L = p.wheelbase(), h = p.cg_height;
-        const Real front_static = weight * p.lr / L, rear_static = weight * p.lf / L;
-        const Real shift = std::clamp(p.chassis.mass * a_x * h / L, -rear_static, front_static);
-        const Real front = front_static - shift, rear = rear_static + shift;
+        const Real h = p.cg_height;
+        Real front, rear;
+        axle_loads(p, a_x, front, rear);
 
         const Real roll_moment = p.chassis.mass * a_y * h;
         auto split = [](Real axle, Real transfer, Real &left, Real &right)
@@ -155,7 +189,7 @@ namespace rallysim
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
-        std::array<Real, kWheels> torque{};        // drive torque on each wheel (N m)
+        std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
     };
 
     // Order (book chapter 3): controls, normal loads, contact patch velocities, tyre forces from the wheels'
@@ -165,14 +199,15 @@ namespace rallysim
         four_wheel_forces f;
         f.steer = applied_steer(p, in.steer);
         f.vel = velocity_in_body(s.body);
-        f.a_x = longitudinal_acceleration(p, in);
+        f.torque = wheel_torques(p.drive_brake, pedals_of(in),
+                                 {s.wheels[FL].omega, s.wheels[FR].omega, s.wheels[RL].omega, s.wheels[RR].omega});
+        f.a_x = longitudinal_acceleration(p, f.torque, f.vel.u);
         f.a_y = f.vel.u * f.vel.r;
         f.fz = four_wheel_loads(p, f.a_x, f.a_y);
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             f.patch[i] = patch_velocity_of(p, s.body, i, f.steer);
             f.tyre[i] = tyre_forces(p.tyre(i), s.wheels[i].slip_ratio, s.wheels[i].lateral_slip, f.fz[i]);
-            f.torque[i] = drive_torque(i, in);
         }
         return f;
     }
@@ -194,14 +229,15 @@ namespace rallysim
     }
 
     // One step: the body moves with the forces of the step's start, each wheel's spin is updated with its own
-    // tyre force (-Fx R) and torque, then its slips relax with the patch velocity of the step's start.
+    // tyre force (-Fx R), drive torque and brake torque (the brake stops a wheel but never reverses it), then
+    // its slips relax with the patch velocity of the step's start.
     inline void step(four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in, Real dt)
     {
         const four_wheel_forces f = evaluate(s, p, in);
         const wrench w = four_wheel_wrench(s, p, f);
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            spin_wheel(s.wheels[i], p.wheel, f.tyre[i].fx, f.torque[i], 0, dt);
+            spin_wheel(s.wheels[i], p.wheel, f.tyre[i].fx, f.torque[i].drive, f.torque[i].brake, dt);
             relax_slips(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], dt);
         }
         step(s.body, p.chassis, w, dt);

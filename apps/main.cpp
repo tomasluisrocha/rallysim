@@ -7,6 +7,7 @@
 #include "scenarios/bicycle_slalom.hpp"
 #include "scenarios/driven_body.hpp"
 #include "scenarios/four_wheel_circle.hpp"
+#include "scenarios/four_wheel_driving.hpp"
 #include "scenarios/four_wheel_lane_change.hpp"
 #include "scenarios/single_track_circle.hpp"
 #include "scenarios/single_track_lane_change.hpp"
@@ -81,9 +82,16 @@ int main(int argc, char **argv)
         ok = write_four_wheel(four_wheel_circle(), path);
     else if (name == "fw_lane")
         ok = write_four_wheel(four_wheel_lane_change(), path);
+    else if (name == "fw_brake")
+        ok = write_four_wheel(four_wheel_brake(), path);
+    else if (name == "fw_launch")
+        ok = write_four_wheel(four_wheel_launch(), path);
+    else if (name == "fw_handbrake")
+        ok = write_four_wheel(four_wheel_handbrake(), path);
     else
     {
-        std::printf("usage: rallysim [thrown|driven|circle|lane|slalom|st_circle|st_lane|fw_circle|fw_lane] [output.csv]\n"
+        std::printf("usage: rallysim [thrown|driven|circle|lane|slalom|st_circle|st_lane|\n"
+                    "                 fw_circle|fw_lane|fw_brake|fw_launch|fw_handbrake] [output.csv]\n"
                     "  output defaults to out/<scenario>.csv\n");
         return 1;
     }

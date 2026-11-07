@@ -118,6 +118,49 @@ match; the model is not meant for that range. `yaw`, `steer`, `speed` and `beta`
 `tools/topdown.py` needs, so it also plays these files. `beta` and `yaw_rate` have the same names and
 meaning as in the bicycle files, which makes the two models easy to overlay.
 
+## Columns (four-wheel car)
+
+The file layout is the same. The first columns match the single-track's where they mean the same thing, so the
+two models can be overlaid; the pedals replace `drive_force`, and each wheel adds a block of columns.
+
+| # | Name | Unit | Meaning |
+|---|---|---|---|
+| 1 | `step` | count | Step index, starting at 0 |
+| 2 | `time` | s | `step * dt` |
+| 3 | `pos.x` | m | Centre of gravity, world frame |
+| 4 | `pos.y` | m | |
+| 5 | `yaw` | rad | Heading of the body, counter-clockwise from +x |
+| 6 | `speed` | m/s | Length of the velocity of the CG |
+| 7 | `steer` | rad | Front wheel angle the model used (limited to max_steer), positive = left; both front wheels |
+| 8 | `throttle` | 0-1 | Throttle pedal, as given (the speed controller's output when a scenario holds speed) |
+| 9 | `brake` | 0-1 | Brake pedal, as given |
+| 10 | `handbrake` | 0-1 | Handbrake, as given |
+| 11 | `u` | m/s | Forward speed of the CG, in the car's frame |
+| 12 | `v` | m/s | Sideways speed of the CG, positive to the left |
+| 13 | `yaw_rate` | rad/s | Angular velocity about the vertical axis |
+| 14 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
+| 15 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
+| 16-23 | `wheel.FL.*` | | Front-left wheel, the eight fields below |
+| 24-31 | `wheel.FR.*` | | Front-right wheel |
+| 32-39 | `wheel.RL.*` | | Rear-left wheel |
+| 40-47 | `wheel.RR.*` | | Rear-right wheel |
+
+Each wheel block, in this order:
+
+| Field | Unit | Meaning |
+|---|---|---|
+| `omega` | rad/s | Wheel spin, positive rolling forward |
+| `slipRatio` | - | Relaxed slip ratio: positive driving, -1 a locked wheel sliding forward |
+| `slipAngle` | rad | Relaxed slip angle (`atan` of the lateral slip): positive when the wheel points left of its path |
+| `Fz` | N | Vertical load, with the quasi-static load transfer |
+| `Fx` | N | Tyre force along the wheel |
+| `Fy` | N | Tyre force across the wheel, positive to its left |
+| `driveTorque` | N m | Drive torque the pedals put on this wheel |
+| `brakeTorque` | N m | Brake torque on this wheel (a magnitude; it opposes the spin) |
+
+`Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
+axes. As in the other files, the columns from `steer` on belong to the step that starts from that row's state.
+
 ## Rules
 
 - Look columns up by name, never by position.
