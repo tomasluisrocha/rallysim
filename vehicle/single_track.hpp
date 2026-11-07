@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include "core/rigid_body.hpp"
+#include "vehicle/tyre.hpp"
 
 namespace rallysim
 {
@@ -52,23 +53,9 @@ namespace rallysim
         Real front_left = 0, front_right = 0, rear_left = 0, rear_right = 0;
     };
 
-    // Velocity of the CG in the car's own frame, and the yaw rate.
-    struct body_velocity
-    {
-        Real u = 0; // forward, m/s
-        Real v = 0; // sideways (+left), m/s
-        Real r = 0; // yaw rate, rad/s
-    };
-
     inline Real applied_steer(const single_track_params &params, Real steer)
     {
         return std::clamp(steer, -params.max_steer, params.max_steer);
-    }
-
-    inline body_velocity velocity_in_body(const rigid_body_state &state)
-    {
-        const vec3 v = to_body(state.q, state.vel);
-        return {v.x, v.y, state.omega.z};
     }
 
     // Estimate of the lateral acceleration of a settled turn: forward speed times yaw rate, positive when
@@ -76,12 +63,6 @@ namespace rallysim
     inline Real lateral_acceleration(const body_velocity &vel)
     {
         return vel.u * vel.r;
-    }
-
-    // Direction of the body x axis on the ground, counter-clockwise from world +x (rad).
-    inline Real yaw_angle(const quat &q)
-    {
-        return std::atan2(2 * (q.x * q.y + q.w * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
     }
 
     // Angle of each axle's wheels minus the angle of its velocity. Positive when the wheels point
@@ -137,8 +118,7 @@ namespace rallysim
     // moving load from one wheel of an axle to the other lowers the axle's total grip.
     inline Real peak_friction(const single_track_params &params, Real fz)
     {
-        const Real drop = params.load_sensitivity * (fz - params.nominal_wheel_load) / params.nominal_wheel_load;
-        return params.friction_coefficient * std::max(static_cast<Real>(1) - drop, static_cast<Real>(0));
+        return load_sensitive_friction(params.friction_coefficient, params.load_sensitivity, params.nominal_wheel_load, fz);
     }
 
     // Largest force each axle can take from the road (N): the sum over its two wheels of mu(fz) fz.

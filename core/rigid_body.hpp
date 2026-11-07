@@ -21,6 +21,26 @@ namespace rallysim
 
     inline constexpr Real kGravity = 9.81; // m/s^2, acts along -z
 
+    // Velocity of the CG in the body's own frame, and the yaw rate: what a ground vehicle cares about.
+    struct body_velocity
+    {
+        Real u = 0; // forward, m/s
+        Real v = 0; // sideways (+left), m/s
+        Real r = 0; // yaw rate, rad/s
+    };
+
+    inline body_velocity velocity_in_body(const rigid_body_state &state)
+    {
+        const vec3 v = to_body(state.q, state.vel);
+        return {v.x, v.y, state.omega.z};
+    }
+
+    // Direction of the body x axis on the ground, counter-clockwise from world +x (rad).
+    inline Real yaw_angle(const quat &q)
+    {
+        return std::atan2(2 * (q.x * q.y + q.w * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
+    }
+
     // Advances the body by one fixed time step dt (s).
     inline void step(rigid_body_state &s, const rigid_body_params &p, const wrench &w, Real dt)
     {
