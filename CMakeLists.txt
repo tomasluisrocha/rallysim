@@ -34,3 +34,7 @@ add_test(NAME vec3 COMMAND test_vec3)
 add_executable(test_quat tests/test_quat.cpp)
 target_link_libraries(test_quat PRIVATE rallysim_core)
 add_test(NAME quat COMMAND test_quat)
+
+add_executable(test_rigid_body tests/test_rigid_body.cpp)
+target_link_libraries(test_rigid_body PRIVATE rallysim_core)
+add_test(NAME rigid_body COMMAND test_rigid_body)
