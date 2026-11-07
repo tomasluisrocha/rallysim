@@ -2,33 +2,14 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
-#include "scenarios/run_single_track.hpp"
 #include "tests/check.hpp"
+#include "tests/single_track_helpers.hpp"
 
 using namespace rallysim;
 
 // Whole-car behaviour of the single-track model against closed forms: understeer gradient with the
 // centre of gravity moved, the steering-step response, and cornering at the friction limit.
 // The functions of the model are tested one by one in test_single_track.cpp.
-
-// Steady-state understeer gradient of the car, rad per m/s^2 of lateral acceleration.
-static Real understeer_gradient(const single_track_params &p)
-{
-    const axle_pair w = axle_loads(p);
-    return (w.front / p.front_cornering_stiffness - w.rear / p.rear_cornering_stiffness) / kGravity;
-}
-
-// A run at constant speed (held) and constant steer from the start.
-static single_track_run constant_steer(const single_track_params &p, Real speed, Real steer, long steps)
-{
-    single_track_run r;
-    r.params = p;
-    r.initial = single_track_initial(speed);
-    r.hold_speed = speed;
-    r.script.keys = {{0.0, single_track_input{steer, 0.0}}};
-    r.steps = steps;
-    return r;
-}
 
 // Measured understeer gradient from a settled circle: (steer - L / R) / a_y.
 static Real measured_gradient(const single_track_params &p, Real speed, Real steer)

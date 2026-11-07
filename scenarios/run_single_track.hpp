@@ -1,8 +1,9 @@
 #pragma once
-#include "core/single_track.hpp"
-#include "core/single_track_script.hpp"
-#include "core/single_track_telemetry.hpp"
 #include "core/telemetry.hpp"
+#include "driver/scripts.hpp"
+#include "driver/speed_hold.hpp"
+#include "vehicle/single_track.hpp"
+#include "vehicle/single_track_telemetry.hpp"
 
 namespace rallysim
 {
@@ -17,9 +18,6 @@ namespace rallysim
         long steps = 0;
     };
 
-    // Gain of the speed controller (1/s): drive force = mass * gain * speed error.
-    inline constexpr Real kSpeedHoldGain = 10.0;
-
     // A car on the ground plane, pointing along +x and moving forward at `speed`.
     inline rigid_body_state single_track_initial(Real speed)
     {
@@ -28,13 +26,13 @@ namespace rallysim
         return s;
     }
 
-    // The commands for time t: the script, with the drive force replaced by a proportional
-    // speed controller on the forward speed when hold_speed is set. Cruise control, not part of the model.
+    // The commands for time t: the script, with the drive force replaced by the speed controller
+    // (driver/speed_hold.hpp) when hold_speed is set.
     inline single_track_input driver_input(const single_track_run &r, const rigid_body_state &s, Real t)
     {
         single_track_input in = sample(r.script, t);
         if (r.hold_speed > 0)
-            in.drive_force = r.params.chassis.mass * kSpeedHoldGain * (r.hold_speed - velocity_in_body(s).u);
+            in.drive_force = speed_hold_force(r.params.chassis.mass, r.hold_speed, velocity_in_body(s).u);
         return in;
     }
 

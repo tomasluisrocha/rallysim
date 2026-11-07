@@ -4,6 +4,7 @@
 #include "scenarios/single_track_circle.hpp"
 #include "scenarios/single_track_lane_change.hpp"
 #include "tests/check.hpp"
+#include "tests/single_track_helpers.hpp"
 
 using namespace rallysim;
 
@@ -37,13 +38,6 @@ static void check_planar(const std::string &what, const planar &a, const planar 
 static void print_planar(const char *name, const planar &a)
 {
     std::printf("%s: {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n", name, a.x, a.y, a.yaw, a.u, a.v, a.r);
-}
-
-// Steady-state understeer gradient of the car, rad per m/s^2 of lateral acceleration.
-static Real understeer_gradient(const single_track_params &p)
-{
-    const axle_pair w = axle_loads(p);
-    return (w.front / p.front_cornering_stiffness - w.rear / p.rear_cornering_stiffness) / kGravity;
 }
 
 // Circle: 20 s at 6 m/s (held), steer step to 0.2 rad at 1 s.

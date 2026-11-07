@@ -1,8 +1,8 @@
 """Plot columns from a telemetry CSV.
 
 Usage:
-    python tools/plot_run.py run.csv time pos.z vel.z
-    python tools/plot_run.py run.csv time pos.z --save pos_z.png
+    python tools/plot_run.py out/st_circle.csv time pos.z vel.z
+    python tools/plot_run.py out/st_circle.csv time pos.z --save out/pos_z.png
 
 The first column named after the file is the x axis; every column after it is plotted
 against it. Column names come from the second line of the file (see docs/telemetry_schema.md).
@@ -16,7 +16,7 @@ import pandas as pd
 
 def main():
     parser = argparse.ArgumentParser(description="Plot columns from a telemetry CSV.")
-    parser.add_argument("file", help="telemetry CSV file, e.g. run.csv")
+    parser.add_argument("file", help="telemetry CSV file, e.g. out/st_circle.csv")
     parser.add_argument("x", help="column for the x axis, e.g. time")
     parser.add_argument("y", nargs="+", help="one or more columns to plot, e.g. pos.z vel.z")
     parser.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")

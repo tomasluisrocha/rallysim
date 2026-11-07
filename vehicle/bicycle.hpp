@@ -33,6 +33,13 @@ namespace rallysim
         Real steer = 0, accel = 0;
     };
 
+    // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
+    inline bicycle_input lerp(const bicycle_input &a, const bicycle_input &b, Real f)
+    {
+        const Real g = static_cast<Real>(1) - f;
+        return {g * a.steer + f * b.steer, g * a.accel + f * b.accel};
+    }
+
     // The front wheel angle the model actually uses: the input, limited to +-max_steer.
     inline Real applied_steer(const bicycle_params &params, Real steer)
     {

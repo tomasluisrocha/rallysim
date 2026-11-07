@@ -11,6 +11,13 @@ namespace rallysim
         vec3 torque; // N m, body frame, about the centre of mass
     };
 
+    // Blend of two wrenches for keyframe scripts: a at f = 0, b at f = 1.
+    inline wrench lerp(const wrench &a, const wrench &b, Real f)
+    {
+        const Real g = static_cast<Real>(1) - f;
+        return {g * a.force + f * b.force, g * a.torque + f * b.torque};
+    }
+
     // Adds a force (world frame) applied at a point (body frame, relative to the centre of mass).
     // A force away from the centre of mass also adds a torque.
     // q is the body's orientation (body -> world).

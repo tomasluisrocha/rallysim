@@ -2,7 +2,7 @@
 #include "core/rigid_body.hpp"
 #include "core/rigid_body_telemetry.hpp"
 #include "core/telemetry.hpp"
-#include "core/wrench_script.hpp"
+#include "driver/scripts.hpp"
 
 namespace rallysim
 {

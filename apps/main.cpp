@@ -1,5 +1,7 @@
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include "scenarios/bicycle_circle.hpp"
 #include "scenarios/bicycle_lane_change.hpp"
 #include "scenarios/bicycle_slalom.hpp"
@@ -40,7 +42,14 @@ static bool write_single_track(const single_track_run &scenario, const std::stri
 int main(int argc, char **argv)
 {
     const std::string name = (argc > 1) ? argv[1] : "thrown";
-    const std::string path = (argc > 2) ? argv[2] : "run.csv";
+    // Without a path the run goes to out/<scenario>.csv (out/ is ignored by git).
+    const std::string path = (argc > 2) ? argv[2] : "out/" + name + ".csv";
+    const std::filesystem::path folder = std::filesystem::path(path).parent_path();
+    if (!folder.empty())
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(folder, ec); // if this fails, opening the file reports it
+    }
 
     bool ok = false;
     if (name == "thrown")
@@ -59,7 +68,8 @@ int main(int argc, char **argv)
         ok = write_single_track(single_track_lane_change(), path);
     else
     {
-        std::printf("usage: rallysim [thrown|driven|circle|lane|slalom|st_circle|st_lane] [output.csv]\n");
+        std::printf("usage: rallysim [thrown|driven|circle|lane|slalom|st_circle|st_lane] [output.csv]\n"
+                    "  output defaults to out/<scenario>.csv\n");
         return 1;
     }
 

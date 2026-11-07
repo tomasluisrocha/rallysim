@@ -29,6 +29,13 @@ namespace rallysim
         Real drive_force = 0; // longitudinal force asked of the rear axle, N (+forward); limited by its grip
     };
 
+    // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
+    inline single_track_input lerp(const single_track_input &a, const single_track_input &b, Real f)
+    {
+        const Real g = static_cast<Real>(1) - f;
+        return {g * a.steer + f * b.steer, g * a.drive_force + f * b.drive_force};
+    }
+
     // Placeholder for low speed: slip angles divide by the forward speed, so below this value the
     // model uses it instead. Only valid well above it; handled properly in a later step.
     inline constexpr Real kMinForwardSpeed = 1.0; // m/s

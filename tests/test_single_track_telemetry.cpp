@@ -2,55 +2,12 @@
 #include <cstdio>
 #include <string>
 #include <vector>
-#include "core/single_track_telemetry.hpp"
+#include "vehicle/single_track_telemetry.hpp"
 #include "tests/check.hpp"
+#include "tests/telemetry_helpers.hpp"
+#include "tests/single_track_helpers.hpp"
 
 using namespace rallysim;
-
-// Returns the index of a column name, or -1 if it is not there.
-static int index_of(const std::vector<std::string> &names, const std::string &name)
-{
-    for (std::size_t i = 0; i < names.size(); ++i)
-        if (names[i] == name)
-            return static_cast<int>(i);
-    return -1;
-}
-
-// Checks the value in the row under `name` against `expected` within `tol` (0 = exactly).
-static void check_column(const std::vector<std::string> &names, const std::vector<Real> &row,
-                         const std::string &name, Real expected, Real tol = 0.0)
-{
-    const int i = index_of(names, name);
-    if (i < 0)
-    {
-        std::printf("FAIL  column %s is missing\n", name.c_str());
-        ++failures;
-        return;
-    }
-    if (static_cast<std::size_t>(i) >= row.size())
-    {
-        std::printf("FAIL  column %s: the row has only %zu values\n", name.c_str(), row.size());
-        ++failures;
-        return;
-    }
-    const Real got = row[static_cast<std::size_t>(i)];
-    if (!(std::fabs(got - expected) <= tol))
-    {
-        std::printf("FAIL  column %s: got %.17g, expected %.17g\n", name.c_str(), got, expected);
-        ++failures;
-    }
-}
-
-// A car at (x, y) with heading `yaw`, velocity (u, v) in its own frame and yaw rate r.
-static rigid_body_state car(Real x, Real y, Real yaw, Real u, Real v, Real r)
-{
-    rigid_body_state s;
-    s.pos = vec3{x, y, 0};
-    s.q = from_axis_angle(vec3{0, 0, 1}, yaw);
-    s.vel = to_world(s.q, vec3{u, v, 0});
-    s.omega = vec3{0, 0, r};
-    return s;
-}
 
 int main()
 {

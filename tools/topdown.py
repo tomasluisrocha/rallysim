@@ -1,12 +1,12 @@
 """Top-down replay of a simulator CSV: path, heading, and the force acting on a rigid body.
 
 Reads the telemetry only; it never touches the physics. It works on rigid-body files (quat and
-force columns) and on bicycle files (yaw, steer, speed and a_lat columns). A rigid body gets a
+force columns) and on bicycle and single-track files (yaw, steer, speed and a_lat columns). A rigid body gets a
 red force arrow; a bicycle gets a front wheel turned by the steer angle.
 
-  py tools/topdown.py run.csv                 interactive window with a time slider
-  py tools/topdown.py run.csv --static        whole path with arrows every N rows
-  py tools/topdown.py run.csv --save out.png  write the static view to a file
+  py tools/topdown.py out/st_circle.csv                           interactive window with a time slider
+  py tools/topdown.py out/st_circle.csv --static                  whole path with arrows every N rows
+  py tools/topdown.py out/st_circle.csv --save out/st_circle.png  write the static view to a file
 """
 import argparse
 import sys

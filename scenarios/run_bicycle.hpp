@@ -1,8 +1,8 @@
 #pragma once
-#include "core/bicycle.hpp"
-#include "core/bicycle_telemetry.hpp"
-#include "core/input_script.hpp"
+#include "vehicle/bicycle.hpp"
+#include "vehicle/bicycle_telemetry.hpp"
 #include "core/telemetry.hpp"
+#include "driver/scripts.hpp"
 
 namespace rallysim
 {
@@ -11,7 +11,7 @@ namespace rallysim
     {
         bicycle_params params;
         bicycle_state initial;
-        input_script script;
+        bicycle_script script;
         Real dt = 0.001; // s, fixed step
         long steps = 0;
     };

@@ -1,6 +1,6 @@
 #include <cmath>
 #include <cstdio>
-#include "core/bicycle.hpp"
+#include "vehicle/bicycle.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;

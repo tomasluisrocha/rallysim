@@ -3,36 +3,14 @@
 #include <cstdio>
 #include "scenarios/single_track_lane_change.hpp"
 #include "tests/check.hpp"
+#include "tests/single_track_helpers.hpp"
 
 using namespace rallysim;
-
-// A car on the ground plane at heading `yaw`, with velocity (u, v) in its own frame and yaw rate r.
-static rigid_body_state car(Real yaw, Real u, Real v, Real r)
-{
-    rigid_body_state s;
-    s.q = from_axis_angle(vec3{0, 0, 1}, yaw);
-    s.vel = to_world(s.q, vec3{u, v, 0});
-    s.omega = vec3{0, 0, r};
-    return s;
-}
-
-// Steady-state understeer gradient of the car, rad per m/s^2 of lateral acceleration.
-static Real understeer_gradient(const single_track_params &p)
-{
-    const axle_pair w = axle_loads(p);
-    return (w.front / p.front_cornering_stiffness - w.rear / p.rear_cornering_stiffness) / kGravity;
-}
 
 // Holds `speed` with a constant steer from the start and returns the state after `steps` steps.
 static rigid_body_state steady_turn(const single_track_params &p, Real speed, Real steer, long steps)
 {
-    single_track_run r;
-    r.params = p;
-    r.initial = single_track_initial(speed);
-    r.hold_speed = speed;
-    r.script.keys = {{0.0, single_track_input{steer, 0.0}}};
-    r.steps = steps;
-    return run(r);
+    return run(constant_steer(p, speed, steer, steps));
 }
 
 // Independent planar model: the book's three equations in the body frame, integrated on their own
@@ -451,7 +429,7 @@ int main()
         single_track_run left = single_track_lane_change();
         single_track_run right = left;
         for (auto &k : right.script.keys)
-            k.in.steer = -k.in.steer;
+            k.value.steer = -k.value.steer;
         const rigid_body_state a = run(left);
         const rigid_body_state b = run(right);
 

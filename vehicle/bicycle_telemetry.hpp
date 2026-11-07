@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
-#include "core/bicycle.hpp"
+#include "vehicle/bicycle.hpp"
 
 namespace rallysim
 {

@@ -17,7 +17,7 @@ namespace rallysim
 
         const Real lift = r.params.mass * kGravity;
         auto key = [&](Real t, Real fy)
-        { return keyframe{t, wrench{vec3{0, fy, lift}, vec3{}}}; };
+        { return keyframe<wrench>{t, wrench{vec3{0, fy, lift}, vec3{}}}; };
 
         r.script.keys = {key(0.0, 0),
                          key(1.0, 0),      // straight

@@ -34,6 +34,20 @@ written down before it is coded (section 5.1). This file holds both. Record any 
 | Torque and angular velocity | Body frame, right-hand rule | `core/wrench.hpp`, `core/rigid_body.hpp` |
 | Wheel spin, suspension deflection, brake torque | Not modelled yet | Fix their signs here before phase 4 |
 
+## Code layout
+
+| Folder | Holds | May include |
+|---|---|---|
+| `core/` | Maths and generic machinery: vec3, quat, wrench, rigid body, fixed-step clock, telemetry writer | `core/` only |
+| `vehicle/` | The car models and their telemetry rows: bicycle, single-track | `core/` |
+| `driver/` | What produces the inputs: keyframe scripts, speed-hold controller | `core/`, `vehicle/` |
+| `scenarios/` | One model + one driver + one script + a run length, and the runners | all of the above |
+| `apps/` | The `rallysim` program | `scenarios/` |
+| `tests/` | One `test_<name>.cpp` per area, registered with `rallysim_test(<name>)`, plus shared helpers | anything |
+
+Dependencies point one way only. `world/` (terrain, surfaces) and `data/` (car files and their loader) are
+created when the first phase needs them. Runs are written to `out/`, which git ignores.
+
 ## Decision log
 
 | Date | Decision | Why |
@@ -44,3 +58,4 @@ written down before it is coded (section 5.1). This file holds both. Record any 
 | 2026-11 | Load sensitivity is linear: `mu(Fz) = mu0 (1 - k (Fz - Fz0) / Fz0)`, `k = 0.1`, `Fz0 = 3000 N` | The simplest form the book asks for in 6.3. Values are placeholders, not fitted |
 | 2026-11 | The rear axle shares its grip between drive force and side force (friction circle) | So every force obeys the friction limit (6.3 gate) |
 | 2026-11 | Slip angles use a forward speed of at least 1 m/s | Placeholder; the book (chapter 15) recommends blending to the kinematic model below 3 to 5 m/s, to do before the car has to start from rest |
+| 2026-11 | One `keyframe_script<T>` template for every scripted input, with a `lerp` per input type | Replaces three copies of the same interpolation; phase 4 adds more input types |

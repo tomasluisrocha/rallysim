@@ -1,14 +1,15 @@
 #include <cmath>
 #include <cstdio>
-#include "core/input_script.hpp"
-#include "core/wrench_script.hpp"
+#include "driver/scripts.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;
 
+// The keyframe template is tested once, on bicycle inputs, for timing, holding and validity. Each input
+// type's lerp is then checked on its own, since that is the only part that differs between them.
 int main()
 {
-    input_script s;
+    bicycle_script s;
     s.keys = {{1.0, bicycle_input{0.0, 1.0}},
               {3.0, bicycle_input{0.4, 3.0}},
               {4.0, bicycle_input{0.4, 3.0}}};
@@ -41,7 +42,7 @@ int main()
 
     // a single keyframe is constant everywhere
     {
-        input_script one;
+        bicycle_script one;
         one.keys = {{2.0, bicycle_input{-0.3, 0.5}}};
         check_true("single key valid", is_valid(one));
         check_near("single key before", sample(one, 0.0).steer, -0.3);
@@ -50,21 +51,38 @@ int main()
 
     // validity checks
     {
-        input_script empty;
+        bicycle_script empty;
         check_true("empty script is invalid", !is_valid(empty));
-        input_script bad;
+        bicycle_script bad;
         bad.keys = {{1.0, bicycle_input{}}, {1.0, bicycle_input{}}};
         check_true("equal times are invalid", !is_valid(bad));
         bad.keys = {{2.0, bicycle_input{}}, {1.0, bicycle_input{}}};
         check_true("decreasing times are invalid", !is_valid(bad));
     }
 
-    // both script types in one file: the names must not clash
+    // single-track inputs: steer and drive force both blend, exact on the keys
     {
-        wrench_script w;
-        w.keys = {{0.0, wrench{}}};
-        check_true("wrench_script and input_script can be used together", is_valid(w) && is_valid(s));
+        single_track_script st;
+        st.keys = {{1.0, single_track_input{0.0, 1000.0}},
+                   {3.0, single_track_input{0.4, 3000.0}}};
+        const single_track_input mid = sample(st, 2.0);
+        check_near("single track: midway steer", mid.steer, 0.2);
+        check_near("single track: midway drive force", mid.drive_force, 2000.0);
+        check_near("single track: quarter drive force", sample(st, 1.5).drive_force, 1500.0);
+        check_true("single track: on a key, exact", sample(st, 3.0).steer == 0.4 && sample(st, 3.0).drive_force == 3000.0);
     }
 
-    return finish("input_script");
+    // wrenches: every component of force and torque blends
+    {
+        wrench_script w;
+        w.keys = {{1.0, wrench{vec3{10, 0, 0}, vec3{0, 0, 1}}},
+                  {3.0, wrench{vec3{30, 20, -4}, vec3{2, -2, 5}}}};
+        const wrench mid = sample(w, 2.0);
+        check_vec("wrench: midway force", mid.force, vec3{20, 10, -2});
+        check_vec("wrench: midway torque", mid.torque, vec3{1, -1, 3});
+        check_near("wrench: quarter torque.z", sample(w, 1.5).torque.z, 2.0);
+        check_true("wrench: on a key, exact", sample(w, 3.0).force.y == 20.0 && sample(w, 3.0).torque.z == 5.0);
+    }
+
+    return finish("keyframe_script");
 }

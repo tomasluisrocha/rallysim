@@ -24,78 +24,28 @@ target_include_directories(rallysim_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(rallysim apps/main.cpp)
 target_link_libraries(rallysim PRIVATE rallysim_core)
 
-# Tests
+# Tests: one executable per tests/test_<name>.cpp, registered with CTest as <name>.
 enable_testing()
 
-add_executable(test_vec3 tests/test_vec3.cpp)
-target_link_libraries(test_vec3 PRIVATE rallysim_core)
-add_test(NAME vec3 COMMAND test_vec3)
+function(rallysim_test name)
+  add_executable(test_${name} tests/test_${name}.cpp)
+  target_link_libraries(test_${name} PRIVATE rallysim_core)
+  add_test(NAME ${name} COMMAND test_${name})
+endfunction()
 
-add_executable(test_quat tests/test_quat.cpp)
-target_link_libraries(test_quat PRIVATE rallysim_core)
-add_test(NAME quat COMMAND test_quat)
-
-add_executable(test_rigid_body tests/test_rigid_body.cpp)
-target_link_libraries(test_rigid_body PRIVATE rallysim_core)
-add_test(NAME rigid_body COMMAND test_rigid_body)
-
-add_executable(test_telemetry tests/test_telemetry.cpp)
-target_link_libraries(test_telemetry PRIVATE rallysim_core)
-add_test(NAME telemetry COMMAND test_telemetry)
-
-add_executable(test_rigid_body_telemetry tests/test_rigid_body_telemetry.cpp)
-target_link_libraries(test_rigid_body_telemetry PRIVATE rallysim_core)
-add_test(NAME rigid_body_telemetry COMMAND test_rigid_body_telemetry)
-
-add_executable(test_golden tests/test_golden.cpp)
-target_link_libraries(test_golden PRIVATE rallysim_core)
-add_test(NAME golden COMMAND test_golden)
-
-add_executable(test_wrench_script tests/test_wrench_script.cpp)
-target_link_libraries(test_wrench_script PRIVATE rallysim_core)
-add_test(NAME wrench_script COMMAND test_wrench_script)
-
-add_executable(test_wrench tests/test_wrench.cpp)
-target_link_libraries(test_wrench PRIVATE rallysim_core)
-add_test(NAME wrench COMMAND test_wrench)
-
-add_executable(test_bicycle tests/test_bicycle.cpp)
-target_link_libraries(test_bicycle PRIVATE rallysim_core)
-add_test(NAME bicycle COMMAND test_bicycle)
-
-add_executable(test_input_script tests/test_input_script.cpp)
-target_link_libraries(test_input_script PRIVATE rallysim_core)
-add_test(NAME input_script COMMAND test_input_script)
-
-add_executable(test_bicycle_telemetry tests/test_bicycle_telemetry.cpp)
-target_link_libraries(test_bicycle_telemetry PRIVATE rallysim_core)
-add_test(NAME bicycle_telemetry COMMAND test_bicycle_telemetry)
-
-add_executable(test_golden_bicycle tests/test_golden_bicycle.cpp)
-target_link_libraries(test_golden_bicycle PRIVATE rallysim_core)
-add_test(NAME golden_bicycle COMMAND test_golden_bicycle)
-
-
-add_executable(test_single_track tests/test_single_track.cpp)
-target_link_libraries(test_single_track PRIVATE rallysim_core)
-add_test(NAME single_track COMMAND test_single_track)
-
-add_executable(test_single_track_script tests/test_single_track_script.cpp)
-target_link_libraries(test_single_track_script PRIVATE rallysim_core)
-add_test(NAME single_track_script COMMAND test_single_track_script)
-
-add_executable(test_single_track_telemetry tests/test_single_track_telemetry.cpp)
-target_link_libraries(test_single_track_telemetry PRIVATE rallysim_core)
-add_test(NAME single_track_telemetry COMMAND test_single_track_telemetry)
-
-add_executable(test_single_track_behaviour tests/test_single_track_behaviour.cpp)
-target_link_libraries(test_single_track_behaviour PRIVATE rallysim_core)
-add_test(NAME single_track_behaviour COMMAND test_single_track_behaviour)
-
-add_executable(test_fixed_step tests/test_fixed_step.cpp)
-target_link_libraries(test_fixed_step PRIVATE rallysim_core)
-add_test(NAME fixed_step COMMAND test_fixed_step)
-
-add_executable(test_golden_single_track tests/test_golden_single_track.cpp)
-target_link_libraries(test_golden_single_track PRIVATE rallysim_core)
-add_test(NAME golden_single_track COMMAND test_golden_single_track)
+rallysim_test(vec3)
+rallysim_test(quat)
+rallysim_test(rigid_body)
+rallysim_test(telemetry)
+rallysim_test(rigid_body_telemetry)
+rallysim_test(golden)
+rallysim_test(wrench)
+rallysim_test(bicycle)
+rallysim_test(keyframe_script)
+rallysim_test(bicycle_telemetry)
+rallysim_test(golden_bicycle)
+rallysim_test(single_track)
+rallysim_test(single_track_telemetry)
+rallysim_test(single_track_behaviour)
+rallysim_test(fixed_step)
+rallysim_test(golden_single_track)

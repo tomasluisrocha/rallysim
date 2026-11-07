@@ -15,7 +15,7 @@ namespace rallysim
 
         const Real d = 0.03; // steer while held (rad)
         auto key = [](Real t, Real steer)
-        { return input_keyframe{t, bicycle_input{steer, 0.0}}; };
+        { return keyframe<bicycle_input>{t, bicycle_input{steer, 0.0}}; };
 
         r.script.keys = {key(0.0, d), key(1.35, d),     // half hold, left
                          key(1.65, -d), key(4.35, -d),  // right
