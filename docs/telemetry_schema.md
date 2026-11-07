@@ -1,34 +1,57 @@
-# Telemetry schema (version 1)
+# Telemetry schema
 
-One CSV file per run. Text, comma-separated, one row per physics step.
+Telemetry is a CSV file written by `telemetry_writer` (`core/telemetry.hpp`), one row per physics step
+plus one for the final state. The simulator writes it; the tools in `tools/` only read it.
 
-## Layout
-- Line 1: comment starting with `#`: schema version, dt, then each column with its unit.
-- Line 2: column names.
-- Line 3 onward: one row per step, one number per column, 17 significant digits.
+## File layout
 
-Example:
 ```
-# schema=1 dt=0.001 units: step[count] time[s] pos.x[m] pos.y[m] pos.z[m] ...
-step,time,pos.x,pos.y,pos.z,...
-0,0,0,0,100,...
-1,0.001,0,0,99.99999...,...
+# schema=1 dt=0.001 units: step[count] time[s] pos.x[m] ...
+step,time,pos.x,...
+0,0,0,...
 ```
 
-## Columns
-| Name | Unit | Meaning |
-|---|---|---|
-| step | count | step index, starts at 0 |
-| time | s | step * dt |
-| pos.x, pos.y, pos.z | m | position, world frame |
-| vel.x, vel.y, vel.z | m/s | velocity, world frame |
-| quat.w, quat.x, quat.y, quat.z | - | orientation, body to world |
-| omega.x, omega.y, omega.z | rad/s | angular velocity, body frame |
+- Line 1 is a comment: the schema number, the time step `dt` in seconds, and the unit of every column.
+- Line 2 is the header: dotted column names, comma separated.
+- Every following line is one row of numbers.
+- Numbers are written with 17 significant digits, so a value reads back as exactly the same double.
+- Lines end with `\n` only, on every platform.
+
+## Columns (rigid body)
+
+| # | Name | Unit | Meaning |
+|---|---|---|---|
+| 1 | `step` | count | Step index, starting at 0 |
+| 2 | `time` | s | `step * dt` |
+| 3 | `pos.x` | m | Position, world frame |
+| 4 | `pos.y` | m | |
+| 5 | `pos.z` | m | |
+| 6 | `vel.x` | m/s | Velocity, world frame |
+| 7 | `vel.y` | m/s | |
+| 8 | `vel.z` | m/s | |
+| 9 | `quat.w` | - | Orientation, body to world, Hamilton, w first |
+| 10 | `quat.x` | - | |
+| 11 | `quat.y` | - | |
+| 12 | `quat.z` | - | |
+| 13 | `omega.x` | rad/s | Angular velocity, body frame |
+| 14 | `omega.y` | rad/s | |
+| 15 | `omega.z` | rad/s | |
+| 16 | `force.x` | N | Applied force, world frame (gravity not included) |
+| 17 | `force.y` | N | |
+| 18 | `force.z` | N | |
+| 19 | `torque.x` | N m | Applied torque, body frame |
+| 20 | `torque.y` | N m | |
+| 21 | `torque.z` | N m | |
+
+Axes follow ISO 8855: x forward, y left, z up. All values are SI.
+Force and torque in a row are the ones that were applied by the step that starts from that row's state.
+The last row has no step after it, so it holds the force and torque the script gives at the final time.
 
 ## Rules
-- Names are dotted paths: group.component (`pos.x`, later `wheel.FL.Fz`).
-- Never rename a column or change its meaning or unit without bumping the schema
-  version and writing a converter for old files.
-- New columns may be appended; plotting scripts must look columns up by name,
-  never by position.
-- Store SI units. Convert (kelvin to Celsius, rad to degrees) only when plotting.
+
+- Look columns up by name, never by position.
+- Never rename or remove a column without changing `kTelemetrySchema`.
+- New columns go at the end. Readers that look columns up by name keep working, so this needs no schema change.
+- Keep the column names, the units and the row function in the same order. `test_rigid_body_telemetry` checks this.
+- Files written before the force and torque columns existed have 15 columns. `tools/topdown.py` needs the force columns;
+  `tools/plot_run.py` works with either.

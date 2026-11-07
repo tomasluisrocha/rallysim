@@ -54,3 +54,7 @@ add_test(NAME golden COMMAND test_golden)
 add_executable(test_wrench_script tests/test_wrench_script.cpp)
 target_link_libraries(test_wrench_script PRIVATE rallysim_core)
 add_test(NAME wrench_script COMMAND test_wrench_script)
+
+add_executable(test_wrench tests/test_wrench.cpp)
+target_link_libraries(test_wrench PRIVATE rallysim_core)
+add_test(NAME wrench COMMAND test_wrench)

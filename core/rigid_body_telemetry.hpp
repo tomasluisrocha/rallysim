@@ -11,20 +11,26 @@ namespace rallysim
                 "pos.x", "pos.y", "pos.z",
                 "vel.x", "vel.y", "vel.z",
                 "quat.w", "quat.x", "quat.y", "quat.z",
-                "omega.x", "omega.y", "omega.z"};
+                "omega.x", "omega.y", "omega.z",
+                "force.x", "force.y", "force.z",
+                "torque.x", "torque.y", "torque.z"};
     }
 
     inline std::vector<std::string> rigid_body_units()
     {
-        return {"count", "s", "m", "m", "m", "m/s", "m/s", "m/s", "-", "-", "-", "-", "rad/s", "rad/s", "rad/s"};
+        return {"count", "s", "m", "m", "m", "m/s", "m/s", "m/s", "-", "-", "-", "-", "rad/s", "rad/s", "rad/s",
+                "N", "N", "N", "N m", "N m", "N m"};
     }
 
-    inline std::vector<Real> rigid_body_row(long step, Real dt, const rigid_body_state &s)
+    // w is the force (world frame) and torque (body frame) applied at this step.
+    inline std::vector<Real> rigid_body_row(long step, Real dt, const rigid_body_state &s, const wrench &w)
     {
         return {static_cast<Real>(step), step * dt,
                 s.pos.x, s.pos.y, s.pos.z,
                 s.vel.x, s.vel.y, s.vel.z,
                 s.q.w, s.q.x, s.q.y, s.q.z,
-                s.omega.x, s.omega.y, s.omega.z};
+                s.omega.x, s.omega.y, s.omega.z,
+                w.force.x, w.force.y, w.force.z,
+                w.torque.x, w.torque.y, w.torque.z};
     }
 }

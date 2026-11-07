@@ -1,5 +1,6 @@
 #pragma once
 #include "core/quat.hpp"
+#include "core/wrench.hpp"
 
 namespace rallysim
 {
@@ -16,12 +17,6 @@ namespace rallysim
     {
         Real mass = 1;         // kg
         vec3 inertia{1, 1, 1}; // kg m^2, principal moments about body x, y, z
-    };
-
-    struct wrench
-    {
-        vec3 force;  // N, world frame (gravity is added in step)
-        vec3 torque; // N m, body frame
     };
 
     inline constexpr Real kGravity = 9.81; // m/s^2, acts along -z

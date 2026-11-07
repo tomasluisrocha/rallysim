@@ -1,43 +1,17 @@
 #include <cmath>
 #include <cstdio>
 #include "scenarios/thrown_body.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
 
-static int failures = 0;
-
-static void check_near(const char *what, Real actual, Real expected, Real t)
-{
-    if (!(std::fabs(actual - expected) <= t))
-    {
-        std::printf("FAIL  %s: got %.17g, expected %.17g\n", what, actual, expected);
-        ++failures;
-    }
-}
-
-static void check_true(const char *what, bool ok)
-{
-    if (!ok)
-    {
-        std::printf("FAIL  %s\n", what);
-        ++failures;
-    }
-}
-
-static bool identical(const rigid_body_state &a, const rigid_body_state &b)
-{
-    return a.pos.x == b.pos.x && a.pos.y == b.pos.y && a.pos.z == b.pos.z &&
-           a.vel.x == b.vel.x && a.vel.y == b.vel.y && a.vel.z == b.vel.z &&
-           a.q.w == b.q.w && a.q.x == b.q.x && a.q.y == b.q.y && a.q.z == b.q.z &&
-           a.omega.x == b.omega.x && a.omega.y == b.omega.y && a.omega.z == b.omega.z;
-}
 
 int main()
 {
-    const rigid_body_state a = run_thrown_body();
+    const rigid_body_state a = run(thrown_body());
 
     // --- Determinism: the same scenario must give identical bits ----------------------------
-    check_true("determinism: two runs give identical state", identical(a, run_thrown_body()));
+    check_true("determinism: two runs give identical state", identical(a, run(thrown_body())));
 
     // --- Golden values -----------------------------------------------------------------------
     // Recorded from run_thrown_body() (3 s, dt = 1 ms) at the phase 1 gate, after checking them
@@ -73,9 +47,5 @@ int main()
     check_near("analytic quat.z = sin(yaw/2)", a.q.z, std::sin(0.5 * yaw), 1e-4);
     check_near("norm(q) = 1", norm(a.q), 1.0, 1e-12);
 
-    if (failures)
-        std::printf("%d check(s) failed\n", failures);
-    else
-        std::printf("all golden tests passed\n");
-    return failures ? 1 : 0;
+    return finish("golden");
 }

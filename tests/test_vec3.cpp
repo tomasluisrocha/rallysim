@@ -1,34 +1,9 @@
 #include <cmath>
 #include <cstdio>
 #include "core/vec3.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
-
-static int failures = 0;
-static const Real tol = 1e-12;
-
-// Compare two numbers with a tolerance (never use == on doubles).
-static void check_near(const char *what, Real actual, Real expected)
-{
-    if (!(std::fabs(actual - expected) <= tol))
-    {
-        std::printf("FAIL  %s: got %.12g, expected %.12g\n", what, actual, expected);
-        ++failures;
-    }
-}
-
-// Compare two vectors component by component.
-static void check_vec(const char *what, const vec3 &actual, const vec3 &expected)
-{
-    if (!(std::fabs(actual.x - expected.x) <= tol &&
-          std::fabs(actual.y - expected.y) <= tol &&
-          std::fabs(actual.z - expected.z) <= tol))
-    {
-        std::printf("FAIL  %s: got (%.12g, %.12g, %.12g), expected (%.12g, %.12g, %.12g)\n",
-                    what, actual.x, actual.y, actual.z, expected.x, expected.y, expected.z);
-        ++failures;
-    }
-}
 
 int main()
 {
@@ -89,9 +64,5 @@ int main()
         check_near("const v[2]", c[2], 3);
     }
 
-    if (failures)
-        std::printf("%d check(s) failed\n", failures);
-    else
-        std::printf("all vec3 tests passed\n");
-    return failures ? 1 : 0;
+    return finish("vec3");
 }

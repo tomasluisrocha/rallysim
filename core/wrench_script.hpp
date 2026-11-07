@@ -2,7 +2,7 @@
 #include <cassert>
 #include <cstddef>
 #include <vector>
-#include "core/rigid_body.hpp"
+#include "core/wrench.hpp"  
 
 namespace rallysim
 {

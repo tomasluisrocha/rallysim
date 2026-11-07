@@ -1,28 +1,9 @@
 #include <cmath>
 #include <cstdio>
 #include "core/wrench_script.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
-
-static int failures = 0;
-
-static void check_near(const char *what, Real actual, Real expected, Real t = 1e-12)
-{
-    if (!(std::fabs(actual - expected) <= t))
-    {
-        std::printf("FAIL  %s: got %.17g, expected %.17g\n", what, actual, expected);
-        ++failures;
-    }
-}
-
-static void check_true(const char *what, bool ok)
-{
-    if (!ok)
-    {
-        std::printf("FAIL  %s\n", what);
-        ++failures;
-    }
-}
 
 int main()
 {
@@ -78,9 +59,5 @@ int main()
         check_true("decreasing times are invalid", !is_valid(bad));
     }
 
-    if (failures)
-        std::printf("%d check(s) failed\n", failures);
-    else
-        std::printf("all wrench script tests passed\n");
-    return failures ? 1 : 0;
+    return finish("wrench_script");
 }

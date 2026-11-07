@@ -4,14 +4,9 @@
 #include <string>
 #include <vector>
 #include "core/telemetry.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
-
-static int failures = 0;
-static void check_true(const char *what, bool ok)
-{
-    if (!ok) { std::printf("FAIL  %s\n", what); ++failures; }
-}
 
 int main()
 {
@@ -50,15 +45,17 @@ int main()
         std::getline(ss, field, ',');
         check_true("1/3 round trips exactly", std::stod(field) == 1.0 / 3.0);
         std::stringstream s2(r2);
-        std::getline(s2, field, ','); std::getline(s2, field, ','); std::getline(s2, field, ',');
+        std::getline(s2, field, ',');
+        std::getline(s2, field, ',');
+        std::getline(s2, field, ',');
         check_true("-2.5e-10 round trips exactly", std::stod(field) == -2.5e-10);
     }
 
-    check_true("no carriage returns in the file", [&] {
+    check_true("no carriage returns in the file", [&]
+               {
         std::ifstream f(path, std::ios::binary);
         std::string all((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-        return all.find('\r') == std::string::npos;
-    }());
+        return all.find('\r') == std::string::npos; }());
 
     std::remove(path.c_str());
 
@@ -67,7 +64,5 @@ int main()
         check_true("unwritable path reports not ok", !bad.ok());
     }
 
-    if (failures) std::printf("%d check(s) failed\n", failures);
-    else std::printf("all telemetry tests passed\n");
-    return failures ? 1 : 0;
+    return finish("telemetry");
 }

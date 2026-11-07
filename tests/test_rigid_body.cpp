@@ -1,52 +1,14 @@
 #include <cmath>
 #include <cstdio>
 #include "core/rigid_body.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
-
-static int failures = 0;
-static const Real tol = 1e-12;
-
-static void check_near(const char *what, Real actual, Real expected, Real t = tol)
-{
-    if (!(std::fabs(actual - expected) <= t))
-    {
-        std::printf("FAIL  %s: got %.12g, expected %.12g\n", what, actual, expected);
-        ++failures;
-    }
-}
-
-static void check_vec(const char *what, const vec3 &a, const vec3 &e, Real t = tol)
-{
-    if (!(std::fabs(a.x - e.x) <= t && std::fabs(a.y - e.y) <= t && std::fabs(a.z - e.z) <= t))
-    {
-        std::printf("FAIL  %s: got (%.12g, %.12g, %.12g), expected (%.12g, %.12g, %.12g)\n",
-                    what, a.x, a.y, a.z, e.x, e.y, e.z);
-        ++failures;
-    }
-}
-
-static void check_true(const char *what, bool ok)
-{
-    if (!ok)
-    {
-        std::printf("FAIL  %s\n", what);
-        ++failures;
-    }
-}
 
 // A force that exactly cancels gravity, so a test can isolate rotation or a single push.
 static wrench hover(const rigid_body_params &p, const vec3 &extra_force = vec3{}, const vec3 &torque = vec3{})
 {
     return wrench{extra_force + vec3{0, 0, p.mass * kGravity}, torque};
-}
-
-static bool identical(const rigid_body_state &a, const rigid_body_state &b)
-{
-    return a.pos.x == b.pos.x && a.pos.y == b.pos.y && a.pos.z == b.pos.z &&
-           a.vel.x == b.vel.x && a.vel.y == b.vel.y && a.vel.z == b.vel.z &&
-           a.q.w == b.q.w && a.q.x == b.q.x && a.q.y == b.q.y && a.q.z == b.q.z &&
-           a.omega.x == b.omega.x && a.omega.y == b.omega.y && a.omega.z == b.omega.z;
 }
 
 // Runs a torque-free spin with an off-axis angular velocity and returns the worst relative drift
@@ -180,9 +142,5 @@ int main()
         check_true("determinism: two identical runs give identical state", identical(a, b));
     }
 
-    if (failures)
-        std::printf("%d check(s) failed\n", failures);
-    else
-        std::printf("all rigid body tests passed\n");
-    return failures ? 1 : 0;
+    return finish("rigid_body");
 }

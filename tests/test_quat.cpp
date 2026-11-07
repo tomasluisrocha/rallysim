@@ -1,42 +1,13 @@
 #include <cmath>
 #include <cstdio>
 #include "core/quat.hpp"
+#include "tests/check.hpp"
 
 using namespace rallysim;
 
-static int failures = 0;
-static const Real tol = 1e-12;
+
 static const Real pi = 3.14159265358979323846;
 
-static void check_near(const char *what, Real actual, Real expected, Real t = tol)
-{
-    if (!(std::fabs(actual - expected) <= t))
-    {
-        std::printf("FAIL  %s: got %.12g, expected %.12g\n", what, actual, expected);
-        ++failures;
-    }
-}
-
-static void check_vec(const char *what, const vec3 &a, const vec3 &e, Real t = tol)
-{
-    if (!(std::fabs(a.x - e.x) <= t && std::fabs(a.y - e.y) <= t && std::fabs(a.z - e.z) <= t))
-    {
-        std::printf("FAIL  %s: got (%.12g, %.12g, %.12g), expected (%.12g, %.12g, %.12g)\n",
-                    what, a.x, a.y, a.z, e.x, e.y, e.z);
-        ++failures;
-    }
-}
-
-static void check_quat(const char *what, const quat &a, const quat &e, Real t = tol)
-{
-    if (!(std::fabs(a.w - e.w) <= t && std::fabs(a.x - e.x) <= t &&
-          std::fabs(a.y - e.y) <= t && std::fabs(a.z - e.z) <= t))
-    {
-        std::printf("FAIL  %s: got (%.12g, %.12g, %.12g, %.12g), expected (%.12g, %.12g, %.12g, %.12g)\n",
-                    what, a.w, a.x, a.y, a.z, e.w, e.x, e.y, e.z);
-        ++failures;
-    }
-}
 
 // Rotates (1,0,0) with nsteps of integrate at 1 rad/s about z, for a total rotation of `angle`,
 // and returns the error against the exact answer (cos, sin, 0).
@@ -149,9 +120,5 @@ int main()
         check_quat("integrate body frame: q0 * Rx(1)", q, qz90 * from_axis_angle(vec3{1, 0, 0}, 1.0), 1e-6);
     }
 
-    if (failures)
-        std::printf("%d check(s) failed\n", failures);
-    else
-        std::printf("all quat tests passed\n");
-    return failures ? 1 : 0;
+    return finish("quat");
 }
