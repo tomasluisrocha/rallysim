@@ -154,7 +154,7 @@ int main()
     check_true("second column is time", names[1] == "time");
 
     // tools/topdown.py reads a file as a vehicle if it has these columns
-    for (const char *needed : {"pos.x", "pos.y", "yaw", "steer", "speed", "a_lat"})
+    for (const char *needed : {"pos.x", "pos.y", "yaw", "steer", "speed", "beta"})
         check_true(needed, index_of(names, needed) >= 0);
 
     return finish("single_track_telemetry");

@@ -114,7 +114,7 @@ names above, so a plot script can build a name from an axle or wheel label (book
 
 The columns from `steer` on belong to the step that starts from that row's state. The slip angles use a
 forward speed of at least `kMinForwardSpeed` (1 m/s), so below that `u` and the slip angles do not
-match; the model is not meant for that range. `yaw`, `steer`, `speed` and `a_lat` are the columns
+match; the model is not meant for that range. `yaw`, `steer`, `speed` and `beta` are the columns
 `tools/topdown.py` needs, so it also plays these files. `beta` and `yaw_rate` have the same names and
 meaning as in the bicycle files, which makes the two models easy to overlay.
 
