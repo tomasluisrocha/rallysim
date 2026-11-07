@@ -21,7 +21,7 @@ endif()
 add_library(rallysim_core INTERFACE)
 target_include_directories(rallysim_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(rallysim main.cpp)
+add_executable(rallysim apps/main.cpp)
 target_link_libraries(rallysim PRIVATE rallysim_core)
 
 # Tests
@@ -38,6 +38,10 @@ add_test(NAME quat COMMAND test_quat)
 add_executable(test_rigid_body tests/test_rigid_body.cpp)
 target_link_libraries(test_rigid_body PRIVATE rallysim_core)
 add_test(NAME rigid_body COMMAND test_rigid_body)
+
+add_executable(test_telemetry tests/test_telemetry.cpp)
+target_link_libraries(test_telemetry PRIVATE rallysim_core)
+add_test(NAME telemetry COMMAND test_telemetry)
 
 add_executable(test_rigid_body_telemetry tests/test_rigid_body_telemetry.cpp)
 target_link_libraries(test_rigid_body_telemetry PRIVATE rallysim_core)
