@@ -33,21 +33,38 @@ namespace rallysim
         Real steer = 0, accel = 0;
     };
 
+    // The front wheel angle the model actually uses: the input, limited to +-max_steer.
+    inline Real applied_steer(const bicycle_params &params, Real steer)
+    {
+        return std::clamp(steer, -params.max_steer, params.max_steer);
+    }
+
+    // Angle between the heading and the velocity of the CG (sideslip), for an already limited steer.
+    inline Real sideslip(const bicycle_params &params, Real steer)
+    {
+        return std::atan(params.lr / params.wheelbase() * std::tan(steer));
+    }
+
+    // Yaw rate (rad/s) for an already limited steer, at the speed in `state`.
+    inline Real yaw_rate(const bicycle_state &state, const bicycle_params &params, Real steer)
+    {
+        return state.v * std::cos(sideslip(params, steer)) * std::tan(steer) / params.wheelbase();
+    }
+
     inline void step(bicycle_state &state, const bicycle_params &params, const bicycle_input &input, Real dt)
     {
         const Real L = params.wheelbase();
         assert(L > 0);
-        const Real steer = std::clamp(input.steer, -params.max_steer, params.max_steer);
+        const Real steer = applied_steer(params, input.steer);
         // speed first
         state.v += input.accel * dt;
-        // angle between the heading and the velocity of the CG (sideslip)
-        const Real beta = std::atan((params.lr / L) * std::tan(steer));
-        const Real yaw_rate = state.v * std::cos(beta) * std::tan(steer) / L;
+        const Real beta = sideslip(params, steer);
+        const Real r = yaw_rate(state, params, steer);
         // heading half way through the step: more accurate on a curve than the start heading
-        const Real mid = state.yaw + 0.5 * yaw_rate * dt;
+        const Real mid = state.yaw + 0.5 * r * dt;
         state.x += state.v * std::cos(mid + beta) * dt;
         state.y += state.v * std::sin(mid + beta) * dt;
-        state.yaw += yaw_rate * dt;
+        state.yaw += r * dt;
     }
 
 }
