@@ -6,7 +6,7 @@ plus one for the final state. The simulator writes it; the tools in `tools/` onl
 ## File layout
 
 ```
-# schema=2 dt=0.001 units: step[count] time[s] pos.x[m] ...
+# schema=3 dt=0.001 units: step[count] time[s] pos.x[m] ...
 step,time,pos.x,...
 0,0,0,...
 ```
@@ -133,6 +133,10 @@ whole axle, and when an axle lifts the other one carries the whole car.
 `axle.*.grip` uses those loads with load sensitivity: the friction coefficient of each tyre falls as its load rises,
 so moving load between the two wheels of an axle lowers the axle's grip. `axle.front.Fy` is limited by
 `axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
+
+Schema 3 inserted columns into the four-wheel files rather than appending them: `pos.z`, `roll` and `pitch` after
+`a_lat`, and `deflection`, `deflVel`, `springF` and `damperF` at the end of each wheel's block. Readers that look columns
+up by name (both tools in `tools/`) read schema 2 and 3 files alike; anything that counts columns does not.
 
 Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
 names above, so a plot script can build a name from an axle or wheel label (book, section 11.1).

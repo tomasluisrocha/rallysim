@@ -17,7 +17,7 @@ namespace rallysim
         Real nominal_load = 3000;            // N, the load at which the friction coefficient is friction_coefficient
         Real relaxation_length_x = 0.2;      // m rolled for the longitudinal force to build up (63%)
         Real relaxation_length_y = 0.4;      // m rolled for the lateral force to build up (63%)
-        Real damping_x = 5000;               // N s/m, low-speed damping of the contact patch along the wheel
+        Real damping_x = 18000;              // N s/m, low-speed damping of the contact patch along the wheel
         Real damping_y = 9500;               // N s/m, low-speed damping of the contact patch across the wheel
         Real damping_fade_speed = 2.5;       // m/s, the damping fades out linearly by this rolling speed
     };

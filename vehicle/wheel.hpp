@@ -13,6 +13,7 @@ namespace rallysim
     {
         Real radius = 0.315; // m, effective rolling radius
         Real inertia = 1.2;  // kg m^2 about the axle: tyre, rim, hub and brake disc
+        int substeps = 4;    // spin updates per step: the wheel changes far faster than the body (book ch. 14)
     };
 
     // What changes from step to step. The two slips are relaxed (transient) values: they follow the slip of
@@ -98,8 +99,8 @@ namespace rallysim
     // damping fades in linearly below damping_fade_speed, so at speed nothing changes; at standstill it soaks
     // up the patch's spring, so a stopped car settles instead of rocking. The total stays within the grip.
     //
-    // Keep damping_x * R^2 * dt / I below about 0.5: the damping also acts on the wheel's spin (through -Fx R),
-    // and above that the explicit spin update overshoots and blows up (book chapter 14).
+    // Keep damping_x * R^2 * (dt / substeps) / I below about 0.5: the damping also acts on the wheel's spin
+    // (through -Fx R), and above that the explicit spin update overshoots and blows up (book chapter 14).
     inline tyre_force wheel_force(const wheel_state &s, const wheel_params &w, const tyre_params &t,
                                   const patch_velocity &v, Real fz)
     {
@@ -131,15 +132,26 @@ namespace rallysim
         s.omega = (std::fabs(free) <= brake) ? static_cast<Real>(0) : free - std::copysign(brake, free);
     }
 
-    // One step of the wheel. The tyre force comes from the slips at the start of the step (that force goes to
-    // the car); the spin is updated with it, then the slips relax with the new spin. The same velocity-first
-    // order as the rigid body.
+    // One step of the wheel, in `substeps` smaller steps (book chapter 14: the wheel is a light flywheel with a
+    // large force at its rim, so its spin changes much faster than the body's motion). Each sub-step takes the tyre
+    // force from the wheel's current slips, updates the spin with it, then relaxes the slips with the new spin, the
+    // same velocity-first order as the rigid body. The patch velocity, the load and the torques stay as given for
+    // the whole step: the body barely moves in it. Returns the average tyre force over the step, so the impulse the
+    // body gets is the one the wheel felt.
     inline tyre_force step_wheel(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v,
                                  Real fz, Real drive_torque, Real brake_torque, Real dt)
     {
-        const tyre_force f = wheel_force(s, w, t, v, fz);
-        spin_wheel(s, w, f.fx, drive_torque, brake_torque, dt);
-        relax_slips(s, w, t, v, fz, dt);
-        return f;
+        assert(w.substeps >= 1);
+        const Real h = dt / w.substeps;
+        tyre_force sum;
+        for (int k = 0; k < w.substeps; ++k)
+        {
+            const tyre_force f = wheel_force(s, w, t, v, fz);
+            spin_wheel(s, w, f.fx, drive_torque, brake_torque, h);
+            relax_slips(s, w, t, v, fz, h);
+            sum.fx += f.fx;
+            sum.fy += f.fy;
+        }
+        return {sum.fx / w.substeps, sum.fy / w.substeps};
     }
 }

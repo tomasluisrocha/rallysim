@@ -30,7 +30,7 @@ int main()
     const bool has_extra = static_cast<bool>(std::getline(in, extra));
     in.close();
 
-    check_true("line 1 starts with schema 2", l1.rfind("# schema=2 dt=0.001", 0) == 0);
+    check_true("line 1 starts with schema 3", l1.rfind("# schema=3 dt=0.001", 0) == 0);
     check_true("line 1 lists units", l1.find("step[count] time[s] pos.x[m]") != std::string::npos);
     check_true("line 2 is the column names", l2 == "step,time,pos.x");
     check_true("row 0 text", r0 == "0,0,0.10000000000000001");
@@ -71,7 +71,7 @@ int main()
         std::getline(f, line);
         f.close();
         std::remove(meta_path.c_str());
-        check_true("meta: line 1 still starts with the schema and dt", line.rfind("# schema=2 dt=0.001 ", 0) == 0);
+        check_true("meta: line 1 still starts with the schema and dt", line.rfind("# schema=3 dt=0.001 ", 0) == 0);
         check_true("meta: key=value pairs before the units", line.find(" lf=1.3 track_front=1.5 units: step[count]") != std::string::npos);
     }
 

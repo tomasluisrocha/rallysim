@@ -167,6 +167,46 @@ int main()
         check_near(what, r.v, speed, 1e-9);
     }
 
+    // why the wheel is sub-stepped: the low-speed damping also damps the wheel's spin, at a rate c R^2 / I. Explicit
+    // Euler is only stable while that rate times the step is below 2. At 30 kN s/m it is 2.5 per 1 ms step: each
+    // step overshoots the last, so the spin flips sign every step. The damping force is capped at the tyre's grip,
+    // which keeps the flipping bounded (about half a rad/s) instead of growing: the wheel chatters for ever. In
+    // four sub-steps of 0.25 ms the rate is 0.6 per sub-step, and the same wheel settles.
+    {
+        struct chatter
+        {
+            Real late;  // largest spin in the last 0.1 s (rad/s)
+            int flips;  // sign changes of the spin in that time
+        };
+        auto twisted_free_wheel = [&](int substeps)
+        {
+            rig r = rolling_rig(0.0);
+            r.w.substeps = substeps;
+            r.t.damping_x = 30000;
+            r.s.slip_ratio = 0.02; // a twisted tyre on a free wheel at rest
+            chatter c{0, 0};
+            Real before = 0;
+            for (int i = 0; i < 1000; ++i)
+            {
+                rig_step(r, 0.0, 0.0, dt);
+                if (i >= 900)
+                {
+                    c.late = std::max(c.late, std::fabs(r.s.omega));
+                    if (r.s.omega * before < 0)
+                        ++c.flips;
+                }
+                before = r.s.omega;
+            }
+            return c;
+        };
+        const chatter one = twisted_free_wheel(1), four = twisted_free_wheel(4);
+        std::printf("sub-stepping: damping 30 kN s/m, last 0.1 s: one 1 ms step %.3g rad/s, %d sign flips; "
+                    "four 0.25 ms sub-steps %.3g rad/s, %d flips\n", one.late, one.flips, four.late, four.flips);
+        check_true("sub-stepping: without it, strong damping makes the spin chatter (it flips sign nearly every step)",
+                   one.flips > 50 && one.late > 0.1);
+        check_true("sub-stepping: with four sub-steps the same wheel settles", four.flips == 0 && four.late < 1e-3);
+    }
+
     // low speed, where the damping acts: a twisted tyre on a free wheel at rest unwinds and settles without the
     // spin update blowing up (the damping also acts on the spin, book chapter 14), and so does a slow roll
     {

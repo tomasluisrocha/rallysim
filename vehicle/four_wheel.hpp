@@ -315,18 +315,17 @@ namespace rallysim
         return w;
     }
 
-    // One step: the body moves with the forces of the step's start, each wheel's spin is updated with its own
-    // tyre force (-Fx R), drive torque and brake torque (the brake stops a wheel but never reverses it), then
-    // its slips relax with the patch velocity of the step's start.
+    // One step. The loads, patch velocities and torques come from the step's start (evaluate). Each wheel then
+    // steps on its own, in sub-steps (step_wheel): its spin changes with its tyre force (-Fx R), drive torque and
+    // brake torque (the brake stops a wheel but never reverses it), and its slips relax. The body then moves with
+    // each wheel's average tyre force over the step, so it gets the same impulse the wheels felt.
     inline void step(four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in, Real dt)
     {
-        const four_wheel_forces f = evaluate(s, p, in);
-        const wrench w = four_wheel_wrench(s, p, f);
+        four_wheel_forces f = evaluate(s, p, in);
         for (std::size_t i = 0; i < kWheels; ++i)
-        {
-            spin_wheel(s.wheels[i], p.wheel, f.tyre[i].fx, f.torque[i].drive, f.torque[i].brake, dt);
-            relax_slips(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], dt);
-        }
+            f.tyre[i] = step_wheel(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], f.torque[i].drive,
+                                   f.torque[i].brake, dt);
+        const wrench w = four_wheel_wrench(s, p, f);
         step(s.body, p.chassis, w, dt);
     }
 }

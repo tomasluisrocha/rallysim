@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include "scenarios/four_wheel_lane_change.hpp"
 #include "scenarios/single_track_lane_change.hpp"
 #include "tests/check.hpp"
@@ -135,6 +136,100 @@ int main()
         std::printf("lane change: largest position gap %.3f m, largest yaw-rate gap %.1f%% of the peak\n", gap, 100 * worst_r / peak_r);
         check_true("lane change: paths within 5 cm", gap < 0.05);
         check_true("lane change: yaw rate within 5% of its peak", worst_r < 0.05 * peak_r);
+    }
+
+    // Steering step on four wheels (book section 11.2: overshoot and settling as the linear model predicts, within
+    // 10%), on springs. A small step (0.005 rad, so the tyres stay linear) from the start, at 20 m/s (close to
+    // critically damped) and 50 m/s (clearly underdamped). The four-wheel car adds what the linear model leaves out:
+    // tyre relaxation, body roll and the inner and outer wheels' different slip angles.
+    {
+        const Real steer = 0.005, dt = 0.001;
+        const long steps = 8000;
+        for (Real speed : {20.0, 50.0})
+        {
+            const four_wheel_run r = four_wheel_constant_steer(p, speed, steer, steps);
+            four_wheel_state s = r.initial;
+            std::vector<Real> sim{s.body.omega.z};
+            for (long i = 0; i < steps; ++i)
+            {
+                step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+                sim.push_back(s.body.omega.z);
+            }
+            const step_response ms = measure(sim, dt);
+            const step_response mo = measure(linear_yaw_rate(q, speed, steer, dt, steps), dt);
+            const Real closed = steer / (q.wheelbase() / speed + understeer_gradient(q) * speed);
+            std::printf("step at %.0f m/s: settled yaw rate %.5f (closed form %.5f); peak %.5f at %.3f s (linear %.5f at %.3f s); "
+                        "settled by %.3f s (linear %.3f s)\n", speed, ms.final, closed, ms.final * (1 + ms.overshoot), ms.t_peak,
+                        mo.final * (1 + mo.overshoot), mo.t_peak, ms.t_settle, mo.t_settle);
+
+            char what[160];
+            std::snprintf(what, sizeof what, "step at %.0f m/s: settled yaw rate = steer / (L/u + K u), within 2%%", speed);
+            check_true(what, std::fabs(ms.final / closed - 1.0) < 0.02);
+            std::snprintf(what, sizeof what, "step at %.0f m/s: peak yaw rate within 10%% of the linear model's", speed);
+            check_true(what, std::fabs((1 + ms.overshoot) * ms.final / ((1 + mo.overshoot) * mo.final) - 1.0) < 0.10);
+            std::snprintf(what, sizeof what, "step at %.0f m/s: settling time within 10%% of the linear model's", speed);
+            check_true(what, std::fabs(ms.t_settle / mo.t_settle - 1.0) < 0.10);
+            if (speed > 30)
+            {
+                std::snprintf(what, sizeof what, "step at %.0f m/s: underdamped, it overshoots by more than 10%% as the linear model does", speed);
+                check_true(what, ms.overshoot > 0.10 && mo.overshoot > 0.10);
+            }
+        }
+    }
+
+    // Cornering at the friction limit on four wheels (book section 11.2): far more steer than the grip can follow,
+    // at a held speed, with load sensitivity off so each tyre's grip is mu Fz. Both front tyres saturate, at
+    // mu Fz_FL and mu Fz_FR across their wheels. The rear supplies what the yaw balance needs:
+    //   lr F_rear = lf (F_FL + F_FR) cos(steer) + (t / 2) sin(steer) (F_FL - F_FR)
+    // The last term is what four wheels add to the single-track's version: each steered front tyre's force leans
+    // back by the steer angle, so it also drags the car, and the two drags act at +-t/2 from the centreline. The
+    // outer front carries more load, drags more, and turns the car out of the corner. So the settled lateral
+    // acceleration is
+    //   a_y = mu [ (Fz_FL + Fz_FR) cos(steer) L / lr + (t / 2) sin(steer) (Fz_FL - Fz_FR) / lr ] / m
+    // from the front loads (the springs tests check those). The inner rear may saturate too (with an open
+    // differential it gets the same drive torque as the outer, on less load); the outer rear keeps some grip.
+    //
+    // The steer is ramped in over 2 s, and mu = 1 is run only at 0.2 rad: stepped in, or at mu = 1 with 0.3 rad (so
+    // much front drag that the drive needed saturates both rear tyres), this rear-drive car spins, the speed
+    // controller's full throttle taking the rear's side grip (power oversteer). Real, but not the front-limited state
+    // this test is about.
+    {
+        struct setup
+        {
+            Real mu, steer;
+        };
+        for (const setup &c : {setup{1.0, 0.2}, setup{0.6, 0.2}, setup{0.6, 0.3}})
+        {
+            four_wheel_params pm = p;
+            for (tyre_params *t : {&pm.front_tyre, &pm.rear_tyre})
+            {
+                t->friction_coefficient = c.mu;
+                t->load_sensitivity = 0;
+            }
+            four_wheel_run r = four_wheel_constant_steer(pm, 15.0, c.steer, 20000);
+            r.script.keys = {{0.0, four_wheel_input{}}, {2.0, four_wheel_input{c.steer, 0.0, 0.0, 0.0}},
+                             {20.0, four_wheel_input{c.steer, 0.0, 0.0, 0.0}}};
+            const four_wheel_state s = run(r);
+            const four_wheel_forces f = evaluate(s, pm, driver_input(r, s, r.steps * r.dt));
+            const body_velocity v = velocity_in_body(s.body);
+            const Real a_y = std::hypot(v.u, v.v) * v.r;
+            const Real L = pm.wheelbase(), t = pm.track_front;
+            const Real expected = c.mu * ((f.fz[FL] + f.fz[FR]) * std::cos(c.steer) * L / pm.lr +
+                                          0.5 * t * std::sin(c.steer) * (f.fz[FL] - f.fz[FR]) / pm.lr) / pm.chassis.mass;
+            const Real centreline = c.mu * (f.fz[FL] + f.fz[FR]) * std::cos(c.steer) * L / pm.lr / pm.chassis.mass;
+            auto use = [&](std::size_t w)
+            { return std::hypot(f.tyre[w].fx, f.tyre[w].fy) / (c.mu * f.fz[w]); };
+            std::printf("limit, mu %.1f, steer %.1f: a_y %.3f m/s^2 (four-wheel form %.3f; without the drag term %.3f); grip use FL %.3f FR %.3f RL %.3f RR %.3f\n",
+                        c.mu, c.steer, a_y, expected, centreline, use(FL), use(FR), use(RL), use(RR));
+
+            char what[160];
+            std::snprintf(what, sizeof what, "limit, mu %.1f, steer %.1f: both front tyres at their grip, the outer rear below its own", c.mu, c.steer);
+            check_true(what, use(FL) > 0.999 && use(FR) > 0.999 && use(RR) < 0.999);
+            std::snprintf(what, sizeof what, "limit, mu %.1f, steer %.1f: settled a_y = the four-wheel friction-limit form, within 1%%", c.mu, c.steer);
+            check_true(what, std::fabs(a_y / expected - 1.0) < 0.01);
+            std::snprintf(what, sizeof what, "limit, mu %.1f, steer %.1f: speed held (not spinning)", c.mu, c.steer);
+            check_near(what, v.u, 15.0, 0.5);
+        }
     }
 
     return finish("four_wheel_behaviour");
