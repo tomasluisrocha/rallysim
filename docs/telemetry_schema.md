@@ -68,6 +68,37 @@ The file layout is the same. Each model has its own set of columns, so read the 
 `steer`, `accel`, `beta`, `yaw_rate` and `a_lat` belong to the step that starts from that row's state.
 The kinematic model is valid while `|a_lat|` stays below about `0.5 * mu * g` (mu: road friction), so compare the two when reading a run.
 
+## Columns (dynamic single-track)
+
+The file layout is the same. The state is the rigid body's, so the columns are derived from it: the
+velocity of the CG in the car's own frame, and the axle slip angles and lateral forces.
+
+| # | Name | Unit | Meaning |
+|---|---|---|---|
+| 1 | `step` | count | Step index, starting at 0 |
+| 2 | `time` | s | `step * dt` |
+| 3 | `pos.x` | m | Centre of gravity, world frame |
+| 4 | `pos.y` | m | |
+| 5 | `yaw` | rad | Heading of the body, counter-clockwise from +x |
+| 6 | `speed` | m/s | Length of the velocity of the CG |
+| 7 | `steer` | rad | Front wheel angle the model used (limited to max_steer), positive = left |
+| 8 | `drive_force` | N | Longitudinal force applied (the speed controller's output when a scenario holds speed) |
+| 9 | `u` | m/s | Forward speed of the CG, in the car's frame |
+| 10 | `v` | m/s | Sideways speed of the CG, positive to the left |
+| 11 | `yaw_rate` | rad/s | Angular velocity about the vertical axis |
+| 12 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
+| 13 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
+| 14 | `alpha_f` | rad | Slip angle of the front axle |
+| 15 | `alpha_r` | rad | Slip angle of the rear axle |
+| 16 | `fy_f` | N | Lateral force of the front axle, sideways to the wheels |
+| 17 | `fy_r` | N | Lateral force of the rear axle |
+
+The columns from `steer` on belong to the step that starts from that row's state. The slip angles use a
+forward speed of at least `kMinForwardSpeed` (1 m/s), so below that `u` and the slip angles do not
+match; the model is not meant for that range. `yaw`, `steer`, `speed` and `a_lat` are the columns
+`tools/topdown.py` needs, so it also plays these files. `beta` and `yaw_rate` have the same names and
+meaning as in the bicycle files, which makes the two models easy to overlay.
+
 ## Rules
 
 - Look columns up by name, never by position.
