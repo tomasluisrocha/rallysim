@@ -277,6 +277,7 @@ int main()
             ++i;
         }
         const Real stopped_at = s.body.pos.x;
+        const Real pitch_at_stop = pitch_angle(s.body.q); // nose down from the braking
         Real after = 0, back = 0, turned = 0;
         for (int k = 0; k < 3000; ++k)
         {
@@ -287,12 +288,16 @@ int main()
             for (const wheel_state &w : s.wheels)
                 turned += std::fabs(w.omega) * dt;
         }
-        // the front tyre, still twisted by sigma_x * grip / Cx when it stops sliding, sets how far the car moves back
+        // two things move the CG back after the stop: the front tyre, still twisted by sigma_x * grip / Cx when it
+        // stops sliding, unwinds; and the body, pitched nose down by the braking, pitches back level, which moves
+        // the CG back by about h * pitch
         const Real twist = p.front_tyre.relaxation_length_x * tyre_grip(p.front_tyre, 4000.0) / p.front_tyre.longitudinal_stiffness;
-        std::printf("standstill: after the stop |u| < %.6f m/s from 0.5 s on, rolled back %.4f m, wheels turned %.6f rad\n",
-                    after, back, turned);
+        const Real pitch_back = p.cg_height * pitch_at_stop;
+        std::printf("standstill: after the stop |u| < %.6f m/s from 0.5 s on, rolled back %.4f m (twist %.4f + pitch %.4f), wheels turned %.6f rad\n",
+                    after, back, twist, pitch_back, turned);
         check_true("standstill: the stopped car is below 1 cm/s after half a second", after < 0.01);
-        check_true("standstill: it rolls back less than twice the tyres' capped twist", back < 2 * twist);
+        check_true("standstill: it rolls back by the tyres' twist and the body pitching back, plus 30% overshoot at most",
+                   back < 1.3 * (twist + pitch_back));
         // as the load moves back to the rear, the rear tyres briefly push harder than the rear brakes hold (30% bias)
         // and turn the wheels by a hair; then the brakes hold
         check_true("standstill: the braked wheels turn by less than 0.01 rad in all", turned < 0.01);

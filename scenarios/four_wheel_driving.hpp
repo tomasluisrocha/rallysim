@@ -34,17 +34,18 @@ namespace rallysim
     }
 
     // Handbrake flick: 15 m/s held by the speed controller, steer into a gentle left turn at 1 s, then a short,
-    // partial pull of the handbrake (0.7 for 0.3 s from 2.5 s) and the wheel straightened after it. The rear
-    // steps out (about 8 degrees of sideslip) and the car recovers. A full pull, or keeping the wheel turned in
-    // while the speed controller reapplies the throttle, spins this rear-drive car right round: the scripted
-    // driver cannot countersteer, and once the rears lock the friction circle leaves them no side grip.
+    // partial pull of the handbrake (0.55 for 0.3 s from 2.5 s) and the wheel straightened after it. The inner
+    // rear locks, the rear steps out (about 10 degrees of sideslip) and the car recovers. A stronger or longer
+    // pull also locks the outer rear (braking pitches the body forward and unloads the rear), and then the rear
+    // axle has no side grip left: with the speed controller back on the throttle and no countersteer from the
+    // script, this rear-drive car spins right round.
     inline four_wheel_run four_wheel_handbrake()
     {
         four_wheel_run r;
         r.initial = four_wheel_initial(r.params, 15.0);
         r.hold_speed = 15.0;
         r.steps = 6000;
-        const Real steer = 0.05, pull = 0.7;
+        const Real steer = 0.05, pull = 0.55;
         r.script.keys = {{0.0, four_wheel_input{}},
                          {1.0, four_wheel_input{}},
                          {1.3, four_wheel_input{steer, 0.0, 0.0, 0.0}},

@@ -36,6 +36,9 @@ ignore them, and adding keys needs no schema change.
 | `mu_front`, `k_front`, `fz0_front` | -, -, N | four-wheel | Front tyre grip: `mu (1 - k (Fz - Fz0) / Fz0) Fz` |
 | `mu_rear`, `k_rear`, `fz0_rear` | -, -, N | four-wheel | Rear tyre grip |
 | `drive_split_front` | - | four-wheel | Share of the drive torque on the front axle |
+| `springs` | - | four-wheel | 1 if the car is on springs, 0 for the flat (planar) model |
+| `spring_front`, `damper_front` | N/m, N s/m | four-wheel | Spring and damper rate of each front corner |
+| `spring_rear`, `damper_rear` | N/m, N s/m | four-wheel | Of each rear corner |
 
 Files written before these keys existed have none; `tools/topdown.py` then draws the default car.
 
@@ -162,10 +165,13 @@ two models can be overlaid; the pedals replace `drive_force`, and each wheel add
 | 13 | `yaw_rate` | rad/s | Angular velocity about the vertical axis |
 | 14 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
 | 15 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
-| 16-23 | `wheel.FL.*` | | Front-left wheel, the eight fields below |
-| 24-31 | `wheel.FR.*` | | Front-right wheel |
-| 32-39 | `wheel.RL.*` | | Rear-left wheel |
-| 40-47 | `wheel.RR.*` | | Rear-right wheel |
+| 16 | `pos.z` | m | Height of the CG above the ground (0 in the planar model) |
+| 17 | `roll` | rad | Body roll, positive with the right side down (leaning out of a left turn) |
+| 18 | `pitch` | rad | Body pitch, positive nose down (diving under braking) |
+| 19-30 | `wheel.FL.*` | | Front-left wheel, the twelve fields below |
+| 31-42 | `wheel.FR.*` | | Front-right wheel |
+| 43-54 | `wheel.RL.*` | | Rear-left wheel |
+| 55-66 | `wheel.RR.*` | | Rear-right wheel |
 
 Each wheel block, in this order:
 
@@ -179,6 +185,10 @@ Each wheel block, in this order:
 | `Fy` | N | Tyre force across the wheel, positive to its left |
 | `driveTorque` | N m | Drive torque the pedals put on this wheel |
 | `brakeTorque` | N m | Brake torque on this wheel (a magnitude; it opposes the spin) |
+| `deflection` | m | How far the corner's spring is compressed; zero or less means the wheel is off the ground |
+| `deflVel` | m/s | How fast it is being compressed |
+| `springF` | N | Spring force |
+| `damperF` | N | Damper force, positive while compressing; `Fz` is spring + damper, never below zero |
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own

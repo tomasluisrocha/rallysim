@@ -39,7 +39,9 @@ written down before it is coded (section 5.1). This file holds both. Record any 
 | Drive torque | Pushes the wheel to roll forward | |
 | Brake torque | Always opposes the wheel's spin | Given as a magnitude >= 0; can stop the wheel but never reverse it |
 | Wheel order | FL, FR, RL, RR | Fixed everywhere, for determinism |
-| Suspension deflection | Compression | Not modelled yet (phase 4, step 6) |
+| Suspension deflection | Compression | `deflection` in the telemetry; positive pushes the body up |
+| Roll | Right side down | ISO 8855, about the forward axis: positive leaning out of a left turn |
+| Pitch | Nose down | ISO 8855, about the left axis: positive diving under braking |
 
 ## Code layout
 
@@ -86,3 +88,8 @@ created when the first phase needs them. Runs are written to `out/`, which git i
 | 2026-11 | Phase 4 step 5: the relaxed slips (the tyre's twist) are capped at what the grip can hold, `|(Cx sx, C_alpha sy)| <= mu(Fz) Fz` | Measured: a car that stopped on locked wheels kept a twist of sigma (0.2 m) and was thrown backwards, rocking at 1.6 m/s. Capped, it is left with about 7 mm. The sliding force does not change |
 | 2026-11 | Low-speed damping of the contact patch, `damping_x` 5000 and `damping_y` 9500 N s/m, fading out linearly by 2.5 m/s of rolling speed | Soaks up the tyre's spring at standstill: a braked car settles within 0.5 s. `damping_y` is about critical for the lateral tyre spring; `damping_x` is held to `c R^2 dt / I < 0.5` (0.41) because it also acts on the wheel's spin and the explicit spin update would blow up (book ch. 14). An implicit spin update would allow more |
 | 2026-11 | The four-wheel telemetry logs the steady (kinematic) slips; `topdown.py` flags spin and slide only when something is rolling | The relaxed slips are capped now, so they no longer show how fast a tyre slides; at a standstill the steady slip is 0/0 |
+| 2026-11 | Phase 4 step 6: the car sits on a vertical spring and damper at each corner (`vehicle/corner.hpp`), 50 kN/m and 3800 N s/m, gravity acts and the tyre forces act on the ground | About 2.1 Hz and a damping ratio of 0.5, a typical rally ride. The load transfer, roll and pitch now come out of the springs and take time to build. Checked against closed forms: heave 2.054 Hz (formula 2.055), roll 1.286 deg (1.285), pitch 0.514 deg (0.513) |
+| 2026-11 | Each spring hangs from the body straight above its contact patch and is preloaded so the car rests level with its CG at `cg_height` | The car starts in balance; no drop and bounce at t = 0 |
+| 2026-11 | The flat model stays as `vertical_model::planar`; springs are the default | The phase 4 gate runs on both: the planar one compares one to one with the single-track, the springs one shows the steady state still matches (yaw rate within 0.13%) |
+| 2026-11 | The wheel's direction is the body's heading turned by the steer and laid flat on the ground | A rolled or pitched body must not tilt the tyre forces into the ground (flat ground for now; phase 8 brings a contact normal) |
+| 2026-11 | Handbrake flick scenario: 0.55 for 0.3 s (was 0.7) | Measured: with springs, braking pitches the body forward and unloads the rear, so at 0.7 the outer rear locks too and the car spins |

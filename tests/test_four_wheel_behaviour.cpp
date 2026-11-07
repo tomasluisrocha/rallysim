@@ -55,23 +55,29 @@ int main()
     const four_wheel_params p; // tyres 30 / 35 kN/rad, so the axles match the single-track's 60 / 70
     const single_track_params q = matching_single_track(p);
 
-    // Gate 1: yaw rate within 5% of the single-track in a 0.3 g steady turn, at three speeds
-    for (Real speed : {10.0, 20.0, 30.0})
-    {
-        const Real steer = steer_for(q, speed, 0.3 * kGravity);
-        const four_wheel_state a = run(four_wheel_constant_steer(p, speed, steer, 10000));
-        const rigid_body_state b = run(constant_steer(q, speed, steer, 10000));
-        const Real r4 = a.body.omega.z, r2 = b.omega.z;
-        const Real a_y = std::hypot(velocity_in_body(a.body).u, velocity_in_body(a.body).v) * r4;
-        std::printf("0.3 g at %2.0f m/s: steer %.4f rad, yaw rate four-wheel %.5f, single-track %.5f (%+.2f%%), a_y %.2f m/s^2\n",
-                    speed, steer, r4, r2, 100 * (r4 / r2 - 1), a_y);
+    // Gate 1: yaw rate within 5% of the single-track in a 0.3 g steady turn, at three speeds, with both vertical
+    // models: the flat car (loads from the same formula as the single-track) and the car on springs (loads from
+    // the springs; equal front and rear springs share the roll moment 50/50, as front_transfer_share does)
+    for (vertical_model model : {vertical_model::planar, vertical_model::springs})
+        for (Real speed : {10.0, 20.0, 30.0})
+        {
+            four_wheel_params pm = p;
+            pm.vertical = model;
+            const char *name = model == vertical_model::planar ? "planar" : "springs";
+            const Real steer = steer_for(q, speed, 0.3 * kGravity);
+            const four_wheel_state a = run(four_wheel_constant_steer(pm, speed, steer, 10000));
+            const rigid_body_state b = run(constant_steer(q, speed, steer, 10000));
+            const Real r4 = a.body.omega.z, r2 = b.omega.z;
+            const Real a_y = std::hypot(velocity_in_body(a.body).u, velocity_in_body(a.body).v) * r4;
+            std::printf("0.3 g at %2.0f m/s, %-7s: steer %.4f rad, yaw rate four-wheel %.5f, single-track %.5f (%+.2f%%), a_y %.2f m/s^2\n",
+                        speed, name, steer, r4, r2, 100 * (r4 / r2 - 1), a_y);
 
-        char what[160];
-        std::snprintf(what, sizeof what, "gate: yaw rate within 5%% of the single-track at 0.3 g, %.0f m/s", speed);
-        check_true(what, std::fabs(r4 / r2 - 1) < 0.05);
-        std::snprintf(what, sizeof what, "gate: the turn is at about 0.3 g, %.0f m/s", speed);
-        check_near(what, a_y / kGravity, 0.3, 0.03);
-    }
+            char what[160];
+            std::snprintf(what, sizeof what, "gate (%s): yaw rate within 5%% of the single-track at 0.3 g, %.0f m/s", name, speed);
+            check_true(what, std::fabs(r4 / r2 - 1) < 0.05);
+            std::snprintf(what, sizeof what, "gate (%s): the turn is at about 0.3 g, %.0f m/s", name, speed);
+            check_near(what, a_y / kGravity, 0.3, 0.03);
+        }
 
     // Gate 2: the measured understeer gradient (steer - L/R) / a_y matches K = (Wf/Cf - Wr/Cr) / g within 10%,
     // for the default car and with the CG moved forward and back (equal tyres, so the CG alone sets the sign)

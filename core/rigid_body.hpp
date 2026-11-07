@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include "core/quat.hpp"
 #include "core/wrench.hpp"
 
@@ -39,6 +40,19 @@ namespace rallysim
     inline Real yaw_angle(const quat &q)
     {
         return std::atan2(2 * (q.x * q.y + q.w * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
+    }
+
+    // Body roll and pitch (rad), as yaw-pitch-roll angles with ISO 8855 signs: roll is about the forward axis,
+    // positive with the right side down (a car leaning out of a left turn); pitch is about the left axis,
+    // positive nose down (a car diving under braking).
+    inline Real roll_angle(const quat &q)
+    {
+        return std::atan2(2 * (q.w * q.x + q.y * q.z), 1 - 2 * (q.x * q.x + q.y * q.y));
+    }
+
+    inline Real pitch_angle(const quat &q)
+    {
+        return std::asin(std::clamp(2 * (q.w * q.y - q.z * q.x), static_cast<Real>(-1), static_cast<Real>(1)));
     }
 
     // Advances the body by one fixed time step dt (s).

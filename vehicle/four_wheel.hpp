@@ -4,16 +4,26 @@
 #include <cmath>
 #include <cstddef>
 #include "core/rigid_body.hpp"
+#include "vehicle/corner.hpp"
 #include "vehicle/drive_brake.hpp"
 #include "vehicle/tyre.hpp"
 #include "vehicle/wheel.hpp"
 
 namespace rallysim
 {
-    // Four-wheel car, planar (book section 7.1, phase 4 steps 3 and 4): four contact patches, each with its own
-    // wheel spin and tyre, on the rigid body with gravity cancelled so the car stays on the ground plane, as
-    // the single-track does. Driven by pedals through vehicle/drive_brake.hpp. Normal loads still come from the
-    // quasi-static load transfer; springs come in step 6.
+    // Four-wheel car (book section 7.1, phase 4): four contact patches, each with its own wheel spin and tyre,
+    // driven by pedals through vehicle/drive_brake.hpp. Two ways to get the vertical loads:
+    //   springs (step 6, the default): gravity acts, each corner of the body sits on a spring and damper
+    //     (vehicle/corner.hpp) and the tyre forces act on the ground, below the CG, so the body heaves, rolls and
+    //     pitches and the load transfer comes out of the springs;
+    //   planar (steps 3 to 5): gravity is cancelled and the tyre forces act at CG height, so the body stays flat
+    //     on the ground plane, as the single-track; the loads come from the quasi-static load transfer.
+    // The planar model stays so the four-wheel car can still be compared one to one with the single-track.
+    enum class vertical_model
+    {
+        planar,
+        springs
+    };
 
     // Wheel order, the same everywhere: front-left, front-right, rear-left, rear-right.
     enum wheel_id : std::size_t
@@ -42,18 +52,38 @@ namespace rallysim
         tyre_params front_tyre{90000, 30000};               // half of the single-track front axle (60 kN/rad)
         tyre_params rear_tyre{90000, 35000};                // half of the single-track rear axle (70 kN/rad)
         drive_brake_params drive_brake;                     // pedals to wheel torques; rear drive by default
+        vertical_model vertical = vertical_model::springs;  // how the vertical loads are found (see above)
+        corner_params front_corner;                         // suspension of each front corner (springs model)
+        corner_params rear_corner;                          // and of each rear corner
 
         Real wheelbase() const { return lf + lr; }
         const tyre_params &tyre(std::size_t i) const { return is_front(i) ? front_tyre : rear_tyre; }
+        const corner_params &corner(std::size_t i) const { return is_front(i) ? front_corner : rear_corner; }
 
-        // Where the contact patch is, from the CG, in the body frame (m). At CG height for now, like the
-        // single-track, so the tyre forces cannot roll or pitch the flat body; step 6 moves it to the ground.
+        // Where the contact patch is, from the CG, in the body frame (m), in the planar model: at CG height, like
+        // the single-track, so the tyre forces cannot roll or pitch the flat body.
         vec3 wheel_position(std::size_t i) const
         {
             const Real x = is_front(i) ? lf : -lr;
             const Real half_track = 0.5 * (is_front(i) ? track_front : track_rear);
             return {x, is_left(i) ? half_track : -half_track, 0};
         }
+
+        // The point on the body where a corner's spring is mounted, from the CG, body frame (m): straight above
+        // the contact patch, at ground level when the car is level with its CG at cg_height (springs model).
+        vec3 suspension_point(std::size_t i) const
+        {
+            const vec3 w = wheel_position(i);
+            return {w.x, w.y, -cg_height};
+        }
+
+        // Each corner's share of the weight when the car stands still (N), and how far that compresses its
+        // spring (m). The springs are set so the car rests level with its CG at cg_height.
+        Real static_load(std::size_t i) const
+        {
+            return 0.5 * chassis.mass * kGravity * (is_front(i) ? lr : lf) / wheelbase();
+        }
+        Real static_deflection(std::size_t i) const { return static_load(i) / corner(i).spring_rate; }
     };
 
     struct four_wheel_state
@@ -85,11 +115,14 @@ namespace rallysim
                 g * a.brake + f * b.brake, g * a.handbrake + f * b.handbrake};
     }
 
-    // A car on the ground plane, pointing along +x, moving forward at `speed` with every wheel rolling freely.
+    // A car pointing along +x, moving forward at `speed` with every wheel rolling freely. With springs it starts
+    // level with its CG at cg_height, each spring compressed by its share of the weight: at rest, in balance.
     inline four_wheel_state four_wheel_initial(const four_wheel_params &p, Real speed)
     {
         four_wheel_state s;
         s.body.vel = {speed, 0, 0};
+        if (p.vertical == vertical_model::springs)
+            s.body.pos.z = p.cg_height;
         for (wheel_state &w : s.wheels)
             w = rolling_wheel(p.wheel, speed);
         return s;
@@ -105,14 +138,57 @@ namespace rallysim
         return is_front(i) ? steer : static_cast<Real>(0);
     }
 
-    // Velocity of a wheel's contact patch over the ground, in that wheel's frame (m/s): v_body + omega x r,
-    // turned by the wheel's steer angle. In a left turn the right wheels move faster than the left ones.
+    // Where a wheel touches the ground and how it moves there (book section 7.1, steps 1 and 2).
+    struct contact_geometry
+    {
+        vec3 point;              // the contact patch from the CG, body frame (m): where the tyre force acts
+        vec3 forward, left;      // the wheel's directions along the ground, world frame, unit length
+        patch_velocity velocity; // how fast the patch moves over the ground, in the wheel's frame (m/s)
+        Real deflection = 0;     // springs model: how far the corner's spring is compressed (m)
+        Real deflection_rate = 0; // springs model: how fast it is being compressed (m/s)
+    };
+
+    // The contact of wheel i. The patch velocity is v_body + omega x r, with r from the CG to the patch, taken
+    // along the wheel and across it: in a left turn the right wheels move faster than the left ones.
+    //   planar: the patch is at CG height and the wheel's frame is the body's, turned by the steer.
+    //   springs: the spring's mount (suspension_point) moves with the body; its height above the ground gives
+    //   the compression and its vertical speed the compression rate. The patch is on the ground straight below
+    //   it, and the wheel's direction is the body's heading turned by the steer, laid flat on the ground, so a
+    //   rolled or pitched body does not tilt the tyre forces into the ground.
+    inline contact_geometry contact_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer)
+    {
+        contact_geometry c;
+        const Real a = steer_angle(i, steer);
+        const Real ca = std::cos(a), sa = std::sin(a);
+        const vec3 omega = to_world(body.q, body.omega);
+        vec3 r; // the patch from the CG, world frame
+        if (p.vertical == vertical_model::planar)
+        {
+            c.point = p.wheel_position(i);
+            r = to_world(body.q, c.point);
+            c.forward = to_world(body.q, vec3{ca, sa, 0});
+            c.left = to_world(body.q, vec3{-sa, ca, 0});
+        }
+        else
+        {
+            const vec3 mount = to_world(body.q, p.suspension_point(i));
+            c.deflection = p.static_deflection(i) - (body.pos.z + mount.z);
+            c.deflection_rate = -(body.vel.z + cross(omega, mount).z);
+            r = vec3{mount.x, mount.y, -body.pos.z};
+            c.point = to_body(body.q, r);
+            const vec3 heading = to_world(body.q, vec3{ca, sa, 0});
+            const Real n = std::hypot(heading.x, heading.y);
+            c.forward = vec3{heading.x / n, heading.y / n, 0};
+            c.left = vec3{-c.forward.y, c.forward.x, 0};
+        }
+        const vec3 v = body.vel + cross(omega, r);
+        c.velocity = {dot(v, c.forward), dot(v, c.left)};
+        return c;
+    }
+
     inline patch_velocity patch_velocity_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer)
     {
-        const vec3 v = to_body(body.q, body.vel) + cross(body.omega, p.wheel_position(i));
-        const Real a = steer_angle(i, steer);
-        const Real c = std::cos(a), s = std::sin(a);
-        return {c * v.x + s * v.y, -s * v.x + c * v.y};
+        return contact_of(p, body, i, steer).velocity;
     }
 
     // Static axle loads moved by a longitudinal acceleration a_x: m a_x h / L from front to rear, never below zero.
@@ -185,15 +261,16 @@ namespace rallysim
     {
         Real steer = 0;                            // front wheel angle used (rad)
         body_velocity vel;                         // velocity of the CG in the car's frame, and the yaw rate
-        Real a_x = 0, a_y = 0;                     // accelerations used for the load transfer (m/s^2)
+        Real a_x = 0, a_y = 0;                     // planar model: accelerations used for the load transfer (m/s^2)
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
+        std::array<corner_load, kWheels> corner;   // springs model: each corner's spring and damper
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
     };
 
-    // Order (book chapter 3): controls, normal loads, contact patch velocities, tyre forces from the wheels'
-    // current slips. Nothing is changed; step() then applies it.
+    // Order (book chapter 3): controls, contact geometry, normal loads, contact patch velocities, tyre forces
+    // from the wheels' current slips. Nothing is changed; step() then applies it.
     inline four_wheel_forces evaluate(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in)
     {
         four_wheel_forces f;
@@ -203,28 +280,38 @@ namespace rallysim
                                  {s.wheels[FL].omega, s.wheels[FR].omega, s.wheels[RL].omega, s.wheels[RR].omega});
         f.a_x = longitudinal_acceleration(p, f.torque, f.vel.u);
         f.a_y = f.vel.u * f.vel.r;
-        f.fz = four_wheel_loads(p, f.a_x, f.a_y);
+        if (p.vertical == vertical_model::planar)
+            f.fz = four_wheel_loads(p, f.a_x, f.a_y);
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            f.patch[i] = patch_velocity_of(p, s.body, i, f.steer);
+            const contact_geometry c = contact_of(p, s.body, i, f.steer);
+            if (p.vertical == vertical_model::springs)
+            {
+                f.corner[i] = corner_force(p.corner(i), c.deflection, c.deflection_rate);
+                f.fz[i] = f.corner[i].fz;
+            }
+            f.patch[i] = c.velocity;
             f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
         }
         return f;
     }
 
-    // Force and torque on the body from the four tyres: each force turned from its wheel's frame into the body
-    // frame and applied at its contact patch, in the fixed wheel order. Gravity is cancelled.
+    // Force and torque on the body from the four wheels, in the fixed wheel order (book section 7.1, step 5):
+    // each tyre force along the ground, (Fx forward + Fy left), applied at its contact patch. With springs each
+    // corner's load also pushes up at its patch, and gravity acts; in the planar model gravity is cancelled.
     inline wrench four_wheel_wrench(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_forces &f)
     {
         wrench w{};
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            const Real a = steer_angle(i, f.steer);
-            const Real c = std::cos(a), sn = std::sin(a);
-            const vec3 body_force{c * f.tyre[i].fx - sn * f.tyre[i].fy, sn * f.tyre[i].fx + c * f.tyre[i].fy, 0};
-            add_force_at(w, s.body.q, to_world(s.body.q, body_force), p.wheel_position(i));
+            const contact_geometry c = contact_of(p, s.body, i, f.steer);
+            vec3 force = f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left;
+            if (p.vertical == vertical_model::springs)
+                force.z += f.fz[i];
+            add_force_at(w, s.body.q, force, c.point);
         }
-        w.force.z += p.chassis.mass * kGravity; // the car stays on the ground plane for now
+        if (p.vertical == vertical_model::planar)
+            w.force.z += p.chassis.mass * kGravity; // the flat car stays on the ground plane
         return w;
     }
 

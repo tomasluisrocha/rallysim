@@ -7,9 +7,18 @@
 
 using namespace rallysim;
 
-// The four-wheel car piece by piece: where the wheels are, how fast each contact patch moves, the loads,
-// how the tyre forces reach the body, and simple runs with closed-form answers. The comparison with the
-// single-track (the phase 4 gate) is in test_four_wheel_behaviour.cpp.
+// The four-wheel car piece by piece, with the planar vertical model (the car flat on the ground plane, loads
+// from the quasi-static transfer): where the wheels are, how fast each contact patch moves, the loads, how the
+// tyre forces reach the body, and simple runs with closed-form answers. The springs model is tested in
+// test_four_wheel_springs.cpp, the comparison with the single-track (the phase 4 gate) in
+// test_four_wheel_behaviour.cpp.
+
+static four_wheel_params planar_car()
+{
+    four_wheel_params p;
+    p.vertical = vertical_model::planar;
+    return p;
+}
 
 // A car at heading `yaw`, velocity (u, v) in its own frame, yaw rate r, every wheel rolling at u.
 static four_wheel_state moving(const four_wheel_params &p, Real yaw, Real u, Real v, Real r)
@@ -34,7 +43,7 @@ static bool identical(const four_wheel_state &a, const four_wheel_state &b)
 
 int main()
 {
-    const four_wheel_params p; // 1200 kg, lf 1.3, lr 1.2, tracks 1.5, h 0.5; tyres 30 / 35 kN/rad
+    const four_wheel_params p = planar_car(); // 1200 kg, lf 1.3, lr 1.2, tracks 1.5, h 0.5; tyres 30 / 35 kN/rad
     const Real weight = p.chassis.mass * kGravity;
     const Real dt = 0.001;
 
@@ -166,6 +175,8 @@ int main()
                    s.body.omega.z > 0 && s.body.pos.y > 0 && yaw_angle(s.body.q) > 0);
 
         four_wheel_run left = four_wheel_lane_change();
+        left.params = p;
+        left.initial = four_wheel_initial(p, 15.0);
         four_wheel_run right = left;
         for (auto &k : right.script.keys)
             k.value.steer = -k.value.steer;
@@ -175,7 +186,7 @@ int main()
         check_near("mirror: yaw rate", a.body.omega.z, -b.body.omega.z, 1e-9);
         check_near("mirror: left and right wheels swap", a.wheels[FL].omega, b.wheels[FR].omega, 1e-9);
         check_near("plane: stays on the ground", a.body.pos.z, 0.0, 1e-9);
-        check_true("determinism: two runs give identical bits", identical(a, run(four_wheel_lane_change())));
+        check_true("determinism: two runs give identical bits", identical(a, run(left)));
     }
 
     // friction: a hard steer at speed, and no tyre force ever exceeds that tyre's grip
@@ -204,7 +215,7 @@ int main()
         const four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in);
-        check_true("telemetry: 15 + 4 x 8 columns, units and values", names.size() == 47 && units.size() == 47 && row.size() == 47);
+        check_true("telemetry: 18 + 4 x 12 columns, units and values", names.size() == 66 && units.size() == 66 && row.size() == 66);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);
