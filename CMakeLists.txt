@@ -70,3 +70,7 @@ add_test(NAME input_script COMMAND test_input_script)
 add_executable(test_bicycle_telemetry tests/test_bicycle_telemetry.cpp)
 target_link_libraries(test_bicycle_telemetry PRIVATE rallysim_core)
 add_test(NAME bicycle_telemetry COMMAND test_bicycle_telemetry)
+
+add_executable(test_golden_bicycle tests/test_golden_bicycle.cpp)
+target_link_libraries(test_golden_bicycle PRIVATE rallysim_core)
+add_test(NAME golden_bicycle COMMAND test_golden_bicycle)
