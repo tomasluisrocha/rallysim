@@ -207,7 +207,7 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             f.patch[i] = patch_velocity_of(p, s.body, i, f.steer);
-            f.tyre[i] = tyre_forces(p.tyre(i), s.wheels[i].slip_ratio, s.wheels[i].lateral_slip, f.fz[i]);
+            f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
         }
         return f;
     }
@@ -238,7 +238,7 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             spin_wheel(s.wheels[i], p.wheel, f.tyre[i].fx, f.torque[i].drive, f.torque[i].brake, dt);
-            relax_slips(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], dt);
+            relax_slips(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], dt);
         }
         step(s.body, p.chassis, w, dt);
     }

@@ -61,17 +61,63 @@ namespace rallysim
         return -v.vy / std::max(rolling_speed(w, omega, v.vx), kSlipSpeedFloor);
     }
 
+    // The relaxed slips stand for how far the contact patch is twisted (sigma times the slip). A tyre cannot be
+    // twisted further than its grip can hold: beyond that the patch slides. So if the force the slips would make,
+    // (Cx sx, C_alpha sy), is more than the grip at load fz, both are scaled back onto the friction circle. The
+    // force does not change (tyre_forces caps it the same way), but a tyre that stops sliding is left twisted
+    // by a few millimetres instead of by sigma (20 cm for a locked wheel), which threw a stopped car backwards.
+    inline void cap_slips(wheel_state &s, const tyre_params &t, Real fz)
+    {
+        const Real grip = tyre_grip(t, fz);
+        const Real size = std::hypot(t.longitudinal_stiffness * s.slip_ratio, t.cornering_stiffness * s.lateral_slip);
+        if (size > grip)
+        {
+            const Real scale = grip / size; // zero in the air: an unloaded tyre is not twisted
+            s.slip_ratio *= scale;
+            s.lateral_slip *= scale;
+        }
+    }
+
     // Relaxation of the slips towards their steady values over the relaxation lengths:
     //   sigma_x d(sx)/dt + V sx = omega R - vx        sigma_y d(sy)/dt + V sy = -vy        (V = rolling speed)
     // so the slip builds over a rolling distance, not a time. At standstill (V = 0) they integrate the patch
-    // creep instead of dividing by zero: the tyre acts as a spring. Backward Euler, stable for any dt and V.
-    inline void relax_slips(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v, Real dt)
+    // creep instead of dividing by zero: the tyre acts as a spring. Backward Euler, stable for any dt and V;
+    // then capped at what the grip at load fz can hold.
+    inline void relax_slips(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v, Real fz, Real dt)
     {
         const Real V = rolling_speed(w, s.omega, v.vx);
         s.slip_ratio = (s.slip_ratio + dt / t.relaxation_length_x * (s.omega * w.radius - v.vx)) /
                        (1 + dt * V / t.relaxation_length_x);
         s.lateral_slip = (s.lateral_slip + dt / t.relaxation_length_y * (-v.vy)) /
                          (1 + dt * V / t.relaxation_length_y);
+        cap_slips(s, t, fz);
+    }
+
+    // The force of the tyre on the car (N, wheel frame): the twisted contact patch (tyre_forces), plus at low
+    // speed a damping force against the patch's sliding, (omega R - vx) along the wheel and -vy across it. The
+    // damping fades in linearly below damping_fade_speed, so at speed nothing changes; at standstill it soaks
+    // up the patch's spring, so a stopped car settles instead of rocking. The total stays within the grip.
+    //
+    // Keep damping_x * R^2 * dt / I below about 0.5: the damping also acts on the wheel's spin (through -Fx R),
+    // and above that the explicit spin update overshoots and blows up (book chapter 14).
+    inline tyre_force wheel_force(const wheel_state &s, const wheel_params &w, const tyre_params &t,
+                                  const patch_velocity &v, Real fz)
+    {
+        tyre_force f = tyre_forces(t, s.slip_ratio, s.lateral_slip, fz);
+        const Real V = rolling_speed(w, s.omega, v.vx);
+        const Real weight = std::clamp(1 - V / t.damping_fade_speed, static_cast<Real>(0), static_cast<Real>(1));
+        if (weight > 0)
+        {
+            f.fx += weight * t.damping_x * (s.omega * w.radius - v.vx);
+            f.fy += weight * t.damping_y * (-v.vy);
+            const Real grip = tyre_grip(t, fz), size = std::hypot(f.fx, f.fy);
+            if (size > grip)
+            {
+                f.fx *= grip / size;
+                f.fy *= grip / size;
+            }
+        }
+        return f;
     }
 
     // Spin update: I domega/dt = T_drive - T_brake - Fx R. The brake torque (a magnitude) opposes the spin. If
@@ -91,9 +137,9 @@ namespace rallysim
     inline tyre_force step_wheel(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v,
                                  Real fz, Real drive_torque, Real brake_torque, Real dt)
     {
-        const tyre_force f = tyre_forces(t, s.slip_ratio, s.lateral_slip, fz);
+        const tyre_force f = wheel_force(s, w, t, v, fz);
         spin_wheel(s, w, f.fx, drive_torque, brake_torque, dt);
-        relax_slips(s, w, t, v, dt);
+        relax_slips(s, w, t, v, fz, dt);
         return f;
     }
 }

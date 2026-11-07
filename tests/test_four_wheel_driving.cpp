@@ -264,6 +264,55 @@ int main()
                    std::fabs(std::atan2(v.v, v.u)) < 2 * 3.14159265358979 / 180 && v.u > 10);
     }
 
+    // standstill (phase 4, step 5): the car stops and stays stopped, a parked car does not creep, and letting
+    // go of the brake leaves it where it is
+    {
+        const four_wheel_params p; // load sensitivity on, as the car is normally run
+        four_wheel_state s = four_wheel_initial(p, 20.0);
+        const four_wheel_input brake{0.0, 0.0, 1.0, 0.0};
+        long i = 0;
+        while (velocity_in_body(s.body).u > 0 && i < 100000)
+        {
+            step(s, p, brake, dt);
+            ++i;
+        }
+        const Real stopped_at = s.body.pos.x;
+        Real after = 0, back = 0, turned = 0;
+        for (int k = 0; k < 3000; ++k)
+        {
+            step(s, p, brake, dt);
+            if (k >= 500)
+                after = std::max(after, std::fabs(velocity_in_body(s.body).u));
+            back = std::max(back, stopped_at - s.body.pos.x);
+            for (const wheel_state &w : s.wheels)
+                turned += std::fabs(w.omega) * dt;
+        }
+        // the front tyre, still twisted by sigma_x * grip / Cx when it stops sliding, sets how far the car moves back
+        const Real twist = p.front_tyre.relaxation_length_x * tyre_grip(p.front_tyre, 4000.0) / p.front_tyre.longitudinal_stiffness;
+        std::printf("standstill: after the stop |u| < %.6f m/s from 0.5 s on, rolled back %.4f m, wheels turned %.6f rad\n",
+                    after, back, turned);
+        check_true("standstill: the stopped car is below 1 cm/s after half a second", after < 0.01);
+        check_true("standstill: it rolls back less than twice the tyres' capped twist", back < 2 * twist);
+        // as the load moves back to the rear, the rear tyres briefly push harder than the rear brakes hold (30% bias)
+        // and turn the wheels by a hair; then the brakes hold
+        check_true("standstill: the braked wheels turn by less than 0.01 rad in all", turned < 0.01);
+
+        // let go of the brake: the last few millimetres of twist unwind and the car stays put
+        const Real released_at = s.body.pos.x;
+        for (int k = 0; k < 3000; ++k)
+            step(s, p, four_wheel_input{}, dt);
+        std::printf("standstill: brake released, moved %.4f m, now at %.6f m/s\n", s.body.pos.x - released_at,
+                    velocity_in_body(s.body).u);
+        check_true("standstill: releasing the brake moves the car less than 1 cm", std::fabs(s.body.pos.x - released_at) < 0.01);
+        check_true("standstill: and it ends at rest", std::fabs(velocity_in_body(s.body).u) < 1e-3);
+
+        // parked with the brake on and a little throttle (less torque than the brake): no creep
+        four_wheel_state parked = four_wheel_initial(p, 0.0);
+        for (int k = 0; k < 5000; ++k)
+            step(parked, p, four_wheel_input{0.0, 0.05, 0.3, 0.0}, dt);
+        check_true("standstill: brake on, a little throttle, no creep", std::fabs(parked.body.pos.x) < 1e-3);
+    }
+
     // the speed controller brakes when the car is too fast
     {
         four_wheel_run r;

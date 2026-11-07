@@ -238,7 +238,9 @@ def wheel_state(run, wheel, i):
     """'LOCK', 'SPIN', 'SLIDE' or '' for a wheel at row i."""
     if wheel.omega is not None and wheel.omega[i] == 0 and abs(run.speed[i]) > LOCK_SPEED:
         return "LOCK"
-    if wheel.slip_ratio is not None:
+    # slip means nothing when nothing rolls: at a standstill (omega R - vx) / max(|vx|, |omega R|) is 0/0 and reads +-1
+    rolling = max(abs(run.speed[i]), abs(wheel.omega[i]) * run.tyre_length / 2 if wheel.omega is not None else 0.0)
+    if wheel.slip_ratio is not None and rolling > LOCK_SPEED:
         if wheel.slip_ratio[i] > SPIN_SLIP:
             return "SPIN"
         if wheel.slip_ratio[i] < -SPIN_SLIP:

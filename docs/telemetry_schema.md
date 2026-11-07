@@ -172,8 +172,8 @@ Each wheel block, in this order:
 | Field | Unit | Meaning |
 |---|---|---|
 | `omega` | rad/s | Wheel spin, positive rolling forward |
-| `slipRatio` | - | Relaxed slip ratio: positive driving, -1 a locked wheel sliding forward |
-| `slipAngle` | rad | Relaxed slip angle (`atan` of the lateral slip): positive when the wheel points left of its path |
+| `slipRatio` | - | Steady (kinematic) slip ratio of the contact patch, `(omega R - vx) / max(|vx|, |omega R|)`: positive driving, -1 a locked wheel sliding forward. Meaningless at a standstill |
+| `slipAngle` | rad | Steady slip angle, `atan(-vy / max(|vx|, |omega R|))`: positive when the wheel points left of its path |
 | `Fz` | N | Vertical load, with the quasi-static load transfer |
 | `Fx` | N | Tyre force along the wheel |
 | `Fy` | N | Tyre force across the wheel, positive to its left |
@@ -181,7 +181,9 @@ Each wheel block, in this order:
 | `brakeTorque` | N m | Brake torque on this wheel (a magnitude; it opposes the spin) |
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
-axes. As in the other files, the columns from `steer` on belong to the step that starts from that row's state.
+axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own
+relaxed slips (the twist of the tyre, which the force comes from) are not logged: they are capped at the grip, so a
+locked wheel's relaxed slip is about -0.03, not -1. As in the other files, the columns from `steer` on belong to the step that starts from that row's state.
 
 ## Rules
 

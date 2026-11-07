@@ -108,8 +108,12 @@ int main()
     }
 
     // relaxation: the slip builds over a rolling distance, 1 - exp(-d / sigma) after rolling d. Backward Euler
-    // lags the exact curve by about half a step, so the tolerance is tied to the step: dt V / sigma.
+    // lags the exact curve by about half a step, so the tolerance is tied to the step: dt V / sigma. With no load
+    // sensitivity and a big load, so the grip cap (tested below) stays out of the way.
     {
+        tyre_params uncapped = t;
+        uncapped.load_sensitivity = 0;
+        const Real big_load = 1e5;
         struct result
         {
             Real got, exact, step; // fraction of the steady slip reached, exact fraction, dt V / sigma
@@ -124,7 +128,7 @@ int main()
             const Real V = rolling_speed(w, s.omega, v.vx);
             const long steps = std::lround(lengths * sigma / V / h);
             for (long i = 0; i < steps; ++i)
-                relax_slips(s, w, t, v, h);
+                relax_slips(s, w, uncapped, v, big_load, h);
             const Real target = lateral ? steady_lateral_slip(w, s.omega, v) : steady_slip_ratio(w, s.omega, v.vx);
             const Real rolled = steps * h * V;
             return result{(lateral ? s.lateral_slip : s.slip_ratio) / target, 1 - std::exp(-rolled / sigma), h * V / sigma};
@@ -163,6 +167,26 @@ int main()
         check_near(what, r.v, speed, 1e-9);
     }
 
+    // low speed, where the damping acts: a twisted tyre on a free wheel at rest unwinds and settles without the
+    // spin update blowing up (the damping also acts on the spin, book chapter 14), and so does a slow roll
+    {
+        rig r = rolling_rig(0.0);
+        r.s.slip_ratio = 0.02; // a twisted tyre, about 4 mm, on a free wheel
+        Real worst_omega = 0;
+        for (int i = 0; i < 2000; ++i)
+        {
+            rig_step(r, 0.0, 0.0, dt);
+            worst_omega = std::max(worst_omega, std::fabs(r.s.omega));
+        }
+        check_true("low speed: a twisted free wheel stays finite (no blow-up)", std::isfinite(r.s.omega) && worst_omega < 10.0);
+        check_true("low speed: and settles", std::fabs(r.v) < 1e-3 && std::fabs(r.s.omega) < 1e-2);
+
+        rig slow = rolling_rig(0.1);
+        for (int i = 0; i < 5000; ++i)
+            rig_step(slow, 0.0, 0.0, dt);
+        check_near("low speed: rolling at 0.1 m/s keeps its speed (the damping only acts on sliding)", slow.v, 0.1, 1e-9);
+    }
+
     // gentle drive: no wheelspin, a = (T / R) / (m + I / R^2): the wheel's spin inertia adds to the mass
     {
         rig r = rolling_rig(10.0);
@@ -199,16 +223,27 @@ int main()
         check_near("braking: distance = v^2 / (2 mu g) within 2%", r.x, expected, 0.02 * expected);
         check_true("braking: the wheel is locked, not turning backwards", never_backwards && r.s.omega == 0.0);
 
-        // after the stop: the brake still holds the wheel, and the tyre is left wound up like a spring, so the
-        // rig rocks on it. Nothing damps that yet (phase 4, step 5); here it only must not grow.
-        Real early = 0, late = 0;
-        for (int i = 0; i < 4000; ++i)
+        // while sliding, the twist is capped at what the grip can hold: grip / Cx, about 3%, not -1
+        const Real cap = tyre_grip(t, r.mass * kGravity) / t.longitudinal_stiffness;
+        check_true("cap: a locked tyre is twisted only as far as its grip holds", std::fabs(r.s.slip_ratio) <= cap * (1 + 1e-12));
+
+        // after the stop: the brake holds the wheel and the rig settles within half a second, without rolling back
+        const Real stopped_at = r.x;
+        Real settle = 0, after = 0, back = 0;
+        for (int i = 0; i < 3000; ++i)
         {
             rig_step(r, 0.0, 3000.0, dt);
-            (i < 1000 ? early : late) = std::max(i < 1000 ? early : late, std::fabs(r.v));
+            (i < 500 ? settle : after) = std::max(i < 500 ? settle : after, std::fabs(r.v));
+            back = std::max(back, stopped_at - r.x);
         }
-        std::printf("after the stop: largest |v| in the first second %.4f m/s, in the last three %.4f m/s\n", early, late);
-        check_true("after the stop: the rocking does not grow", late <= early * (1 + 1e-9));
+        std::printf("after the stop: largest |v| in the first 0.5 s %.4f m/s, afterwards %.6f m/s, rolled back %.4f m\n",
+                    settle, after, back);
+        check_true("after the stop: below 1 cm/s after half a second, and it stays there", after < 0.01);
+        // the tyre is still twisted by sigma_x * cap when it stops sliding; it unwinds, so the rig moves back by
+        // about that much (6.7 mm here), plus a little overshoot
+        const Real twist = t.relaxation_length_x * cap;
+        check_true("after the stop: it rolls back less than twice the tyre's capped twist", back < 2 * twist);
+        check_true("after the stop: the wheel stays locked", r.s.omega == 0.0);
 
         // halving dt converges
         const Real d1 = braking_distance(20.0, 0.002), d2 = braking_distance(20.0, 0.001), d3 = braking_distance(20.0, 0.0005);

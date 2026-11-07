@@ -34,14 +34,7 @@ namespace rallysim
     // much of each tyre's grip is in use: grip = mu (1 - k (Fz - Fz0) / Fz0) Fz.
     inline telemetry_meta four_wheel_meta(const four_wheel_params &p)
     {
-        return {{"model", 4}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_front}, {"track_rear", p.track_rear},
-                {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass},
-                {"wheel_radius", p.wheel.radius},
-                {"mu_front", p.front_tyre.friction_coefficient}, {"k_front", p.front_tyre.load_sensitivity},
-                {"fz0_front", p.front_tyre.nominal_load},
-                {"mu_rear", p.rear_tyre.friction_coefficient}, {"k_rear", p.rear_tyre.load_sensitivity},
-                {"fz0_rear", p.rear_tyre.nominal_load},
-                {"drive_split_front", p.drive_brake.drive_split_front}};
+        return {{"model", 4}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_front}, {"track_rear", p.track_rear}, {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass}, {"wheel_radius", p.wheel.radius}, {"mu_front", p.front_tyre.friction_coefficient}, {"k_front", p.front_tyre.load_sensitivity}, {"fz0_front", p.front_tyre.nominal_load}, {"mu_rear", p.rear_tyre.friction_coefficient}, {"k_rear", p.rear_tyre.load_sensitivity}, {"fz0_rear", p.rear_tyre.nominal_load}, {"drive_split_front", p.drive_brake.drive_split_front}};
     }
 
     inline std::vector<std::string> four_wheel_units()
@@ -55,9 +48,11 @@ namespace rallysim
     }
 
     // `input` is the command applied at this step (the pedals as given, the steer limited); everything after it
-    // is computed by evaluate(), the same function the step uses. slipRatio and slipAngle are the wheel's relaxed
-    // slips (slipAngle = atan of the lateral slip); Fx and Fy are in the wheel's frame; driveTorque and
-    // brakeTorque are what the pedals put on that wheel. See docs/telemetry_schema.md.
+    // is computed by evaluate(), the same function the step uses. slipRatio and slipAngle are the steady
+    // (kinematic) slips of the contact patch, from the wheel's spin and the patch velocity: -1 is a locked wheel
+    // sliding forward. The relaxed slips inside the wheel are capped at the grip, so they say how far the tyre is
+    // twisted, not how fast it slides. Fx and Fy are in the wheel's frame; driveTorque and brakeTorque are what
+    // the pedals put on that wheel. See docs/telemetry_schema.md.
     inline std::vector<Real> four_wheel_row(long step, Real dt, const four_wheel_state &s,
                                             const four_wheel_params &p, const four_wheel_input &input)
     {
@@ -70,8 +65,9 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             const wheel_state &w = s.wheels[i];
-            row.insert(row.end(), {w.omega, w.slip_ratio, std::atan(w.lateral_slip), f.fz[i], f.tyre[i].fx, f.tyre[i].fy,
-                                   f.torque[i].drive, f.torque[i].brake});
+            row.insert(row.end(), {w.omega, steady_slip_ratio(p.wheel, w.omega, f.patch[i].vx),
+                                   std::atan(steady_lateral_slip(p.wheel, w.omega, f.patch[i])), f.fz[i], f.tyre[i].fx,
+                                   f.tyre[i].fy, f.torque[i].drive, f.torque[i].brake});
         }
         return row;
     }
