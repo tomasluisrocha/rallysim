@@ -87,3 +87,7 @@ add_test(NAME single_track_script COMMAND test_single_track_script)
 add_executable(test_single_track_telemetry tests/test_single_track_telemetry.cpp)
 target_link_libraries(test_single_track_telemetry PRIVATE rallysim_core)
 add_test(NAME single_track_telemetry COMMAND test_single_track_telemetry)
+ 
+add_executable(test_single_track_behaviour tests/test_single_track_behaviour.cpp)
+target_link_libraries(test_single_track_behaviour PRIVATE rallysim_core)
+add_test(NAME single_track_behaviour COMMAND test_single_track_behaviour)
