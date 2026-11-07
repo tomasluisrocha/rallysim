@@ -1,6 +1,6 @@
 #include <cmath>
 #include <cstdio>
-#include "core/thrown_body.hpp"
+#include "scenarios/thrown_body.hpp"
 
 using namespace rallysim;
 
