@@ -12,6 +12,20 @@ namespace rallysim
         Real x = 0, y = 0, yaw = 0, v = 0;
     };
 
+    // The first field of the state that is not a finite number (NaN or infinity), or nullptr if all are.
+    inline const char *non_finite_field(const bicycle_state &s)
+    {
+        if (!std::isfinite(s.x))
+            return "x";
+        if (!std::isfinite(s.y))
+            return "y";
+        if (!std::isfinite(s.yaw))
+            return "yaw";
+        if (!std::isfinite(s.v))
+            return "v";
+        return nullptr;
+    }
+
     struct bicycle_params
     {
         // distance from front and rear wheel to center of gravity (m)

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/finite.hpp"
 #include "core/telemetry.hpp"
 #include "driver/scripts.hpp"
 #include "driver/speed_hold.hpp"
@@ -38,15 +39,18 @@ namespace rallysim
 
     // Runs the scenario with a fixed step and returns the final state.
     // If writer is not null, one telemetry row is written per step, plus one for the final state.
+    // Stops with an exception naming the field, step and time if the state stops being finite (core/finite.hpp).
     inline rigid_body_state run(const single_track_run &r, telemetry_writer *writer = nullptr)
     {
         rigid_body_state s = r.initial;
+        require_finite(s, 0, r.dt);
         for (long i = 0; i < r.steps; ++i)
         {
             const single_track_input in = driver_input(r, s, i * r.dt);
             if (writer)
                 writer->row(single_track_row(i, r.dt, s, r.params, in));
             step(s, r.params, in, r.dt);
+            require_finite(s, i + 1, r.dt);
         }
         if (writer)
             writer->row(single_track_row(r.steps, r.dt, s, r.params, driver_input(r, s, r.steps * r.dt)));

@@ -1,8 +1,10 @@
 #pragma once
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <iomanip>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,7 +29,7 @@ namespace rallysim
                          const std::vector<std::string> &names,
                          const std::vector<std::string> &units,
                          const telemetry_meta &meta = {})
-            : columns_(names.size())
+            : columns_(names.size()), names_(names)
         {
             assert(names.size() == units.size());
 
@@ -57,17 +59,28 @@ namespace rallysim
         // False if the file could not be opened or a write has failed.
         bool ok() const { return out_.is_open() && out_.good(); }
 
-        // Writes one row. Must have exactly one value per column.
+        // Writes one row. Must have exactly one value per column. Every value must be finite: a NaN or infinity is
+        // refused with an exception naming the column and the row, before anything of the row is written. Besides
+        // marking a bug, MSVC would write it as "-nan(ind)", which the tools cannot read as a number (pandas turns
+        // the whole column into text). The runners already stop on a non-finite state; this also covers the
+        // columns worked out from it, such as forces and loads.
         void row(const std::vector<Real> &values)
         {
             assert(values.size() == columns_);
             for (std::size_t i = 0; i < values.size(); ++i)
+                if (!std::isfinite(values[i]))
+                    throw std::runtime_error("telemetry: column " + names_[i] + " is not finite in row " +
+                                             std::to_string(rows_));
+            for (std::size_t i = 0; i < values.size(); ++i)
                 out_ << (i ? "," : "") << values[i];
             out_ << '\n';
+            ++rows_;
         }
 
     private:
         std::ofstream out_;
         std::size_t columns_;
+        std::vector<std::string> names_; // for naming a column in an error
+        long rows_ = 0;                  // rows written so far
     };
 }

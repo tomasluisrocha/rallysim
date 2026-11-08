@@ -5,10 +5,10 @@ files, these only read them. Everything goes under `out/`, which git ignores, so
 remade with `run_all.py`.
 
 Run them from the `sim/` folder with `py tools/<tool>.py` (or `python`); each has `--help`.
-They need numpy, pandas and matplotlib, and Pillow for GIFs:
+They need numpy, pandas and matplotlib, and Pillow for GIFs, all listed in `tools/requirements.txt`:
 
 ```
-py -m pip install numpy pandas matplotlib pillow
+py -m pip install -r tools/requirements.txt
 ```
 
 ## Quick start
@@ -42,6 +42,8 @@ py tools/run_all.py --no-plots              just the CSVs
 ```
 
 It asks `rallysim list` for the scenario names, so a new scenario added to `apps/main.cpp` is picked up on its own.
+A scenario whose state stops being finite (a NaN or infinity, `core/finite.hpp`) is listed as FAILED with
+`rallysim`'s message (the field, step and time); its CSV ends where the run stopped, and the script exits with 1.
 
 ### topdown.py
 

@@ -16,6 +16,9 @@ step,time,pos.x,...
 - Line 2 is the header: dotted column names, comma separated.
 - Every following line is one row of numbers.
 - Numbers are written with 17 significant digits, so a value reads back as exactly the same double.
+- Every number is finite: the writer refuses a NaN or infinity (an exception naming the column and the row) rather
+  than write it, and the runners stop a run whose state stops being finite (`core/finite.hpp`). A file that ends
+  early was cut short by that; `rallysim` prints why.
 - Lines end with `\n` only, on every platform.
 
 ## Facts on line 1
@@ -234,6 +237,7 @@ linear,x,1500,-1.0000,0.00,-1575,0
 ## Rules
 
 - Look columns up by name, never by position.
+- Never write a NaN or infinity; `telemetry_writer::row` enforces it.
 - Never rename or remove a column without changing `kTelemetrySchema`.
 - New columns go at the end. Readers that look columns up by name keep working, so this needs no schema change.
 - Keep the column names, the units and the row function in the same order. `test_rigid_body_telemetry` checks this.

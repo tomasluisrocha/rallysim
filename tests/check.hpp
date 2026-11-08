@@ -5,6 +5,24 @@
 
 // Shared helpers for the test programs. Include it once per test and end main() with finish().
 
+#if defined(_MSC_VER) && defined(_DEBUG)
+#include <crtdbg.h>
+#include <cstdlib>
+// In a Debug build on Windows, a failed assert or an abort() opens a dialog and waits for a click. On the CI runner
+// nobody clicks, so the job would hang until GitHub's timeout. Send those messages to the console instead: the test
+// prints the message and stops, and CTest reports it as failed. Runs once, before main().
+inline const bool tests_never_open_dialogs = []
+{
+    _set_error_mode(_OUT_TO_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    return true;
+}();
+#endif
+
 inline int failures = 0;
 
 inline void check_true(const char *what, bool ok)

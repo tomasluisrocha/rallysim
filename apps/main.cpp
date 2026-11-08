@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdio>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -120,7 +121,17 @@ int main(int argc, char **argv)
         std::filesystem::create_directories(folder, ec); // if this fails, opening the file reports it
     }
 
-    const bool ok = found->write(path);
+    bool ok = false;
+    try
+    {
+        ok = found->write(path);
+    }
+    catch (const std::exception &e)
+    {
+        // a non-finite state or telemetry value (core/finite.hpp): say where, and fail; the file stops there
+        std::printf("%s failed: %s\n", name.c_str(), e.what());
+        return 1;
+    }
     if (!ok)
     {
         std::printf("could not open %s for writing\n", path.c_str());

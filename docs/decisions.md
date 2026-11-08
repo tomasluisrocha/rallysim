@@ -47,12 +47,14 @@ written down before it is coded (section 5.1). This file holds both. Record any 
 
 | Folder | Holds | May include |
 |---|---|---|
-| `core/` | Maths and generic machinery: vec3, quat, wrench, rigid body, fixed-step clock, telemetry writer | `core/` only |
+| `core/` | Maths and generic machinery: vec3, quat, wrench, rigid body, fixed-step clock, telemetry writer, the non-finite guard | `core/` only |
 | `vehicle/` | The car models and their telemetry rows: bicycle, single-track, four-wheel; and the car's parts: tyre, wheel, drive and brakes, corner springs | `core/` |
 | `driver/` | What produces the inputs: keyframe scripts, speed-hold controller | `core/`, `vehicle/` |
 | `scenarios/` | One model + one driver + one script + a run length, and the runners | all of the above |
 | `apps/` | The `rallysim` program | `scenarios/` |
-| `tests/` | One `test_<name>.cpp` per area, registered with `rallysim_test(<name>)`, plus shared helpers | anything |
+| `tests/` | One `test_<name>.cpp` per area, registered with `rallysim_test(<name>)`, plus shared helpers (`check.hpp`, which also keeps Debug tests from opening dialogs on Windows) | anything |
+| `tools/` | Python tools that read the CSVs and draw (`tools/README.md`); `requirements.txt` | the CSV files only |
+| `.github/workflows/` | CI: `ci.yml` builds and runs every test, Release and Debug, on Windows (MSVC) and Linux (GCC), on every push | — |
 
 Dependencies point one way only. `world/` (terrain, surfaces) and `data/` (car files and their loader) are
 created when the first phase needs them. Runs and pictures are written to `out/`, which git ignores; its folders and
@@ -116,3 +118,7 @@ the tools that fill them are in `tools/README.md`.
 | 2026-11 | `fw_brake` runs 5 s (was 4); handbrake flick pull 0.40 (was 0.55) | A locked tmeasy stop takes 3.3 s and 42.5 m. Measured flick on tmeasy: 0.34 gives 4 deg, 0.40 gives 7, 0.42 gives 9, 0.44 spins (a sliding rear loses grip as it slides more, so slides stay small or run away); on peak_slide the edge was 0.40. Replaces the 0.55 entry above |
 | 2026-11 | Rungs 6 (Magic Formula) and 7 (surface curves) not done; tmeasy has no self-aligning torque, camber or rolling resistance | The book: the Magic Formula is "not more accurate by itself; the coefficients are the model", for when there is data. Surface curves are chapter 9; camber is phase 6; aligning torque matters for steering feel only |
 | 2026-11 | Tools: `out/` split into `runs/`, `rig/`, `plots/`, `gif/`, `snapshots/`, `scratch/`; `run_all.py`, `tyre_points.py`, `compare.py` and the shared `simdata.py` (see `tools/README.md`); each tyre's curve and tables go on line 1 of the four-wheel files | Comparing a physics change against a snapshot is one command. `simdata.py` repeats the C++ tyre and matches the rig to 0.005 N on every row. New line-1 keys need no schema change |
+| 2026-11 | CI (`.github/workflows/ci.yml`): every push and pull request builds and runs all tests, Release and Debug, on Windows (MSVC, `windows-2025`) and Linux (GCC 15.2, `ubuntu-26.04`); `checkout@v5`; a newer push cancels the older run on the same branch | Book ch. 26, tier T2 (CI on every commit, golden runs). The runners are pinned, because a new image can change a compiler's last bits and with them the golden values: an upgrade is then a deliberate commit. First run: no warnings at `/W4` or `-Wall -Wextra`, and MSVC and GCC agree on every golden value to 1e-9 |
+| 2026-11 | Non-finite guard: `non_finite_field(state)` for the rigid body, the bicycle and the four-wheel car names the first field that is NaN or infinite; the runners call `require_finite` (`core/finite.hpp`) on the initial state and after every step, and throw with the field, step and time; `telemetry_writer::row` refuses a non-finite value, naming the column and row; `rallysim` prints the error and exits with 1 | Book ch. 26: "fail the build on NaN or infinity anywhere in the state". A NaN does not crash: it spreads through the state in a step or two and the run goes on, and MSVC would write it as `-nan(ind)`, which pandas reads as text. Checked after `step()`, not inside it, so the physics loop is untouched; code that calls `step()` directly (some tests, later the viewer) calls `require_finite` itself. Test: a NaN steer stops the run at step 2 |
+| 2026-11 | `normalized()` (vec3, quat) asserts `!(n <= 0)`, not `n > 0` | The assert guards against dividing by zero. Written as `n > 0` it also fired on a NaN (inside `step()`, before the runner's check), with no field or step to go on; now a NaN passes and the guard reports it a step later, by name |
+| 2026-11 | Debug tests on Windows send failed asserts and `abort()` to the console instead of a dialog (`tests/check.hpp`) | A dialog waits for a click; on the CI runner nobody clicks and the job would hang until GitHub's timeout. Checked: a failing assert prints and exits with code 3 at once |

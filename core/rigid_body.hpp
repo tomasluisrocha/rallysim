@@ -78,4 +78,19 @@ namespace rallysim
         // Orientation: integrate the new body-frame angular velocity.
         s.q = integrate(s.q, s.omega, dt);
     }
+
+    // The first field of the state that is not a finite number (NaN or infinity), or nullptr if all are. The
+    // runners stop on it through require_finite (core/finite.hpp; book ch. 26: fail on any non-finite state).
+    inline const char *non_finite_field(const rigid_body_state &s)
+    {
+        if (!is_finite(s.pos))
+            return "body.pos";
+        if (!is_finite(s.vel))
+            return "body.vel";
+        if (!is_finite(s.q))
+            return "body.q";
+        if (!is_finite(s.omega))
+            return "body.omega";
+        return nullptr;
+    }
 }

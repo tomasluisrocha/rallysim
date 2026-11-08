@@ -62,7 +62,9 @@ namespace rallysim
     inline quat normalized(const quat &a)
     {
         Real n = norm(a);
-        assert(n > 0);
+        // Guards against dividing by zero. Written so a NaN passes: a NaN state is reported by the runners'
+        // finite guard (core/finite.hpp), which names the field and the step; an assert here could not.
+        assert(!(n <= 0));
         return quat{a.w / n, a.x / n, a.y / n, a.z / n};
     }
 
@@ -96,4 +98,11 @@ namespace rallysim
                                q.y + h * d.y,
                                q.z + h * d.z});
     }
+
+    // True when every component is a real number: no NaN, no infinity (book ch. 26: fail on non-finite state).
+    inline bool is_finite(const quat &q)
+    {
+        return std::isfinite(q.w) && std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z);
+    }
+
 }

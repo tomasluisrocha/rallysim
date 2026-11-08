@@ -76,10 +76,10 @@ namespace rallysim
         // half of the single-track front and rear axles (60 / 70 kN/rad), at each wheel's load at rest
         tyre_params front_tyre = car_tyre(90000, 30000, 0.5 * chassis.mass * kGravity * lr / (lf + lr));
         tyre_params rear_tyre = car_tyre(90000, 35000, 0.5 * chassis.mass * kGravity * lf / (lf + lr));
-        drive_brake_params drive_brake;                     // pedals to wheel torques; rear drive by default
-        vertical_model vertical = vertical_model::springs;  // how the vertical loads are found (see above)
-        corner_params front_corner;                         // suspension of each front corner (springs model)
-        corner_params rear_corner;                          // and of each rear corner
+        drive_brake_params drive_brake;                    // pedals to wheel torques; rear drive by default
+        vertical_model vertical = vertical_model::springs; // how the vertical loads are found (see above)
+        corner_params front_corner;                        // suspension of each front corner (springs model)
+        corner_params rear_corner;                         // and of each rear corner
 
         Real wheelbase() const { return lf + lr; }
         const tyre_params &tyre(std::size_t i) const { return is_front(i) ? front_tyre : rear_tyre; }
@@ -129,6 +129,30 @@ namespace rallysim
         Real handbrake = 0; // 0 to 1, rear wheels only
     };
 
+    // The first field of the four-wheel state that is not a finite number, or nullptr if all are: the body, then
+    // each wheel's spin and relaxed slips, in the fixed wheel order.
+    inline const char *non_finite_field(const four_wheel_state &s)
+    {
+        if (const char *bad = non_finite_field(s.body))
+            return bad;
+        static const char *const names[kWheels][3] = {
+            {"wheel FL omega", "wheel FL slip_ratio", "wheel FL lateral_slip"},
+            {"wheel FR omega", "wheel FR slip_ratio", "wheel FR lateral_slip"},
+            {"wheel RL omega", "wheel RL slip_ratio", "wheel RL lateral_slip"},
+            {"wheel RR omega", "wheel RR slip_ratio", "wheel RR lateral_slip"}};
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            const wheel_state &w = s.wheels[i];
+            if (!std::isfinite(w.omega))
+                return names[i][0];
+            if (!std::isfinite(w.slip_ratio))
+                return names[i][1];
+            if (!std::isfinite(w.lateral_slip))
+                return names[i][2];
+        }
+        return nullptr;
+    }
+
     inline pedals pedals_of(const four_wheel_input &in)
     {
         return {in.throttle, in.brake, in.handbrake};
@@ -168,10 +192,10 @@ namespace rallysim
     // Where a wheel touches the ground and how it moves there (book section 7.1, steps 1 and 2).
     struct contact_geometry
     {
-        vec3 point;              // the contact patch from the CG, body frame (m): where the tyre force acts
-        vec3 forward, left;      // the wheel's directions along the ground, world frame, unit length
-        patch_velocity velocity; // how fast the patch moves over the ground, in the wheel's frame (m/s)
-        Real deflection = 0;     // springs model: how far the corner's spring is compressed (m)
+        vec3 point;               // the contact patch from the CG, body frame (m): where the tyre force acts
+        vec3 forward, left;       // the wheel's directions along the ground, world frame, unit length
+        patch_velocity velocity;  // how fast the patch moves over the ground, in the wheel's frame (m/s)
+        Real deflection = 0;      // springs model: how far the corner's spring is compressed (m)
         Real deflection_rate = 0; // springs model: how fast it is being compressed (m/s)
     };
 

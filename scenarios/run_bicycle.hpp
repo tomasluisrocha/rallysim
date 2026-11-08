@@ -1,6 +1,7 @@
 #pragma once
 #include "vehicle/bicycle.hpp"
 #include "vehicle/bicycle_telemetry.hpp"
+#include "core/finite.hpp"
 #include "core/telemetry.hpp"
 #include "driver/scripts.hpp"
 
@@ -18,15 +19,18 @@ namespace rallysim
 
     // Runs the scenario with a fixed step and returns the final state.
     // If writer is not null, one telemetry row is written per step, plus one for the final state.
+    // Stops with an exception naming the field, step and time if the state stops being finite (core/finite.hpp).
     inline bicycle_state run(const bicycle_run &r, telemetry_writer *writer = nullptr)
     {
         bicycle_state s = r.initial;
+        require_finite(s, 0, r.dt);
         for (long i = 0; i < r.steps; ++i)
         {
             const bicycle_input in = sample(r.script, i * r.dt);
             if (writer)
                 writer->row(bicycle_row(i, r.dt, s, r.params, in));
             step(s, r.params, in, r.dt);
+            require_finite(s, i + 1, r.dt);
         }
         if (writer)
             writer->row(bicycle_row(r.steps, r.dt, s, r.params, sample(r.script, r.steps * r.dt)));

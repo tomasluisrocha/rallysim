@@ -1,6 +1,7 @@
 #pragma once
 #include "core/rigid_body.hpp"
 #include "core/rigid_body_telemetry.hpp"
+#include "core/finite.hpp"
 #include "core/telemetry.hpp"
 #include "driver/scripts.hpp"
 
@@ -18,15 +19,18 @@ namespace rallysim
 
     // Runs the scenario with a fixed step and returns the final state.
     // If writer is not null, one telemetry row is written per step, plus one for the final state.
+    // Stops with an exception naming the field, step and time if the state stops being finite (core/finite.hpp).
     inline rigid_body_state run(const scripted_run &r, telemetry_writer *writer = nullptr)
     {
         rigid_body_state s = r.initial;
+        require_finite(s, 0, r.dt);
         for (long i = 0; i < r.steps; ++i)
         {
             const wrench w = sample(r.script, i * r.dt);
             if (writer)
                 writer->row(rigid_body_row(i, r.dt, s, w));
             step(s, r.params, w, r.dt);
+            require_finite(s, i + 1, r.dt);
         }
         if (writer)
             writer->row(rigid_body_row(r.steps, r.dt, s, sample(r.script, r.steps * r.dt)));

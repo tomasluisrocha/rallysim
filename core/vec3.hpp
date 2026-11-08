@@ -82,13 +82,21 @@ namespace rallysim
 	inline vec3 normalized(const vec3 &a)
 	{
 		Real n = norm(a);
-		assert(n > 0);
+		// Guards against dividing by zero. Written so a NaN passes: a NaN state is reported by the runners'
+		// finite guard (core/finite.hpp), which names the field and the step; an assert here could not.
+		assert(!(n <= 0));
 		return a / n;
 	}
 
 	inline vec3 cross(const vec3 &a, const vec3 &b)
 	{
 		return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+	}
+
+	// True when every component is a real number: no NaN, no infinity (book ch. 26: fail on non-finite state).
+	inline bool is_finite(const vec3 &v)
+	{
+		return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 	}
 
 }
