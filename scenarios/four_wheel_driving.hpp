@@ -65,4 +65,34 @@ namespace rallysim
                          {6.0, four_wheel_input{0.0, 0.0, 0.0, 0.0}}};
         return r;
     }
+
+    // Hairpin: a rally U-turn on the handbrake. All-wheel drive (30/70), 8 m/s held by the speed controller; the
+    // wheel turned in to 0.4 rad over 0.2 s from 1 s, the handbrake pulled fully for 0.3 s from 1.3 s to lock the rear
+    // wheels and swing the tail round; from its release the heading-hold driver (driver/heading_hold.hpp) steers to
+    // the opposite heading, countersteering to catch the slide, and the speed controller drives back up to 8 m/s.
+    // The car turns 180 degrees with the tail out by up to about 37 degrees, and drives off the other way.
+    //
+    // The steering after the handbrake has to react to the slide: scripted open-loop, the same turn landed only on a
+    // knife edge (a pull of 0.73 turned the car 83 degrees, 0.74 171, 0.75 spun it), which any change to the physics
+    // would move. With the driver it turns 180 degrees for pulls from 0.5 to 1.0 and on either peaked tyre.
+    inline four_wheel_run four_wheel_hairpin()
+    {
+        four_wheel_run r;
+        r.params.drive_brake.drive_split_front = 0.3;
+        r.initial = four_wheel_initial(r.params, 8.0);
+        r.hold_speed = 8.0;
+        r.steps = 8000;
+        const Real steer = 0.4, pull = 1.0, pull_at = 1.3, release = 1.6;
+        r.script.keys = {{0.0, four_wheel_input{}},
+                         {1.0, four_wheel_input{}},
+                         {1.2, four_wheel_input{steer, 0.0, 0.0, 0.0}},
+                         {pull_at, four_wheel_input{steer, 0.0, 0.0, 0.0}},
+                         {pull_at + 0.05, four_wheel_input{steer, 0.0, 0.0, pull}},
+                         {release, four_wheel_input{steer, 0.0, 0.0, pull}},
+                         {release + 0.05, four_wheel_input{steer, 0.0, 0.0, 0.0}},
+                         {8.0, four_wheel_input{steer, 0.0, 0.0, 0.0}}};
+        r.hold_heading_from = release; // the driver steers from here (the script's steer after it is not used)
+        r.hold_heading = kPi;           // the way it came, reversed
+        return r;
+    }
 }

@@ -25,6 +25,7 @@ py tools/topdown.py out/runs/fw_handbrake.csv
 |---|---|
 | `run_all.py` | Runs every scenario and the rig, then makes the views, the tyre plots and (with `--gif`) the GIFs |
 | `topdown.py` | The car seen from above: interactive dashboard, one frame, the whole path, or a GIF |
+| `view3d.py` | A four-wheel run in 3D (isometric by default): the body's roll, pitch and ride height, and every force where it acts |
 | `tyre_plot.py` | The tyre rig's force curves, every curve and load in one figure |
 | `tyre_points.py` | A four-wheel run's tyres on their force curve, for every wheel and moment |
 | `compare.py` | Two runs overlaid channel by channel, with their difference |
@@ -56,6 +57,24 @@ py tools/topdown.py out/runs/fw_handbrake.csv --gif run.gif --start 2 --end 5
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
 It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and draws the car from line 1 of the file.
+
+### view3d.py
+
+```
+py tools/view3d.py out/runs/fw_handbrake.csv                           play, pause, scrub, drag to turn the view
+py tools/view3d.py out/runs/fw_brake.csv --at 1.6 --save brake3d.png    one frame
+py tools/view3d.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake_3d.gif --start 2.3 --end 4.3
+py tools/view3d.py out/runs/fw_circle.csv --chase --perspective        behind the car, perspective
+```
+
+The vertical side of a run, which `topdown.py` cannot show: the body at its real pose (roll, pitch and ride height,
+exaggerated x4 by default, `--exaggerate 1` for true scale; the HUD gives the true angles), wheels that steer and spin
+(a locked wheel's spoke stops), struts coloured by how loaded each corner is. At each contact patch: the vertical load
+(blue, standing just outboard of the wheel), the tyre force on the ground (red), and the grip circle mu(Fz) Fz (grey),
+so the red arrow against its circle is the grip in use; at the CG, the velocity (green) and the sum of the tyre
+forces (orange). Every force uses one scale, printed in the HUD. The camera is isometric (a parallel projection, so
+arrows keep their true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel
+runs only. GIFs take about 4 s per second of run.
 
 ### tyre_plot.py
 

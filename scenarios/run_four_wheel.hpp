@@ -1,6 +1,7 @@
 #pragma once
 #include "core/finite.hpp"
 #include "core/telemetry.hpp"
+#include "driver/heading_hold.hpp"
 #include "driver/scripts.hpp"
 #include "driver/speed_hold.hpp"
 #include "vehicle/four_wheel.hpp"
@@ -15,17 +16,26 @@ namespace rallysim
         four_wheel_state initial;
         four_wheel_script script;
         Real hold_speed = 0; // m/s; if above zero, the speed controller replaces the script's throttle and brake
-        Real dt = 0.001;     // s, fixed step
+        // From this time (s) the heading-hold driver (driver/heading_hold.hpp) steers towards hold_heading (rad,
+        // world) instead of the script; below zero, never (the default: the script steers throughout)
+        Real hold_heading_from = -1;
+        Real hold_heading = 0;
+        heading_hold_params heading_hold;
+        Real dt = 0.001; // s, fixed step
         long steps = 0;
     };
 
     // The commands for time t: the script, with the throttle and brake replaced by the speed controller
-    // (driver/speed_hold.hpp) when hold_speed is set. The steer and the handbrake always come from the script.
-    // While the handbrake is up the controller lifts off the throttle, as a driver does (clutch in): otherwise
-    // the drive torque on the rear wheels would fight the handbrake.
+    // (driver/speed_hold.hpp) when hold_speed is set, and the steer by the heading-hold driver
+    // (driver/heading_hold.hpp) from hold_heading_from on. The handbrake always comes from the script.
+    // While the handbrake is up the speed controller lifts off the throttle, as a driver does (clutch in):
+    // otherwise the drive torque on the rear wheels would fight the handbrake.
     inline four_wheel_input driver_input(const four_wheel_run &r, const four_wheel_state &s, Real t)
     {
         four_wheel_input in = sample(r.script, t);
+        if (r.hold_heading_from >= 0 && t >= r.hold_heading_from)
+            in.steer = heading_hold_steer(velocity_in_body(s.body), yaw_angle(s.body.q), r.hold_heading, r.params.lf,
+                                          r.params.max_steer, r.heading_hold);
         if (r.hold_speed > 0 && in.handbrake > 0)
         {
             in.throttle = 0;

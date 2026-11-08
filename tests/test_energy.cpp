@@ -83,6 +83,7 @@ int main()
     check_run("fw_brake", four_wheel_brake(), 0.005);
     check_run("fw_launch", four_wheel_launch(), 0.005);
     check_run("fw_handbrake", four_wheel_handbrake(), 0.005);
+    check_run("fw_hairpin", four_wheel_hairpin(), 0.005);
 
     // the planar model (gravity cancelled, no springs): only motion and wheel spin are stored
     {

@@ -355,6 +355,61 @@ int main()
         check_true("standstill: brake on, a little throttle, no creep", std::fabs(parked.body.pos.x) < 1e-3);
     }
 
+    // the heading-hold driver (driver/heading_hold.hpp): its signs, then the hairpin it makes possible
+    {
+        const heading_hold_params c;
+        // going straight and level, a target to the left: steer left; to the right: steer right
+        check_true("heading hold: a target to the left steers left",
+                   heading_hold_steer(body_velocity{10, 0, 0}, 0.0, 0.5, 1.3, 0.6, c) > 0);
+        check_true("heading hold: a target to the right steers right",
+                   heading_hold_steer(body_velocity{10, 0, 0}, 0.0, -0.5, 1.3, 0.6, c) < 0);
+        // on target, but the car sliding with its velocity to the left of its heading: the wheels point along the
+        // slide (left), which is countersteer when the tail has gone out to the right
+        check_true("heading hold: on target and sliding, the wheels point along the slide (countersteer)",
+                   heading_hold_steer(body_velocity{8, 3, 0}, 0.0, 0.0, 1.3, 0.6, c) > 0);
+        // on target and rotating left: steer right to stop the rotation
+        check_true("heading hold: rotating past the target, it steers against the rotation",
+                   heading_hold_steer(body_velocity{8, 0, 1.0}, 0.0, 0.0, 1.3, 0.6, c) < 0);
+        // the short way round: heading 170 degrees, target -170 is 20 degrees to the left, not 340 to the right
+        check_near("heading hold: the error wraps the short way round", heading_error(-170 * kPi / 180, 170 * kPi / 180),
+                   20 * kPi / 180, 1e-12);
+        check_true("heading hold: never more than max_steer", std::fabs(heading_hold_steer(body_velocity{1, 5, 3}, 0.0, 3.0, 1.3, 0.6, c)) <= 0.6);
+    }
+
+    // the hairpin: a U-turn on the handbrake, the heading-hold driver catching the slide. It must turn the car round
+    // (170 to 190 degrees), with a real slide (20 to 90 degrees of sideslip, not a spin), and end straight and at
+    // speed. On both tyres with a fall-off: an open-loop script landed this only on a knife edge of the pull
+    // (0.73 turned 83 degrees, 0.75 spun), so a driver that reacts is what the scenario is about.
+    for (tyre_curve curve : {tyre_curve::tmeasy, tyre_curve::peak_slide})
+    {
+        four_wheel_run r = four_wheel_hairpin();
+        r.params.set_tyre_curve(curve);
+        r.initial = four_wheel_initial(r.params, 8.0);
+        four_wheel_state s = r.initial;
+        Real turned = 0, previous = yaw_angle(s.body.q), peak_beta = 0;
+        for (long i = 0; i < r.steps; ++i)
+        {
+            step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+            const Real yaw = yaw_angle(s.body.q);
+            turned += heading_error(yaw, previous); // the change since the last step, the short way
+            previous = yaw;
+            const body_velocity v = velocity_in_body(s.body);
+            if (std::hypot(v.u, v.v) > 1)
+                peak_beta = std::max(peak_beta, std::fabs(std::atan2(v.v, v.u)));
+        }
+        const body_velocity v = velocity_in_body(s.body);
+        const char *name = curve == tyre_curve::tmeasy ? "tmeasy" : "peak_slide";
+        std::printf("hairpin (%s): turned %.1f deg, peak sideslip %.1f deg, at the end sideslip %.2f deg at %.2f m/s\n", name,
+                    turned * 180 / kPi, peak_beta * 180 / kPi, std::atan2(v.v, v.u) * 180 / kPi, v.u);
+        char what[200];
+        std::snprintf(what, sizeof what, "hairpin (%s): the car turns round, 170 to 190 degrees", name);
+        check_true(what, std::fabs(turned) > 170 * kPi / 180 && std::fabs(turned) < 190 * kPi / 180);
+        std::snprintf(what, sizeof what, "hairpin (%s): a real slide, 20 to 90 degrees of sideslip, not a spin", name);
+        check_true(what, peak_beta > 20 * kPi / 180 && peak_beta < 90 * kPi / 180);
+        std::snprintf(what, sizeof what, "hairpin (%s): it drives off straight (under 2 degrees) at the held speed", name);
+        check_true(what, std::fabs(std::atan2(v.v, v.u)) < 2 * kPi / 180 && std::fabs(v.u - 8.0) < 0.1);
+    }
+
     // the speed controller brakes when the car is too fast
     {
         four_wheel_run r;

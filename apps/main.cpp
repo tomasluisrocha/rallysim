@@ -80,6 +80,7 @@ static const std::vector<scenario> &scenarios()
         {"fw_brake", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_brake(), p); }},
         {"fw_launch", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_launch(), p); }},
         {"fw_handbrake", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_handbrake(), p); }},
+        {"fw_hairpin", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_hairpin(), p); }},
         {"tyre_rig", "rig", [](const std::string &p) { return write_tyre_rig(p); }},
     };
     return list;
