@@ -202,8 +202,34 @@ Each wheel block, in this order:
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own
-relaxed slips (the twist of the tyre, which the force comes from) are not logged: they are capped at the grip, so a
-locked wheel's relaxed slip is about -0.03, not -1. As in the other files, the columns from `steer` on belong to the step that starts from that row's state.
+relaxed slips (the twist of the tyre, which the force comes from) are not logged: they are capped where the force stops
+changing (`slip_cap_scale` in `vehicle/tyre.hpp`: at full sliding while rolling, at the peak at rest), so a locked
+tmeasy wheel's relaxed slip is about -0.8 while it slides and the slip at its peak once stopped, not -1. As in the
+other files, the columns from `steer` on belong to the step that starts from that row's state.
+
+## Tyre rig file
+
+`rallysim tyre_rig` (`scenarios/tyre_rig.hpp`) writes `out/rig/tyre_rig.csv`: the force curves of one tyre, swept over
+slip and load with no car and no time. It is not a telemetry file and has no schema number.
+
+```
+# tyre_rig
+curve,sweep,fz,slip_ratio,slip_angle_deg,fx,fy
+linear,x,1500,-1.0000,0.00,-1575,0
+```
+
+- Line 1 is `# tyre_rig`; line 2 the header; then one row per point.
+
+| Column | Unit | Meaning |
+|---|---|---|
+| `curve` | text | `linear`, `brush` (peak_slide with `peak_slip` 3, `sliding_ratio` 1), `peak_slide`, `tmeasy`: each with the `tyre_params` defaults (`tyre_rig_curves()`) |
+| `sweep` | text | `x`: slip ratio -1 to 1 in steps of 0.002, no slip angle; `y`: slip angle -30 to 30 deg in steps of 0.1, no slip ratio; `combined`: slip ratio -1 to 1 at slip angles of 2, 4, 6 and 8 deg |
+| `fz` | N | Vertical load: 1500, 3000, 4500 and 6000 for `x` and `y`; the nominal load (3000) for `combined` |
+| `slip_ratio` | - | Slip ratio given to `tyre_forces` |
+| `slip_angle_deg` | deg | Slip angle; `tyre_forces` is given its tangent, the lateral slip |
+| `fx`, `fy` | N | The tyre force in the wheel frame, along and to the left (6 significant digits) |
+
+`tools/tyre_plot.py` draws it; `tools/simdata.py` checks its own copy of the tyre against every row.
 
 ## Rules
 
