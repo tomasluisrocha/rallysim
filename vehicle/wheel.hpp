@@ -65,15 +65,16 @@ namespace rallysim
     // The relaxed slips stand for how far the contact patch is twisted (sigma times the slip). A tyre cannot be
     // twisted further than its force needs: beyond that the patch only slides. So the slips are capped at the
     // normalised slip where the force stops changing (max_normalised_slip: 1 for the linear tyre, where it
-    // reaches the grip; sliding_slip for peak_slide, where it slides fully). If (Cx sx, C_alpha sy) is longer
-    // than that limit times the grip at load fz, both are scaled back along their direction. The force does not
-    // change (the curve is flat there), but a tyre that stops sliding is left twisted by millimetres instead of
-    // by sigma (20 cm for a locked wheel), which threw a stopped car backwards.
-    inline void cap_slips(wheel_state &s, const tyre_params &t, Real fz)
+    // reaches the grip; for peak_slide, sliding_slip while rolling, so it can slide down the fall-off, blending to
+    // peak_slip at rest, where the tyre holds no more than its peak force). If (Cx sx, C_alpha sy) is longer than
+    // that limit times the grip at load fz, both are scaled back along their direction. The force does not change
+    // where the curve is flat, but a tyre that stops sliding is left twisted by millimetres instead of by sigma
+    // (20 cm for a locked wheel), which threw a stopped car backwards. V is the rolling speed (m/s).
+    inline void cap_slips(wheel_state &s, const tyre_params &t, Real fz, Real V)
     {
         const Real grip = tyre_grip(t, fz);
         const Real size = std::hypot(t.longitudinal_stiffness * s.slip_ratio, t.cornering_stiffness * s.lateral_slip);
-        const Real limit = max_normalised_slip(t) * grip;
+        const Real limit = max_normalised_slip(t, V) * grip;
         if (size > limit)
         {
             const Real scale = limit / size; // zero in the air: an unloaded tyre is not twisted
@@ -94,7 +95,7 @@ namespace rallysim
                        (1 + dt * V / t.relaxation_length_x);
         s.lateral_slip = (s.lateral_slip + dt / t.relaxation_length_y * (-v.vy)) /
                          (1 + dt * V / t.relaxation_length_y);
-        cap_slips(s, t, fz);
+        cap_slips(s, t, fz, V);
     }
 
     // The force of the tyre on the car (N, wheel frame): the twisted contact patch (tyre_forces), plus at low

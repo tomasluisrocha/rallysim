@@ -13,10 +13,11 @@
 
 using namespace rallysim;
 
-// Golden runs for the four-wheel scenarios (phase 4, step 7), on springs. Each scenario is first checked against
-// something that does not share its code (a closed form, or the single-track model), so a wrong result cannot be
-// frozen in as golden; then its final state is compared with the values recorded at the phase 4 gate. Last, the
-// timestep: halving dt must change the results less each time (book section 11.2).
+// Golden runs for the four-wheel scenarios (phase 4, step 7), on springs, on the car's own tyre (peak_slide since
+// phase 5). Each scenario is first checked against something that does not share its code (a closed form, or the
+// single-track model), so a wrong result cannot be frozen in as golden; then its final state is compared with the
+// recorded values (re-recorded in phase 5, when the car moved to the peak_slide tyre). Last, the timestep: halving
+// dt must change the results less each time (book section 11.2).
 
 // Golden values must match to this tolerance. It is far below any real change in the model,
 // and loose enough that a different compiler's last-bit rounding does not fail the test.
@@ -85,9 +86,9 @@ static void test_circle()
     const four_wheel_run r = four_wheel_circle();
     const four_wheel_state s = run(r);
     check_true("circle: determinism: two runs give identical bits", identical(s, run(four_wheel_circle())));
-    check_golden("circle", s, {10.881383969291427, 24.257168527150991, 2.6529136336719104, 5.991757503621951,
-        0.4197438892115759, 0.4728252244615358, 0.49995577845730993, 0.015957019841847081,
-        0.00038943274580224667, 18.179633028095779, 20.386309223952463, 17.893534878756626, 20.146321643184308});
+    check_golden("circle", s, {11.177534257342515, 24.186987761834967, 2.6377425184792895, 5.9911715837758432,
+        0.40549915775012879, 0.47226888209908963, 0.49995526273695384, 0.015936642268173016,
+        0.00037581680700999345, 18.169699331905974, 20.373779134160483, 17.894911280394602, 20.144744916889927});
 
     // the settled turn: the steer is L / R + K a_y (small-angle form, so within a few percent at 0.2 rad); the body
     // leans out by m a_y h / (K_roll - m g h); the yaw rate is the single-track's within 2%
@@ -113,9 +114,9 @@ static void test_lane_change()
     const four_wheel_run r = four_wheel_lane_change();
     const four_wheel_state s = run(r);
     check_true("lane: determinism: two runs give identical bits", identical(s, run(four_wheel_lane_change())));
-    check_golden("lane", s, {104.85133943103796, 3.3854321012588873, 2.7666543837507465e-08, 14.999999999592891,
-        2.4194050936317824e-08, -6.2627363643480992e-10, 0.50000000000147504, -2.6044103170408835e-10,
-        -6.6151143238857337e-12, 47.619047619200316, 47.61904761606165, 47.619047620035609, 47.619047616896907});
+    check_golden("lane", s, {104.85175153357049, 3.3828899049447774, -5.7549979153209595e-06, 14.999999999564485,
+        2.5222045071620464e-08, -6.8129294598980992e-10, 0.50000000000154876, -2.3126735718780762e-10,
+        -7.0874223669017482e-12, 47.61904761923708, 47.619047615827213, 47.619047620130644, 47.619047616720778});
 
     // back to going straight, level and at speed, displaced to the left as the single-track is
     const body_velocity v = velocity_in_body(s.body);
@@ -147,17 +148,20 @@ static void test_brake()
             x_stop = st.body.pos.x;
         } });
     check_true("brake: determinism: two runs give identical bits", identical(s, run(four_wheel_brake())));
-    check_golden("brake", s, {57.773153252727504, 0, 0, 0.015712169314441179,
-        0, 0, 0.49965502760450536, 0,
-        -0.0019561948445738202, 0, 0, 0, 0});
+    check_golden("brake", s, {65.351963009520603, 0, 0, -0.00069670958301160199,
+        0, 0, 0.49997972242379612, 0,
+        -0.00014816443035537506, 0, 0, 0, 0});
 
-    // the stop: about v^2 / (2 mu g) from where the brake went down (a few percent longer: the pedal takes 50 ms,
-    // the tyres build their force over a relaxation length, and the loaded front loses a little grip to load
-    // sensitivity); all four wheels lock; at the end the car is (nearly) still
-    const Real expected = 25.0 * 25.0 / (2 * kGravity);
-    std::printf("brake: stopped %.3f m after the brake went down, at %.3f s (v^2 / 2 mu g = %.3f m)\n", x_stop - x_brake,
-                t_stop, expected);
-    check_near("brake analytic: stopping distance within 4% of v^2 / (2 mu g)", x_stop - x_brake, expected, 0.04 * expected);
+    // the stop: all four wheels lock, so each tyre slides at sliding_ratio of its grip, and the car stops in about
+    // v^2 / (2 sliding_ratio mu g) from where the brake went down (a few percent longer: the pedal takes 50 ms, the
+    // tyres build their force over a relaxation length, and the loaded front loses a little grip to load
+    // sensitivity); at the end the car is (nearly) still
+    const Real ratio = r.params.front_tyre.sliding_ratio;
+    const Real expected = 25.0 * 25.0 / (2 * ratio * kGravity);
+    std::printf("brake: stopped %.3f m after the brake went down, at %.3f s (v^2 / 2 sliding_ratio mu g = %.3f m)\n",
+                x_stop - x_brake, t_stop, expected);
+    check_near("brake analytic: stopping distance within 4% of v^2 / (2 sliding_ratio mu g)", x_stop - x_brake, expected,
+               0.04 * expected);
     check_true("brake: all four wheels lock", all_locked);
     check_near("brake: at rest at the end", velocity_in_body(s.body).u, 0.0, 0.05);
 }
@@ -174,21 +178,23 @@ static void test_launch()
         if (std::fabs(t - 1.2) < 1e-9) u_b = u;
         if (std::fabs(t - 3.4) < 1e-9) u_end_a = u; });
     check_true("launch: determinism: two runs give identical bits", identical(s, run(four_wheel_launch())));
-    check_golden("launch", s, {47.58495227103537, 0, 0, 26.996153279568169,
-        0, 0, 0.49939125516726851, 0,
-        -0.011522889159315789, 86.669378751649504, 86.669378751649504, 88.101379088753916, 88.101379088753916});
+    check_golden("launch", s, {39.462018192208809, 0, 0, 23.450837750256088,
+        0, 0, 0.49929334337326764, 0,
+        -0.013145716362282964, 75.593492631182428, 75.593492631182428, 77.648334979441771, 77.648334979441771});
 
-    // traction-limited at first: about mu g (load sensitivity takes a little off); power-limited at the end:
-    // a = P / (m_eff v), every wheel's spin inertia adding to the mass
+    // traction-limited at first: full throttle spins the wheels past their peak, so each tyre pushes at
+    // sliding_ratio of its grip, about sliding_ratio mu g (load sensitivity takes a little off); power-limited at the
+    // end: a = P / (m_eff v), every wheel's spin inertia adding to the mass
     const Real early = (u_b - u_a) / 0.4;
     const Real u_end = velocity_in_body(s.body).u;
     const Real late = (u_end - u_end_a) / 0.1;
     const four_wheel_params &p = r.params;
+    const Real spinning = p.front_tyre.sliding_ratio * kGravity;
     const Real m_eff = p.chassis.mass + 4 * p.wheel.inertia / (p.wheel.radius * p.wheel.radius);
     const Real power_limited = p.drive_brake.max_drive_power / (m_eff * 0.5 * (u_end + u_end_a));
-    std::printf("launch: %.3f m/s^2 at first (mu g = %.3f), %.3f m/s^2 at the end (P / m_eff v = %.3f)\n", early,
-                kGravity, late, power_limited);
-    check_near("launch analytic: traction-limited at about mu g, within 8%", early, kGravity, 0.08 * kGravity);
+    std::printf("launch: %.3f m/s^2 at first (sliding_ratio mu g = %.3f), %.3f m/s^2 at the end (P / m_eff v = %.3f)\n",
+                early, spinning, late, power_limited);
+    check_near("launch analytic: wheels spinning, at about sliding_ratio mu g, within 8%", early, spinning, 0.08 * spinning);
     check_near("launch analytic: power-limited at P / (m_eff v) at the end, within 5%", late, power_limited, 0.05 * power_limited);
 }
 
@@ -202,9 +208,9 @@ static void test_handbrake()
         const body_velocity v = velocity_in_body(st.body);
         peak_beta = std::max(peak_beta, std::fabs(std::atan2(v.v, v.u))); });
     check_true("handbrake: determinism: two runs give identical bits", identical(s, run(four_wheel_handbrake())));
-    check_golden("handbrake", s, {70.962109842359226, 40.6981533657844, 0.99608716212553927, 14.999999965529085,
-        -3.04243547688543e-07, -1.1415521074202461e-08, 0.50000000127889876, 3.0599667384784965e-08,
-        -1.4964632752489423e-10, 47.619047533247368, 47.619047479142424, 47.619047603982196, 47.619047549877259});
+    check_golden("handbrake", s, {76.700331878289191, 35.92670365952457, 0.78814182785100406, 14.999999994230961,
+        4.0998742178999237e-09, -3.5053099487825652e-09, 0.49999999980824023, 4.7706128481047994e-09,
+        -1.9589652240811087e-10, 47.619047608323925, 47.619047591303712, 47.619047620149061, 47.619047603128841});
 
     // the tail steps out, and the car recovers to going straight at the held speed
     const body_velocity v = velocity_in_body(s.body);

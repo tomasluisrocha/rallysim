@@ -38,6 +38,17 @@ namespace rallysim
     inline bool is_front(std::size_t i) { return i == FL || i == FR; }
     inline bool is_left(std::size_t i) { return i == FL || i == RL; }
 
+    // The car's tyre (phase 5): the given stiffnesses on the peak_slide curve, so it has a peak and falls off when
+    // it slides. The rest (grip, load sensitivity, relaxation, curve shape) is tyre_params' defaults.
+    inline tyre_params car_tyre(Real longitudinal_stiffness, Real cornering_stiffness)
+    {
+        tyre_params t;
+        t.longitudinal_stiffness = longitudinal_stiffness;
+        t.cornering_stiffness = cornering_stiffness;
+        t.curve = tyre_curve::peak_slide;
+        return t;
+    }
+
     struct four_wheel_params
     {
         rigid_body_params chassis{1200, {400, 1800, 1500}}; // mass (kg), inertia about x, y, z (kg m^2)
@@ -49,8 +60,8 @@ namespace rallysim
         Real front_transfer_share = 0.5;                    // fraction of the lateral load transfer on the front axle
         Real max_steer = 0.6;                               // steer input clamped to +-max_steer (rad)
         wheel_params wheel;                                 // the same wheel at each corner
-        tyre_params front_tyre{90000, 30000};               // half of the single-track front axle (60 kN/rad)
-        tyre_params rear_tyre{90000, 35000};                // half of the single-track rear axle (70 kN/rad)
+        tyre_params front_tyre = car_tyre(90000, 30000);    // half of the single-track front axle (60 kN/rad)
+        tyre_params rear_tyre = car_tyre(90000, 35000);     // half of the single-track rear axle (70 kN/rad)
         drive_brake_params drive_brake;                     // pedals to wheel torques; rear drive by default
         vertical_model vertical = vertical_model::springs;  // how the vertical loads are found (see above)
         corner_params front_corner;                         // suspension of each front corner (springs model)
@@ -58,6 +69,8 @@ namespace rallysim
 
         Real wheelbase() const { return lf + lr; }
         const tyre_params &tyre(std::size_t i) const { return is_front(i) ? front_tyre : rear_tyre; }
+        // Both axles on one curve; the tests whose closed forms assume a flat ceiling put the car back on linear.
+        void set_tyre_curve(tyre_curve c) { front_tyre.curve = rear_tyre.curve = c; }
         const corner_params &corner(std::size_t i) const { return is_front(i) ? front_corner : rear_corner; }
 
         // Where the contact patch is, from the CG, in the body frame (m), in the planar model: at CG height, like

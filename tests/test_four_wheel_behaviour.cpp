@@ -55,6 +55,12 @@ int main()
 {
     const four_wheel_params p; // tyres 30 / 35 kN/rad, so the axles match the single-track's 60 / 70
     const single_track_params q = matching_single_track(p);
+    // The car's own tyre is peak_slide (phase 5). The closed forms below (the understeer gradient, the linear step
+    // response, the friction limit with a flat ceiling) are for the linear tyre, so those checks run the same car on
+    // it; the 0.3 g turn and the lane change run on the car's own tyre (the book's "rerun the phase 3 tests with four
+    // wheels" for the new tyre).
+    four_wheel_params linear = p;
+    linear.set_tyre_curve(tyre_curve::linear);
 
     // Gate 1: yaw rate within 5% of the single-track in a 0.3 g steady turn, at three speeds, with both vertical
     // models: the flat car (loads from the same formula as the single-track) and the car on springs (loads from
@@ -94,7 +100,7 @@ int main()
                                 {"CG rearward", 1.4, 1.1, 32500, 32500, -1}};
         for (const setup &c : setups)
         {
-            four_wheel_params pc = p;
+            four_wheel_params pc = linear;
             pc.lf = c.lf;
             pc.lr = c.lr;
             pc.front_tyre.cornering_stiffness = c.front_c;
@@ -102,17 +108,30 @@ int main()
             const Real K = understeer_gradient(matching_single_track(pc));
 
             const Real speed = 20.0, steer = 0.02;
-            const four_wheel_state s = run(four_wheel_constant_steer(pc, speed, steer, 10000));
-            const body_velocity vel = velocity_in_body(s.body);
-            const Real v_cg = std::hypot(vel.u, vel.v);
-            const Real measured = (steer - pc.wheelbase() * vel.r / v_cg) / (v_cg * vel.r);
-            std::printf("%s: K formula %.3e, measured %.3e (%+.1f%%)\n", c.name, K, measured, 100 * (measured / K - 1));
+            auto measure_K = [&](const four_wheel_params &car)
+            {
+                const four_wheel_state s = run(four_wheel_constant_steer(car, speed, steer, 10000));
+                const body_velocity vel = velocity_in_body(s.body);
+                const Real v_cg = std::hypot(vel.u, vel.v);
+                return (steer - car.wheelbase() * vel.r / v_cg) / (v_cg * vel.r);
+            };
+            const Real measured = measure_K(pc);
+            four_wheel_params peak = pc;
+            peak.set_tyre_curve(tyre_curve::peak_slide);
+            const Real measured_peak = measure_K(peak);
+            std::printf("%s: K formula %.3e, measured %.3e (%+.1f%%); on peak_slide %.3e (%+.1f%%)\n", c.name, K,
+                        measured, 100 * (measured / K - 1), measured_peak, 100 * (measured_peak / K - 1));
 
             char what[160];
             std::snprintf(what, sizeof what, "gate: %s, measured K within 10%% of the formula", c.name);
             check_true(what, std::fabs(measured / K - 1) < 0.10);
             std::snprintf(what, sizeof what, "gate: %s, K has the expected sign", c.name);
             check_true(what, c.sign > 0 ? measured > 0 : measured < 0);
+            // On peak_slide the cornering stiffness falls as the slip grows (f(s) / s = 1 - s / 4 near zero for the
+            // default peak at 2), and the axle that works harder loses more: the understeering car understeers more,
+            // the oversteering car oversteers more. So |K| grows as the car corners harder.
+            std::snprintf(what, sizeof what, "peak_slide: %s, |K| larger than the linear formula's, by under 15%%", c.name);
+            check_true(what, measured_peak / K > 1.0 && measured_peak / K < 1.15);
         }
     }
 
@@ -139,7 +158,7 @@ int main()
     }
 
     // Steering step on four wheels (book section 11.2: overshoot and settling as the linear model predicts, within
-    // 10%), on springs. A small step (0.005 rad, so the tyres stay linear) from the start, at 20 m/s (close to
+    // 10%), on springs, on the linear tyre (on peak_slide the stiffness already drops a few percent). A small step (0.005 rad, so the tyres stay linear) from the start, at 20 m/s (close to
     // critically damped) and 50 m/s (clearly underdamped). The four-wheel car adds what the linear model leaves out:
     // tyre relaxation, body roll and the inner and outer wheels' different slip angles.
     {
@@ -147,7 +166,7 @@ int main()
         const long steps = 8000;
         for (Real speed : {20.0, 50.0})
         {
-            const four_wheel_run r = four_wheel_constant_steer(p, speed, steer, steps);
+            const four_wheel_run r = four_wheel_constant_steer(linear, speed, steer, steps);
             four_wheel_state s = r.initial;
             std::vector<Real> sim{s.body.omega.z};
             for (long i = 0; i < steps; ++i)
@@ -200,7 +219,7 @@ int main()
         };
         for (const setup &c : {setup{1.0, 0.2}, setup{0.6, 0.2}, setup{0.6, 0.3}})
         {
-            four_wheel_params pm = p;
+            four_wheel_params pm = linear; // the closed form needs a tyre that holds mu Fz while it slides
             for (tyre_params *t : {&pm.front_tyre, &pm.rear_tyre})
             {
                 t->friction_coefficient = c.mu;

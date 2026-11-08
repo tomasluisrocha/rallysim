@@ -89,18 +89,25 @@ namespace rallysim
         return r;
     }
 
-    // Largest normalised slip the relaxed slips may build up to (cap_slips in wheel.hpp). A tyre cannot hold more
-    // twist than its force needs: the linear force is flat from 1 (it reaches the grip there), the peak_slide
-    // force from sliding_slip (it slides fully there). Capping there leaves the force unchanged but stops a
-    // sliding tyre storing a twist it would release after it stops.
-    inline Real max_normalised_slip(const tyre_params &t)
+    // Largest normalised slip the relaxed slips may build up to (cap_slips in wheel.hpp), at rolling speed V (m/s).
+    // A tyre cannot hold more twist than its force needs. The linear force is flat from 1 (it reaches the grip
+    // there), so the cap is 1. The peak_slide force changes up to sliding_slip, so a rolling tyre is capped there,
+    // and it can slide down the fall-off. But the relaxed slip is also the twist the tyre releases when the car stops
+    // (sigma times the slip), and a stopped tyre can hold no more than its peak force: static grip holds up to the
+    // peak. So the cap blends from sliding_slip down to peak_slip as the rolling speed falls below
+    // damping_fade_speed, the same fade as the low-speed damping. Capping at 1 at rest would hold only part of the
+    // grip (0.75 at the default peak); capping at sliding_slip doubled the roll-back after a locked-wheel stop.
+    inline Real max_normalised_slip(const tyre_params &t, Real rolling_speed)
     {
         switch (t.curve)
         {
         case tyre_curve::linear:
             return 1; // the linear force reaches the grip at s = 1
         case tyre_curve::peak_slide:
-            return t.sliding_slip; // past full sliding the curve is flat
+        {
+            const Real rolling = std::clamp(rolling_speed / t.damping_fade_speed, static_cast<Real>(0), static_cast<Real>(1));
+            return t.peak_slip + (t.sliding_slip - t.peak_slip) * rolling; // past full sliding the curve is flat
+        }
         }
         return 1; // not reached: every curve returns above
     }
