@@ -1,0 +1,27 @@
+name: ci
+on:
+  push:            # every push, to any branch, and tags (phase*-gate)
+  pull_request:
+  workflow_dispatch: # a manual "Run workflow" button
+
+jobs:
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build              # Visual Studio generator: multi-config
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build -C Release --output-on-failure
+      - run: cmake --build build --config Debug
+      - run: ctest --test-dir build -C Debug --output-on-failure
+
+  linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release   # single-config: one folder per type
+      - run: cmake --build build-release -j
+      - run: ctest --test-dir build-release --output-on-failure
+      - run: cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build-debug -j
+      - run: ctest --test-dir build-debug --output-on-failure
