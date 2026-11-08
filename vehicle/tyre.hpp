@@ -32,7 +32,9 @@ namespace rallysim
         // The peak_slide curve. Its slips are normalised: slip 1 is where the linear tyre would reach the grip,
         // C s = mu(Fz) Fz, so the peak moves to larger slips as the load grows (as a brush tyre's does).
         tyre_curve curve = tyre_curve::linear;
-        Real peak_slip = 2.0;     // normalised slip at the peak force; between 1 and 3 (above 3 the rise overshoots)
+        Real peak_slip = 2.0;     // normalised slip at the peak force; between 1.5 and 3. Above 3 the rise overshoots
+                                  // the grip; below 1.5 it bulges above the linear tyre, so braking while cornering
+                                  // would add side force (the gate test checks the range)
         Real sliding_slip = 4.0;  // normalised slip from which the tyre slides fully; above peak_slip
         Real sliding_ratio = 0.8; // sliding force over peak force (0 to 1); 1 gives no fall-off
     };
