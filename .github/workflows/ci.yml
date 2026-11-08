@@ -1,27 +1,43 @@
 name: ci
 on:
-  push:            # every push, to any branch, and tags (phase*-gate)
+  push:              # every push, to any branch, and tags (phase*-gate)
   pull_request:
   workflow_dispatch: # a manual "Run workflow" button
 
+# a newer push to the same branch cancels the run still going for the older one
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-msvc:
-    runs-on: windows-latest
+    runs-on: windows-2025          # pinned: the image the goldens were checked on
     steps:
-      - uses: actions/checkout@v4
-      - run: cmake -S . -B build              # Visual Studio generator: multi-config
-      - run: cmake --build build --config Release
-      - run: ctest --test-dir build -C Release --output-on-failure
-      - run: cmake --build build --config Debug
-      - run: ctest --test-dir build -C Debug --output-on-failure
+      - uses: actions/checkout@v5
+      - name: Configure            # Visual Studio generator: multi-config
+        run: cmake -S . -B build
+      - name: Build Release
+        run: cmake --build build --config Release
+      - name: Test Release
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Build Debug
+        run: cmake --build build --config Debug
+      - name: Test Debug
+        run: ctest --test-dir build -C Debug --output-on-failure
 
   linux-gcc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04          # pinned: GCC 15.2, checked against the goldens
     steps:
-      - uses: actions/checkout@v4
-      - run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release   # single-config: one folder per type
-      - run: cmake --build build-release -j
-      - run: ctest --test-dir build-release --output-on-failure
-      - run: cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
-      - run: cmake --build build-debug -j
-      - run: ctest --test-dir build-debug --output-on-failure
+      - uses: actions/checkout@v5
+      - name: Configure Release    # single-config: one folder per build type
+        run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+      - name: Build Release
+        run: cmake --build build-release -j
+      - name: Test Release
+        run: ctest --test-dir build-release --output-on-failure
+      - name: Configure Debug
+        run: cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+      - name: Build Debug
+        run: cmake --build build-debug -j
+      - name: Test Debug
+        run: ctest --test-dir build-debug --output-on-failure
