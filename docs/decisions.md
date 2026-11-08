@@ -72,8 +72,9 @@ The project keeps three levels of vehicle model:
   lateral tyre forces and quasi-static load transfer. It is a compact
   reference for the four-wheel car.
 - **Four-wheel:** individual wheels, wheel rotation, combined-slip tyres,
-  drive and brake torques, load transfer and optional corner springs. This is
-  the main exploratory model.
+  drive and brake torques, load transfer and corner springs (by default; a
+  planar mode without them is kept for comparison). This is the main
+  exploratory model.
 
 The four-wheel model is not yet a complete rally simulator. The ground is
 currently flat, terrain and surface data are reserved for later work, and the
@@ -86,10 +87,11 @@ The tyre supports three curve families: linear, peak-slide and TMeasy-inspired.
 The car currently uses the TMeasy-inspired curve, while the other curves
 remain useful for comparisons and tests.
 
-Longitudinal and lateral forces share a friction limit. When the combined
-force exceeds the available grip, it is scaled onto the friction circle. The
-tyre also models relaxation length, so force builds over distance rather than
-appearing instantaneously. These choices are intentionally simple enough to
+Longitudinal and lateral slip share one grip: the curve is read once at the
+combined slip and the force is split between the two directions, so it never
+exceeds the grip (the linear curve instead scales an oversized force back onto
+the friction circle). The tyre also models relaxation length, so force builds
+over distance rather than appearing instantaneously. These choices are intentionally simple enough to
 compare against the tyre rig and to replace independently later.
 
 ### Loads and suspension
@@ -123,7 +125,8 @@ the implementation:
 
 - closed-form results for geometry, energy, suspension or limiting cases;
 - an independent bicycle or single-track comparison where appropriate;
-- finite-state and invariant checks for every simulation step;
+- a finite-state check after every simulation step, and invariant checks
+  (such as the energy balance) over whole runs;
 - timestep-convergence checks for integration-sensitive behaviour;
 - golden runs only after the result has passed an independent plausibility
   check.
