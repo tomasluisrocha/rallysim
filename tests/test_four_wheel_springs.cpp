@@ -177,9 +177,10 @@ int main()
     // Its load reaches zero and never goes below, the other three stay down, and the car stays upright because the
     // front tyres run out of grip first (the car understeers) before the turn gets any harder. The steer is ramped
     // in; a sudden step of steer on this car overshoots, lifts the inner rear too and rolls it over.
-    // On the linear tyre: this tests the springs, and the turn has to reach about 5 m/s^2. On the car's own
-    // peak_slide tyre the understeering front slides down to sliding_ratio of its grip, and the turn tops out just
-    // short of lifting the wheel (lowest load about 100 N).
+    // On the linear tyre: this tests the springs, and the turn has to reach about 5 m/s^2, so it should not hang on
+    // which tyre with a fall-off the car has. On peak_slide (phase 5, measured) the understeering front slides down
+    // to its sliding share of the grip, and the turn tops out just short of lifting the wheel (lowest load about
+    // 100 N).
     {
         four_wheel_params q = p;
         q.set_tyre_curve(tyre_curve::linear);

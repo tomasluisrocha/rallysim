@@ -18,14 +18,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-STYLES = {"linear": "--", "brush": ":", "peak_slide": "-"}
+STYLES = {"linear": "--", "brush": ":", "peak_slide": (0, (6, 2, 1, 2)), "tmeasy": "-"}
 
 
 def main():
     parser = argparse.ArgumentParser(description="Plot the single-tyre rig CSV.")
     parser.add_argument("file", nargs="?", default="out/rig/tyre_rig.csv", help="rig CSV (default out/rig/tyre_rig.csv)")
     parser.add_argument("--curve", nargs="+", help="curves for the pure-slip panels (default: all in the file)")
-    parser.add_argument("--combined", default="peak_slide", help="curve for the combined panels (default peak_slide)")
+    parser.add_argument("--combined", default="tmeasy", help="curve for the combined panels (default tmeasy, the car's)")
     parser.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
     args = parser.parse_args()
 
@@ -49,8 +49,8 @@ def main():
             pure_y = data[(data["curve"] == curve) & (data["sweep"] == "y") & (data["fz"] == fz)]
             style = STYLES.get(curve, "-.")
             label = f"{curve}, Fz {fz:.0f} N"
-            ax_x.plot(pure_x["slip_ratio"], pure_x["fx"], style, color=load_colour[fz], label=label)
-            ax_y.plot(pure_y["slip_angle_deg"], pure_y["fy"], style, color=load_colour[fz], label=label)
+            ax_x.plot(pure_x["slip_ratio"], pure_x["fx"], linestyle=style, color=load_colour[fz], label=label)
+            ax_y.plot(pure_y["slip_angle_deg"], pure_y["fy"], linestyle=style, color=load_colour[fz], label=label)
 
     ax_x.set_title("Pure longitudinal slip")
     ax_x.set_xlabel("slip ratio")

@@ -55,7 +55,7 @@ int main()
 {
     const four_wheel_params p; // tyres 30 / 35 kN/rad, so the axles match the single-track's 60 / 70
     const single_track_params q = matching_single_track(p);
-    // The car's own tyre is peak_slide (phase 5). The closed forms below (the understeer gradient, the linear step
+    // The car's own tyre is tmeasy (phase 5). The closed forms below (the understeer gradient, the linear step
     // response, the friction limit with a flat ceiling) are for the linear tyre, so those checks run the same car on
     // it; the 0.3 g turn and the lane change run on the car's own tyre (the book's "rerun the phase 3 tests with four
     // wheels" for the new tyre).

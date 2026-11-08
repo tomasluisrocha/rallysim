@@ -38,14 +38,27 @@ namespace rallysim
     inline bool is_front(std::size_t i) { return i == FL || i == FR; }
     inline bool is_left(std::size_t i) { return i == FL || i == RL; }
 
-    // The car's tyre (phase 5): the given stiffnesses on the peak_slide curve, so it has a peak and falls off when
-    // it slides. The rest (grip, load sensitivity, relaxation, curve shape) is tyre_params' defaults.
-    inline tyre_params car_tyre(Real longitudinal_stiffness, Real cornering_stiffness)
+    // The car's tyre (phase 5): the tmeasy curve, with its own peak and fall-off along and across the wheel, given
+    // at two loads. Its tables are tyre_params' defaults with the stiffnesses scaled so that at `static_load`, the
+    // load the wheel carries with the car at rest, they are the given ones; the defaults' growth with load is kept.
+    // A tmeasy tyre's stiffness depends on its load, the linear and peak_slide tyres' does not. Scaled at the
+    // nominal load instead (3000 N), the front tyres (2825 N at rest) came out 5% softer and the rears (3061 N) 2%
+    // stiffer than the same car on the linear tyre, which doubled the understeer gradient. Scaled at the static
+    // load, the car at rest has exactly the linear car's stiffnesses, so set_tyre_curve() still puts the same car on
+    // the older curves, and what differs at speed is the tmeasy tyre itself (load transfer, the curve's bend).
+    // The rest (grip, load sensitivity, relaxation) is the defaults.
+    inline tyre_params car_tyre(Real longitudinal_stiffness, Real cornering_stiffness, Real static_load)
     {
         tyre_params t;
+        const Real along = longitudinal_stiffness / tmeasy_at(t.tmeasy_x, static_load, t.nominal_load).stiffness;
+        const Real across = cornering_stiffness / tmeasy_at(t.tmeasy_y, static_load, t.nominal_load).stiffness;
         t.longitudinal_stiffness = longitudinal_stiffness;
         t.cornering_stiffness = cornering_stiffness;
-        t.curve = tyre_curve::peak_slide;
+        t.tmeasy_x.nominal.stiffness *= along;
+        t.tmeasy_x.double_load.stiffness *= along;
+        t.tmeasy_y.nominal.stiffness *= across;
+        t.tmeasy_y.double_load.stiffness *= across;
+        t.curve = tyre_curve::tmeasy;
         return t;
     }
 
@@ -60,8 +73,9 @@ namespace rallysim
         Real front_transfer_share = 0.5;                    // fraction of the lateral load transfer on the front axle
         Real max_steer = 0.6;                               // steer input clamped to +-max_steer (rad)
         wheel_params wheel;                                 // the same wheel at each corner
-        tyre_params front_tyre = car_tyre(90000, 30000);    // half of the single-track front axle (60 kN/rad)
-        tyre_params rear_tyre = car_tyre(90000, 35000);     // half of the single-track rear axle (70 kN/rad)
+        // half of the single-track front and rear axles (60 / 70 kN/rad), at each wheel's load at rest
+        tyre_params front_tyre = car_tyre(90000, 30000, 0.5 * chassis.mass * kGravity * lr / (lf + lr));
+        tyre_params rear_tyre = car_tyre(90000, 35000, 0.5 * chassis.mass * kGravity * lf / (lf + lr));
         drive_brake_params drive_brake;                     // pedals to wheel torques; rear drive by default
         vertical_model vertical = vertical_model::springs;  // how the vertical loads are found (see above)
         corner_params front_corner;                         // suspension of each front corner (springs model)

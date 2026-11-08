@@ -13,7 +13,7 @@ namespace rallysim
     // and no time, so the force curves can be plotted and checked before a tyre goes on the car.
     //
     // Curves: linear (the default tyre), brush (peak_slide with its peak at 3 and no fall-off, which is the brush
-    // model of section 17.7) and peak_slide with its default shape. Sweeps:
+    // model of section 17.7), peak_slide with its default shape, and tmeasy with its default tables. Sweeps:
     //   x         slip ratio -1 to 1, no slip angle, at each load
     //   y         slip angle -30 to 30 degrees, no slip ratio, at each load
     //   combined  slip ratio -1 to 1 at slip angles of 2, 4, 6 and 8 degrees, at the nominal load
@@ -31,7 +31,9 @@ namespace rallysim
         brush.sliding_ratio = 1;
         tyre_params peak_slide;
         peak_slide.curve = tyre_curve::peak_slide;
-        return {{"linear", linear}, {"brush", brush}, {"peak_slide", peak_slide}};
+        tyre_params tmeasy;
+        tmeasy.curve = tyre_curve::tmeasy;
+        return {{"linear", linear}, {"brush", brush}, {"peak_slide", peak_slide}, {"tmeasy", tmeasy}};
     }
 
     inline bool write_tyre_rig(const std::string &path)

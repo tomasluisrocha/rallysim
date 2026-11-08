@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 #include "core/telemetry.hpp"
 #include "vehicle/four_wheel.hpp"
@@ -35,11 +36,29 @@ namespace rallysim
         return c;
     }
 
+    // A tyre's TMeasy tables for line 1, as tmeasy_<axis>_<field><1 or 2>_<axle>: 1 at the nominal load, 2 at twice
+    // it (see tmeasy_point in tyre.hpp).
+    inline void add_tmeasy_meta(telemetry_meta &meta, const tyre_params &t, const char *axle)
+    {
+        for (const auto &[axis, d] : {std::pair<const char *, const tmeasy_direction *>{"x", &t.tmeasy_x}, {"y", &t.tmeasy_y}})
+            for (const auto &[n, point] : {std::pair<const char *, const tmeasy_point *>{"1", &d->nominal}, {"2", &d->double_load}})
+            {
+                const std::string at = std::string(n) + "_" + axle;
+                const std::string base = std::string("tmeasy_") + axis + "_";
+                meta.push_back({base + "stiffness" + at, point->stiffness});
+                meta.push_back({base + "peak_slip" + at, point->peak_slip});
+                meta.push_back({base + "sliding_slip" + at, point->sliding_slip});
+                meta.push_back({base + "sliding_ratio" + at, point->sliding_ratio});
+            }
+    }
+
     // The car's geometry and tyre grip for line 1 of the file, so a viewer can draw it to scale and work out how
-    // much of each tyre's grip is in use: grip = mu (1 - k (Fz - Fz0) / Fz0) Fz.
+    // much of each tyre's grip is in use: grip = mu (1 - k (Fz - Fz0) / Fz0) Fz. Then each tyre's curve (curve: 0
+    // linear, 1 peak_slide, 2 tmeasy) and the numbers of every curve, so a tool can put the tyres on their curves.
     inline telemetry_meta four_wheel_meta(const four_wheel_params &p)
     {
-        return {{"model", 4}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_front}, {"track_rear", p.track_rear},
+        telemetry_meta meta{
+                {"model", 4}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_front}, {"track_rear", p.track_rear},
                 {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass},
                 {"wheel_radius", p.wheel.radius},
                 {"mu_front", p.front_tyre.friction_coefficient}, {"k_front", p.front_tyre.load_sensitivity},
@@ -56,6 +75,9 @@ namespace rallysim
                 {"cx_rear", p.rear_tyre.longitudinal_stiffness}, {"calpha_rear", p.rear_tyre.cornering_stiffness},
                 {"curve_rear", static_cast<Real>(p.rear_tyre.curve)}, {"peak_slip_rear", p.rear_tyre.peak_slip},
                 {"sliding_slip_rear", p.rear_tyre.sliding_slip}, {"sliding_ratio_rear", p.rear_tyre.sliding_ratio}};
+        add_tmeasy_meta(meta, p.front_tyre, "front");
+        add_tmeasy_meta(meta, p.rear_tyre, "rear");
+        return meta;
     }
 
     inline std::vector<std::string> four_wheel_units()

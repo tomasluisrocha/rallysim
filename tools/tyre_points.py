@@ -1,10 +1,12 @@
 """Where a four-wheel run's tyres sit on their force curve.
 
-Every tyre, at every moment, is drawn as a point on its own curve: across, the normalised slip s (the combined slip
-the curve is read at, with s = 1 where the linear tyre reaches its grip); up, the grip it uses, |F| / (mu(Fz) Fz).
-On the normalised axes every load collapses onto one curve, so all four wheels share one plot. Braking hard, a
-point climbs the curve, passes the peak and slides down to the locked plateau; cornering, the outer front sits
-just under its peak.
+Every tyre, at every moment, is drawn as a point on its own curve: across, the normalised slip (the combined slip
+the curve is read at); up, the grip it uses, |F| / (mu(Fz) Fz). For linear and peak_slide tyres the slip is
+s = |(Cx sx, C_alpha sy)| / grip (1 = where the linear tyre reaches its grip), and every load and direction collapses
+onto one curve. For tmeasy tyres it is sigma, each slip over its own peak slip (1 = the peak, in every direction),
+and each direction has its own curve, drawn at the nominal load; points of a mixed slip, or at other loads, sit
+near them. Braking hard, a point climbs the curve, passes the peak and slides down to the locked plateau;
+cornering, the outer front sits just under its peak.
 
 Usage:
   py tools/tyre_points.py out/runs/fw_brake.csv                      show it
@@ -57,8 +59,7 @@ def plot(path, min_speed):
 
     # How far along the slip axis to draw: past the full-sliding point, but a locked wheel (s near 30) is pinned
     # to the edge rather than squashing the rest.
-    edge = max(1.6 * max(tyre["sliding_slip"] if simdata.CURVES.get(int(tyre["curve"])) == "peak_slide" else 2.5
-                         for tyre in tyres.values()), 2.5)
+    edge = max(simdata.axis_edge(tyre) for tyre in tyres.values())
     thin = max(1, len(t) // 3000)
     for wheel in simdata.WHEELS:
         tyre = tyres["front" if wheel[0] == "F" else "rear"]
@@ -73,27 +74,23 @@ def plot(path, min_speed):
         ax_s.plot(t, np.minimum(s, edge), color=colour, lw=1, label=wheel)
         ax_use.plot(t, use, color=colour, lw=1, label=wheel)
 
-    sweep = np.linspace(0, edge, 400)
-    shapes = {simdata.CURVES.get(int(tyre["curve"]), "?") + f" ({axle})": simdata.curve_shape(tyre, sweep)
-              for axle, tyre in tyres.items()}
-    if np.allclose(*shapes.values()):
-        shapes = {next(iter(shapes)).split(" (")[0] + " (both axles)": next(iter(shapes.values()))}
-    for name, shape in shapes.items():
-        ax_curve.plot(sweep, shape, color="black", lw=1.5, label=name)
+    # the curve(s) the points should sit on: one per axle, or one if both axles have the same tyre; a tmeasy tyre
+    # has one per direction (the points of a mixed slip sit between them)
+    same = all(tyres["front"].get(k) == tyres["rear"].get(k) for k in simdata.TYRE_DEFAULTS)
+    styles = ["-", "--", ":", "-."]
+    references = (simdata.reference_curves(tyres["front"], edge) if same else
+                  simdata.reference_curves(tyres["front"], edge, "front") + simdata.reference_curves(tyres["rear"], edge, "rear"))
+    for (name, sweep, curve), style in zip(references, styles * 2):
+        ax_curve.plot(sweep, curve, style, color="black", lw=1.5, label=name + (" (both axles)" if same else ""))
 
-    front = tyres["front"]
-    marks = [(1.0, "linear reaches the grip")]
-    if simdata.CURVES.get(int(front["curve"])) == "peak_slide":
-        marks = [(front["peak_slip"], "peak"), (front["sliding_slip"], "full sliding")]
-    for value, text in marks:
-        for ax in (ax_curve,):
-            ax.axvline(value, color="grey", ls=":", lw=1)
+    for value, text in simdata.marks(tyres["front"]):
+        ax_curve.axvline(value, color="grey", ls=":", lw=1)
         ax_s.axhline(value, color="grey", ls=":", lw=1)
         ax_s.text(t[0], value, " " + text, va="bottom", fontsize=8, color="grey")
 
     name = simdata.label_of(path)
     ax_curve.set_title(f"{name}: every tyre on its curve (> = beyond the edge, e.g. locked)")
-    ax_curve.set_xlabel("normalised slip s  (1 = where the linear tyre reaches the grip)")
+    ax_curve.set_xlabel(simdata.slip_axis_label(tyres["front"]))
     ax_curve.set_ylabel("grip used  |F| / mu(Fz) Fz")
     ax_curve.set_xlim(0, edge * 1.03)
     ax_curve.set_ylim(0, 1.15)

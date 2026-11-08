@@ -13,10 +13,10 @@
 
 using namespace rallysim;
 
-// Golden runs for the four-wheel scenarios (phase 4, step 7), on springs, on the car's own tyre (peak_slide since
+// Golden runs for the four-wheel scenarios (phase 4, step 7), on springs, on the car's own tyre (tmeasy since
 // phase 5). Each scenario is first checked against something that does not share its code (a closed form, or the
 // single-track model), so a wrong result cannot be frozen in as golden; then its final state is compared with the
-// recorded values (re-recorded in phase 5, when the car moved to the peak_slide tyre). Last, the timestep: halving
+// recorded values (re-recorded in phase 5, when the car moved to the tmeasy tyre). Last, the timestep: halving
 // dt must change the results less each time (book section 11.2).
 
 // Golden values must match to this tolerance. It is far below any real change in the model,
@@ -86,9 +86,9 @@ static void test_circle()
     const four_wheel_run r = four_wheel_circle();
     const four_wheel_state s = run(r);
     check_true("circle: determinism: two runs give identical bits", identical(s, run(four_wheel_circle())));
-    check_golden("circle", s, {11.177534257342515, 24.186987761834967, 2.6377425184792895, 5.9911715837758432,
-        0.40549915775012879, 0.47226888209908963, 0.49995526273695384, 0.015936642268173016,
-        0.00037581680700999345, 18.169699331905974, 20.373779134160483, 17.894911280394602, 20.144744916889927});
+    check_golden("circle", s, {9.92197438208491, 24.400028218566668, 2.7380305775516356, 5.9909956599165479,
+        0.41062452916747527, 0.47750371405849906, 0.49995429516940204, 0.016113115079905576,
+        0.00038477787250838173, 18.164199589856302, 20.392710527739581, 17.884126055193637, 20.154892552664688});
 
     // the settled turn: the steer is L / R + K a_y (small-angle form, so within a few percent at 0.2 rad); the body
     // leans out by m a_y h / (K_roll - m g h); the yaw rate is the single-track's within 2%
@@ -114,9 +114,9 @@ static void test_lane_change()
     const four_wheel_run r = four_wheel_lane_change();
     const four_wheel_state s = run(r);
     check_true("lane: determinism: two runs give identical bits", identical(s, run(four_wheel_lane_change())));
-    check_golden("lane", s, {104.85175153357049, 3.3828899049447774, -5.7549979153209595e-06, 14.999999999564485,
-        2.5222045071620464e-08, -6.8129294598980992e-10, 0.50000000000154876, -2.3126735718780762e-10,
-        -7.0874223669017482e-12, 47.61904761923708, 47.619047615827213, 47.619047620130644, 47.619047616720778});
+    check_golden("lane", s, {104.85015197593086, 3.4005716965072508, -3.627078119674203e-06, 14.999999999564123,
+        2.5154731007182409e-08, -6.7472109341571973e-10, 0.50000000000154554, -2.3738304286770109e-10,
+        -7.0982692384757764e-12, 47.619047619220005, 47.619047615842305, 47.619047620114337, 47.619047616736644});
 
     // back to going straight, level and at speed, displaced to the left as the single-track is
     const body_velocity v = velocity_in_body(s.body);
@@ -148,15 +148,15 @@ static void test_brake()
             x_stop = st.body.pos.x;
         } });
     check_true("brake: determinism: two runs give identical bits", identical(s, run(four_wheel_brake())));
-    check_golden("brake", s, {65.351963009520603, 0, 0, -0.00069670958301160199,
-        0, 0, 0.49997972242379612, 0,
-        -0.00014816443035537506, 0, 0, 0, 0});
+    check_golden("brake", s, {67.436703481699723, 0, 0, -0.0037244601527707502,
+        0, 0, 0.5001406620655966, 0,
+        0.00063693370040539905, 0, 0, 0, 0});
 
     // the stop: all four wheels lock, so each tyre slides at sliding_ratio of its grip, and the car stops in about
     // v^2 / (2 sliding_ratio mu g) from where the brake went down (a few percent longer: the pedal takes 50 ms, the
     // tyres build their force over a relaxation length, and the loaded front loses a little grip to load
     // sensitivity); at the end the car is (nearly) still
-    const Real ratio = r.params.front_tyre.sliding_ratio;
+    const Real ratio = pure_slip_curve(r.params.front_tyre, r.params.front_tyre.nominal_load, slip_axis::x).sliding_ratio;
     const Real expected = 25.0 * 25.0 / (2 * ratio * kGravity);
     std::printf("brake: stopped %.3f m after the brake went down, at %.3f s (v^2 / 2 sliding_ratio mu g = %.3f m)\n",
                 x_stop - x_brake, t_stop, expected);
@@ -170,31 +170,44 @@ static void test_brake()
 static void test_launch()
 {
     const four_wheel_run r = four_wheel_launch();
-    Real u_a = 0, u_b = 0, u_end_a = 0;
+    Real u_a = 0, u_b = 0, u_end_a = 0, rear_share = 0, front_slip = 0;
     const four_wheel_state s = trace(r, [&](Real t, const four_wheel_state &st)
                                      {
         const Real u = velocity_in_body(st.body).u;
         if (std::fabs(t - 0.8) < 1e-9) u_a = u;
         if (std::fabs(t - 1.2) < 1e-9) u_b = u;
-        if (std::fabs(t - 3.4) < 1e-9) u_end_a = u; });
+        if (std::fabs(t - 3.4) < 1e-9) u_end_a = u;
+        if (std::fabs(t - 1.0) < 1e-9)
+        {
+            // how hard the rear tyres push, as a share of their grip, and how much the fronts slip
+            const four_wheel_forces f = evaluate(st, r.params, driver_input(r, st, t));
+            rear_share = f.tyre[RL].fx / tyre_grip(r.params.rear_tyre, f.fz[RL]);
+            front_slip = steady_slip_ratio(r.params.wheel, st.wheels[FL].omega, f.patch[FL].vx);
+        } });
     check_true("launch: determinism: two runs give identical bits", identical(s, run(four_wheel_launch())));
-    check_golden("launch", s, {39.462018192208809, 0, 0, 23.450837750256088,
-        0, 0, 0.49929334337326764, 0,
-        -0.013145716362282964, 75.593492631182428, 75.593492631182428, 77.648334979441771, 77.648334979441771});
+    check_golden("launch", s, {39.130999886072779, 0, 0, 23.858754368389384,
+        0, 0, 0.49931076238784389, 0,
+        -0.01296610505916369, 77.403366434689985, 77.403366434689985, 78.590437044503105, 78.590437044503105});
 
-    // traction-limited at first: full throttle spins the wheels past their peak, so each tyre pushes at
-    // sliding_ratio of its grip, about sliding_ratio mu g (load sensitivity takes a little off); power-limited at the
-    // end: a = P / (m_eff v), every wheel's spin inertia adding to the mass
+    // At first full throttle spins the rear wheels (70% of the torque) far past their peak, and they push at their
+    // tyre's sliding share of the grip. The fronts do not spin: the engine's power limit divides by the average
+    // driven-wheel speed, which the spinning rears drive up, so P / omega leaves the fronts too little torque, and
+    // they push at about half their grip. So the launch is well short of the linear tyre's mu g: spinning wastes
+    // the engine's power. Power-limited at the end: a = P / (m_eff v), every wheel's spin inertia adding to the mass.
     const Real early = (u_b - u_a) / 0.4;
     const Real u_end = velocity_in_body(s.body).u;
     const Real late = (u_end - u_end_a) / 0.1;
     const four_wheel_params &p = r.params;
-    const Real spinning = p.front_tyre.sliding_ratio * kGravity;
+    const Real ratio = pure_slip_curve(p.rear_tyre, p.rear_tyre.nominal_load, slip_axis::x).sliding_ratio;
     const Real m_eff = p.chassis.mass + 4 * p.wheel.inertia / (p.wheel.radius * p.wheel.radius);
     const Real power_limited = p.drive_brake.max_drive_power / (m_eff * 0.5 * (u_end + u_end_a));
-    std::printf("launch: %.3f m/s^2 at first (sliding_ratio mu g = %.3f), %.3f m/s^2 at the end (P / m_eff v = %.3f)\n",
-                early, spinning, late, power_limited);
-    check_near("launch analytic: wheels spinning, at about sliding_ratio mu g, within 8%", early, spinning, 0.08 * spinning);
+    std::printf("launch: at 1 s the rears push at %.3f of their grip (sliding share %.3f), the fronts slip %.3f; %.3f m/s^2 at "
+                "first (linear tyre's mu g = %.3f), %.3f m/s^2 at the end (P / m_eff v = %.3f)\n",
+                rear_share, ratio, front_slip, early, kGravity, late, power_limited);
+    check_near("launch analytic: the spinning rear tyres push at their sliding share of the grip, within 2%", rear_share,
+               ratio, 0.02 * ratio);
+    check_true("launch analytic: the fronts do not spin (slip ratio under 10%)", std::fabs(front_slip) < 0.1);
+    check_true("launch analytic: spinning costs: more than 20% short of the linear tyre's mu g", early < 0.8 * kGravity);
     check_near("launch analytic: power-limited at P / (m_eff v) at the end, within 5%", late, power_limited, 0.05 * power_limited);
 }
 
@@ -208,9 +221,9 @@ static void test_handbrake()
         const body_velocity v = velocity_in_body(st.body);
         peak_beta = std::max(peak_beta, std::fabs(std::atan2(v.v, v.u))); });
     check_true("handbrake: determinism: two runs give identical bits", identical(s, run(four_wheel_handbrake())));
-    check_golden("handbrake", s, {76.700331878289191, 35.92670365952457, 0.78814182785100406, 14.999999994230961,
-        4.0998742178999237e-09, -3.5053099487825652e-09, 0.49999999980824023, 4.7706128481047994e-09,
-        -1.9589652240811087e-10, 47.619047608323925, 47.619047591303712, 47.619047620149061, 47.619047603128841});
+    check_golden("handbrake", s, {76.340299045613563, 36.365745815187914, 0.78867505558573792, 14.999999996300588,
+        2.0441127901449363e-08, -1.0612007120768798e-09, 0.49999999994269573, 5.3360968309490133e-10,
+        -1.0935608894508067e-10, 47.6190476089143, 47.619047603681537, 47.619047616499877, 47.619047611267128});
 
     // the tail steps out, and the car recovers to going straight at the held speed
     const body_velocity v = velocity_in_body(s.body);

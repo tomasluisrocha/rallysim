@@ -9,7 +9,8 @@ using namespace rallysim;
 // Phase 4, step 4: pedals, drive layouts, brakes and handbrake. The straight-line tests use load sensitivity off,
 // so the closed forms (book section 11.2: braking v^2 / 2 mu g, acceleration at the traction limit) are exact.
 // Those forms are for a tyre that holds mu Fz while it slides, so flat_grip() is on the linear tyre; the phase 5
-// tests at the end run the same experiments on the car's own peak_slide tyre, which loses grip past its peak.
+// tests at the end run the same experiments on the tyres that lose grip past their peak: peak_slide, and tmeasy, the
+// car's own.
 
 static four_wheel_params flat_grip(Real split_front = 0, tyre_curve curve = tyre_curve::linear)
 {
@@ -194,10 +195,11 @@ int main()
             }
         }
         std::printf("launch: wheel surface at most %.2f m/s ahead of the car until 2.5 s, %.2f m/s after\n", early, late);
-        // On the peak_slide tyre a spinning wheel's tyre pushes back with only sliding_ratio of the grip, so the
-        // wheels spin up further than on the linear tyre (about 23 m/s ahead here) before the power limit holds them.
+        // On a tyre with a fall-off a spinning wheel's tyre pushes back with only its sliding share of the grip, so
+        // the wheels spin up further than on the linear tyre before the power limit holds them: about 23 m/s ahead on
+        // peak_slide, 27 on the car's tmeasy tyre (its slower fall leaves less push at this much slip).
         check_true("launch: the wheelspin settles instead of growing", late <= early);
-        check_true("launch: and stays below 25 m/s", early < 25.0);
+        check_true("launch: and stays below 30 m/s", early < 30.0);
     }
 
     // straight braking from 20 m/s with the brake fully down: all four wheels lock, the car stops in
@@ -323,11 +325,10 @@ int main()
                 turned += std::fabs(w.omega) * dt;
         }
         // two things move the CG back after the stop: the front tyre, still twisted by sigma_x times its capped slip
-        // when it stops sliding (at rest the cap is the peak: peak_slip * grip / Cx on peak_slide, grip / Cx on
-        // linear), unwinds; and the body, pitched nose down by the braking, pitches back level, which moves the CG
+        // when it stops sliding (at rest the cap is the peak, the slip ratio where the force peaks, whatever the
+        // curve), unwinds; and the body, pitched nose down by the braking, pitches back level, which moves the CG
         // back by about h * pitch
-        const Real twist = p.front_tyre.relaxation_length_x * max_normalised_slip(p.front_tyre, 0.0) *
-                           tyre_grip(p.front_tyre, 4000.0) / p.front_tyre.longitudinal_stiffness;
+        const Real twist = p.front_tyre.relaxation_length_x * pure_slip_curve(p.front_tyre, 4000.0, slip_axis::x).peak_slip;
         const Real pitch_back = p.cg_height * pitch_at_stop;
         std::printf("standstill: after the stop |u| < %.6f m/s from 0.5 s on, rolled back %.4f m (twist %.4f + pitch %.4f), wheels turned %.6f rad\n",
                     after, back, twist, pitch_back, turned);
@@ -365,83 +366,95 @@ int main()
         check_near("speed hold: settles at the target", velocity_in_body(run(r).body).u, 15.0, 0.05);
     }
 
-    // Phase 5: the same straight-line experiments on the car's own tyre, peak_slide, which gives its most force at
-    // a small slip (the peak) and only sliding_ratio of it when the wheel is locked or spinning freely.
-    const Real ratio = four_wheel_params{}.rear_tyre.sliding_ratio;
-
-    // locked braking: with the brake fully down every wheel locks, so the car decelerates at sliding_ratio mu g,
-    // not mu g: the stop is 1 / sliding_ratio times longer than the linear tyre's v^2 / (2 mu g)
-    const Real locked = stopping_distance(flat_grip(0, tyre_curve::peak_slide), 20.0, 1.0);
+    // Phase 5: the same straight-line experiments on the tyres with a peak, peak_slide and tmeasy (the car's own),
+    // which give their most force at a small slip (the peak) and only their sliding share of it when the wheel is
+    // locked or spinning freely (along the wheel: 0.8 for peak_slide, 0.75 for tmeasy).
+    for (tyre_curve curve : {tyre_curve::peak_slide, tyre_curve::tmeasy})
     {
-        const Real expected = 20.0 * 20.0 / (2 * ratio * kGravity);
-        std::printf("peak_slide, full brake from 20 m/s: %.3f m (v^2 / 2 sliding_ratio mu g = %.3f m; linear tyre %.3f m)\n",
-                    locked, expected, 20.0 * 20.0 / (2 * kGravity));
-        check_near("peak_slide braking: locked, the distance is v^2 / (2 sliding_ratio mu g) within 3%", locked, expected, 0.03 * expected);
-    }
+        const four_wheel_params p = flat_grip(0, curve);
+        const char *name = curve == tyre_curve::peak_slide ? "peak_slide" : "tmeasy";
+        const Real ratio = pure_slip_curve(p.front_tyre, p.front_tyre.nominal_load, slip_axis::x).sliding_ratio;
+        char what[200];
 
-    // threshold braking: a pedal that keeps the tyres near their peak decelerates harder than locking them, which
-    // gives only sliding_ratio of the grip. Once a wheel locks it stays locked (its tyre pushes back with less than
-    // the brake holds), so the pedal is squeezed in, as a driver would, letting the load move forward first. With
-    // the 70/30 bias the fronts lock first (about 3760 N each under braking holds 1185 N m at the peak, against
-    // 2100 N m per unit of pedal), so the best pedal is short of that and the rears do less than they could.
-    {
-        const four_wheel_params p = flat_grip(0, tyre_curve::peak_slide);
-        const Real locked_a = braking_deceleration(p, 1.0);
-        Real best = locked_a, best_pedal = 1.0;
-        for (int k = 40; k <= 100; k += 2)
+        // locked braking: with the brake fully down every wheel locks, so the car decelerates at ratio mu g, not
+        // mu g: the stop is 1 / ratio times longer than the linear tyre's v^2 / (2 mu g)
+        const Real locked = stopping_distance(p, 20.0, 1.0);
         {
-            const Real a = braking_deceleration(p, k / 100.0);
-            if (a > best)
-            {
-                best = a;
-                best_pedal = k / 100.0;
-            }
+            const Real expected = 20.0 * 20.0 / (2 * ratio * kGravity);
+            std::printf("%s, full brake from 20 m/s: %.3f m (v^2 / 2 sliding_ratio mu g = %.3f m; linear tyre %.3f m)\n",
+                        name, locked, expected, 20.0 * 20.0 / (2 * kGravity));
+            std::snprintf(what, sizeof what, "%s braking: locked, the distance is v^2 / (2 sliding_ratio mu g) within 3%%", name);
+            check_near(what, locked, expected, 0.03 * expected);
         }
-        std::printf("peak_slide, braking from 18 to 6 m/s: locked %.3f m/s^2 (%.3f g), best pedal %.2f gives %.3f m/s^2 (%.3f g)\n",
-                    locked_a, locked_a / kGravity, best_pedal, best, best / kGravity);
-        check_near("peak_slide braking: locked, the deceleration is sliding_ratio g within 3%", locked_a, ratio * kGravity,
-                   0.03 * ratio * kGravity);
-        check_true("peak_slide braking: the best pedal decelerates at over 0.9 g, harder than locking", best > 0.9 * kGravity);
-        check_true("peak_slide braking: but no harder than every tyre at its peak (g)", best < 1.01 * kGravity);
-        check_true("peak_slide braking: the best pedal is short of full", best_pedal < 1.0);
-    }
 
-    // traction, the mirror of braking: on the rear-drive car full throttle spins the rear wheels past their peak,
-    // and once spinning they stay spinning; a throttle squeezed in to keep them near their peak accelerates harder.
-    // Both are squeezed in over 0.3 s from 4 m/s; the acceleration is averaged from 0.5 to 1.3 s.
-    {
-        auto acceleration = [](const four_wheel_params &p, Real throttle)
+        // threshold braking: a pedal that keeps the tyres near their peak decelerates harder than locking them,
+        // which gives only the sliding share of the grip. Once a wheel locks it stays locked (its tyre pushes back
+        // with less than the brake holds), so the pedal is squeezed in, as a driver would, letting the load move
+        // forward first. With the 70/30 bias the fronts lock first (about 3760 N each under braking holds 1185 N m
+        // at the peak, against 2100 N m per unit of pedal), so the best pedal is short of that and the rears do less
+        // than they could.
         {
-            four_wheel_state s = four_wheel_initial(p, 4.0);
-            Real u0 = 0;
-            for (int i = 0; i < 1300; ++i)
+            const Real locked_a = braking_deceleration(p, 1.0);
+            Real best = locked_a, best_pedal = 1.0;
+            for (int k = 40; k <= 100; k += 2)
             {
-                if (i == 500)
-                    u0 = velocity_in_body(s.body).u;
-                step(s, p, four_wheel_input{0.0, std::min(i * 0.001 / 0.3, 1.0) * throttle, 0.0, 0.0}, 0.001);
+                const Real a = braking_deceleration(p, k / 100.0);
+                if (a > best)
+                {
+                    best = a;
+                    best_pedal = k / 100.0;
+                }
             }
-            return (velocity_in_body(s.body).u - u0) / 0.8;
-        };
-        const four_wheel_params p = flat_grip(0, tyre_curve::peak_slide);
-        const Real full = acceleration(p, 1.0);
-        Real best = full, best_throttle = 1.0;
-        for (int k = 20; k <= 100; k += 2)
-        {
-            const Real a = acceleration(p, k / 100.0);
-            if (a > best)
-            {
-                best = a;
-                best_throttle = k / 100.0;
-            }
+            std::printf("%s, braking from 18 to 6 m/s: locked %.3f m/s^2 (%.3f g), best pedal %.2f gives %.3f m/s^2 (%.3f g)\n",
+                        name, locked_a, locked_a / kGravity, best_pedal, best, best / kGravity);
+            std::snprintf(what, sizeof what, "%s braking: locked, the deceleration is sliding_ratio g within 3%%", name);
+            check_near(what, locked_a, ratio * kGravity, 0.03 * ratio * kGravity);
+            std::snprintf(what, sizeof what, "%s braking: the best pedal decelerates at over 0.9 g, harder than locking", name);
+            check_true(what, best > 0.9 * kGravity);
+            std::snprintf(what, sizeof what, "%s braking: but no harder than every tyre at its peak (g)", name);
+            check_true(what, best < 1.01 * kGravity);
+            std::snprintf(what, sizeof what, "%s braking: the best pedal is short of full", name);
+            check_true(what, best_pedal < 1.0);
         }
-        const Real linear_full = acceleration(flat_grip(0), 1.0);
-        std::printf("peak_slide, RWD from 4 m/s: full throttle %.3f m/s^2, best throttle %.2f gives %.3f m/s^2 (linear tyre, full throttle %.3f)\n",
-                    full, best_throttle, best, linear_full);
-        check_true("peak_slide traction: full throttle spins the rears past the peak, below the linear tyre's",
-                   full < 0.9 * linear_full);
-        check_true("peak_slide traction: a lighter throttle accelerates more than 10% harder than full throttle",
-                   best > 1.1 * full && best_throttle < 1.0);
-        check_true("peak_slide traction: but no harder than the linear tyre's traction limit", best < 1.01 * linear_full);
+
+        // traction, the mirror of braking: on the rear-drive car full throttle spins the rear wheels past their
+        // peak, and once spinning they stay spinning; a throttle squeezed in to keep them near their peak
+        // accelerates harder. Both are squeezed in over 0.3 s from 4 m/s; the acceleration is averaged from 0.5 to
+        // 1.3 s.
+        {
+            auto acceleration = [](const four_wheel_params &car, Real throttle)
+            {
+                four_wheel_state s = four_wheel_initial(car, 4.0);
+                Real u0 = 0;
+                for (int i = 0; i < 1300; ++i)
+                {
+                    if (i == 500)
+                        u0 = velocity_in_body(s.body).u;
+                    step(s, car, four_wheel_input{0.0, std::min(i * 0.001 / 0.3, 1.0) * throttle, 0.0, 0.0}, 0.001);
+                }
+                return (velocity_in_body(s.body).u - u0) / 0.8;
+            };
+            const Real full = acceleration(p, 1.0);
+            Real best = full, best_throttle = 1.0;
+            for (int k = 20; k <= 100; k += 2)
+            {
+                const Real a = acceleration(p, k / 100.0);
+                if (a > best)
+                {
+                    best = a;
+                    best_throttle = k / 100.0;
+                }
+            }
+            const Real linear_full = acceleration(flat_grip(0), 1.0);
+            std::printf("%s, RWD from 4 m/s: full throttle %.3f m/s^2, best throttle %.2f gives %.3f m/s^2 (linear tyre, full throttle %.3f)\n",
+                        name, full, best_throttle, best, linear_full);
+            std::snprintf(what, sizeof what, "%s traction: full throttle spins the rears past the peak, below the linear tyre's", name);
+            check_true(what, full < 0.9 * linear_full);
+            std::snprintf(what, sizeof what, "%s traction: a lighter throttle accelerates more than 10%% harder than full throttle", name);
+            check_true(what, best > 1.1 * full && best_throttle < 1.0);
+            std::snprintf(what, sizeof what, "%s traction: but no harder than the linear tyre's traction limit", name);
+            check_true(what, best < 1.01 * linear_full);
+        }
     }
 
     return finish("four_wheel_driving");

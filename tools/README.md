@@ -60,12 +60,14 @@ It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and d
 ```
 py tools/tyre_plot.py                                  reads out/rig/tyre_rig.csv
 py tools/tyre_plot.py --save out/plots/tyres/tyre_rig.png
-py tools/tyre_plot.py --curve peak_slide brush --combined brush
+py tools/tyre_plot.py --curve peak_slide tmeasy --combined peak_slide
 ```
 
-Fx against slip ratio and Fy against slip angle at each load (colour: load; dashed linear, dotted brush, solid
-peak_slide), then the combined sweeps of one curve: the side force falling as the wheel slips, and Fy against Fx
-inside the grip circle. Make the CSV with `rallysim tyre_rig` (or `run_all.py`).
+Fx against slip ratio and Fy against slip angle at each load (colour: load; dashed linear, dotted brush, dash-dot
+peak_slide, solid tmeasy), then the combined sweeps of one curve (tmeasy by default, the car's tyre): the side force
+falling as the wheel slips, and Fy against Fx inside the grip circle. Make the CSV with `rallysim tyre_rig` (or
+`run_all.py`). Comparing peak_slide and tmeasy here shows what the two-load tables buy: tmeasy's side force peaks at
+about 9-10 degrees at every load, peak_slide's moves from 6 to 20.
 
 ### tyre_points.py
 
@@ -74,9 +76,11 @@ py tools/tyre_points.py out/runs/fw_brake.csv
 py tools/tyre_points.py out/runs/fw_brake.csv --save        to out/plots/tyres/fw_brake.png
 ```
 
-Every tyre at every moment as a point on its curve: across, the normalised slip (1 is where the linear tyre
-reaches its grip); up, the grip used, |F| / mu(Fz) Fz. On these axes every load collapses onto one curve, so the four
-wheels share one plot. Hard braking climbs the curve and pins at the locked edge; steady cornering sits on it. The
+Every tyre at every moment as a point on its curve: across, the normalised slip; up, the grip used, |F| / mu(Fz) Fz.
+For linear and peak_slide tyres the slip is scaled so 1 is where the linear tyre reaches its grip, and every load
+collapses onto one curve. For tmeasy tyres (the car's) it is sigma, each slip over its own peak slip, so 1 is the peak
+in every direction; each direction has its own curve, drawn at the nominal load, and mixed slips sit between them.
+Hard braking climbs the curve and pins at the locked edge; steady cornering sits on it. The
 slips in the file are the steady ones while the force comes from the relaxed ones, so in fast transients the
 points loop off the curve (that is the relaxation lag, not an error). Below 1 m/s (`--min-speed`) points are left out.
 
@@ -131,9 +135,10 @@ py tools/compare.py --against before --all     # what moved, run by run, into ou
 ## Keeping the tools in step with the C++
 
 - Look columns up by name, never by position (`docs/telemetry_schema.md`).
-- `simdata.py` repeats the tyre curve of `vehicle/tyre.hpp` (`grip`, `curve_shape`) so `tyre_points.py` can draw it.
-  If the C++ curve changes, change it there too: `tyre_points.py` warns when the two differ from
-  `out/rig/tyre_rig.csv` by more than 1 N.
+- `simdata.py` repeats the tyre of `vehicle/tyre.hpp` (`grip`, `tyre_forces` for every curve, `tmeasy_at`,
+  `tmeasy_combine`, `pure_slip_curve`) so `tyre_points.py` can put the tyres on their curves. If the C++ tyre changes,
+  change it there too: `tyre_points.py` warns when the two differ by more than 1 N on any row of
+  `out/rig/tyre_rig.csv` (every curve, sweep and load).
 - A new tyre parameter the tools need goes on line 1 of the four-wheel files (`four_wheel_meta`) and into
   `simdata.TYRE_DEFAULTS`.
 

@@ -56,10 +56,15 @@ def compare(path_a, path_b, channels, labels):
     label_a, label_b = labels
 
     print(f"A = {label_a}  ({path_a})\nB = {label_b}  ({path_b})")
-    changed = sorted(k for k in set(meta_a) | set(meta_b) if meta_a.get(k) != meta_b.get(k))
+    changed = sorted(k for k in set(meta_a) & set(meta_b) if meta_a[k] != meta_b[k])
+    only_a, only_b = sorted(set(meta_a) - set(meta_b)), sorted(set(meta_b) - set(meta_a))
     if changed:
-        print("line-1 facts that differ: " + ", ".join(f"{k} {meta_a.get(k)} -> {meta_b.get(k)}" for k in changed))
-    else:
+        print("line-1 facts that differ: " + ", ".join(f"{k} {meta_a[k]:g} -> {meta_b[k]:g}" for k in changed))
+    for keys, where in ((only_a, "A"), (only_b, "B")):
+        if keys:  # a newer file has more keys: count them rather than list dozens
+            shown = ", ".join(keys[:4]) + (", ..." if len(keys) > 4 else "")
+            print(f"line-1 facts only in {where}: {len(keys)} ({shown})")
+    if not (changed or only_a or only_b):
         print("line-1 facts: the same")
     if ta[-1] != tb[-1]:
         print(f"note: A ends at {ta[-1]:g} s, B at {tb[-1]:g} s; compared over {t[0]:g} to {t[-1]:g} s")
