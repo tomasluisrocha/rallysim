@@ -5,6 +5,7 @@
 #include <vector>
 #include "core/telemetry.hpp"
 #include "vehicle/four_wheel.hpp"
+#include "vehicle/four_wheel_energy.hpp"
 
 namespace rallysim
 {
@@ -25,6 +26,14 @@ namespace rallysim
         return {"rad/s", "-", "rad", "N", "N", "N", "N m", "N m", "m", "m/s", "N", "N"};
     }
 
+    // The energy books, appended after the wheels (so no schema change): what is stored, term by term, the work
+    // done since the start of the run by kind, and the residual (vehicle/four_wheel_energy.hpp). All in J.
+    inline std::vector<const char *> energy_columns()
+    {
+        return {"energy.translation", "energy.rotation", "energy.gravity", "energy.springs", "energy.wheels",
+                "energy.total", "work.drive", "work.brake", "work.damper", "work.tyre", "energy.residual"};
+    }
+
     inline std::vector<std::string> four_wheel_columns()
     {
         std::vector<std::string> c{"step", "time", "pos.x", "pos.y", "yaw", "speed",
@@ -33,6 +42,8 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
             for (const std::string &field : wheel_fields())
                 c.push_back(std::string("wheel.") + wheel_label(i) + "." + field);
+        for (const char *name : energy_columns())
+            c.push_back(name);
         return c;
     }
 
@@ -88,19 +99,24 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
             for (const std::string &unit : wheel_units())
                 u.push_back(unit);
+        for (std::size_t i = 0; i < energy_columns().size(); ++i)
+            u.push_back("J");
         return u;
     }
 
     // `input` is the command applied at this step (the pedals as given, the steer limited); everything after it
     // is computed by evaluate(), the same function the step uses. slipRatio and slipAngle are the steady
     // (kinematic) slips of the contact patch, from the wheel's spin and the patch velocity: -1 is a locked wheel
-    // sliding forward. The relaxed slips inside the wheel are capped at the grip, so they say how far the tyre is
-    // twisted, not how fast it slides. Fx and Fy are in the wheel's frame; driveTorque and brakeTorque are what
-    // the pedals put on that wheel. deflection, deflVel, springF and damperF are the corner's suspension (zero in
-    // the planar model). pos.z is the CG's height; roll and pitch follow ISO 8855 (positive: right side down,
-    // nose down). See docs/telemetry_schema.md.
+    // sliding forward. The relaxed slips inside the wheel are capped where the force stops changing
+    // (slip_cap_scale), so they say how far the tyre is twisted, not how fast it slides. Fx and Fy are in the
+    // wheel's frame; driveTorque and brakeTorque are what the pedals put on that wheel. deflection, deflVel,
+    // springF and damperF are the corner's suspension (zero in the planar model). pos.z is the CG's height; roll
+    // and pitch follow ISO 8855 (positive: right side down, nose down). The energy columns are this state's
+    // stored energy and `books`' work and residual: the books must hold the work of every step before this one.
+    // See docs/telemetry_schema.md.
     inline std::vector<Real> four_wheel_row(long step, Real dt, const four_wheel_state &s,
-                                            const four_wheel_params &p, const four_wheel_input &input)
+                                            const four_wheel_params &p, const four_wheel_input &input,
+                                            const energy_books &books)
     {
         const four_wheel_forces f = evaluate(s, p, input);
         const Real speed = std::hypot(f.vel.u, f.vel.v);
@@ -117,6 +133,10 @@ namespace rallysim
                                    f.corner[i].deflection, f.corner[i].deflection_rate, f.corner[i].spring,
                                    f.corner[i].damper});
         }
+        const stored_energy e = energy_of(s, p);
+        const energy_work &w = books.work();
+        row.insert(row.end(), {e.translation, e.rotation, e.gravity, e.springs, e.wheels, e.total(), w.drive, w.brake,
+                               w.damper, w.tyre, books.residual(e)});
         return row;
     }
 }

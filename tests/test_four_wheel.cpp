@@ -216,8 +216,10 @@ int main()
         const std::vector<std::string> names = four_wheel_columns(), units = four_wheel_units();
         const four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
-        const std::vector<Real> row = four_wheel_row(7, dt, s, p, in);
-        check_true("telemetry: 18 + 4 x 12 columns, units and values", names.size() == 66 && units.size() == 66 && row.size() == 66);
+        const energy_books books(s, p); // no work done yet: the residual is zero
+        const std::vector<Real> row = four_wheel_row(7, dt, s, p, in, books);
+        check_true("telemetry: 18 + 4 x 12 + 11 energy columns, units and values",
+                   names.size() == 77 && units.size() == 77 && row.size() == 77);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);
@@ -232,6 +234,9 @@ int main()
         check_column(names, row, "wheel.FL.driveTorque", 0.0); // rear drive
         check_column(names, row, "yaw_rate", 0.25, 1e-12);
         check_column(names, row, "beta", std::atan2(0.4, 12.0), 1e-12);
+        check_column(names, row, "energy.total", energy_of(s, p).total());
+        check_column(names, row, "energy.translation", 0.5 * p.chassis.mass * (12.0 * 12.0 + 0.4 * 0.4), 1e-9);
+        check_column(names, row, "energy.residual", 0.0);
         for (const char *needed : {"pos.x", "pos.y", "yaw", "steer", "speed", "beta"})
             check_true("telemetry: tools/topdown.py can read it", index_of(names, needed) >= 0);
     }

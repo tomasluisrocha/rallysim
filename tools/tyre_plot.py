@@ -3,12 +3,14 @@
 Usage:
     python tools/tyre_plot.py                      # reads out/rig/tyre_rig.csv, shows the figure
     python tools/tyre_plot.py --save out/plots/tyres/tyre_rig.png
+    python tools/tyre_plot.py --curve peak_slide          # every panel on peak_slide
     python tools/tyre_plot.py --curve peak_slide brush --combined brush
 
 Make the CSV first with:  build/Release/rallysim tyre_rig
 Panels: Fx against slip ratio and Fy against slip angle at each load (colour = load, line style = curve),
 and, for one curve, the combined sweeps: Fx and Fy against slip ratio at fixed slip angles, and Fy against Fx
-with the grip circle mu Fz at the nominal load (the force must stay inside it).
+with the grip circle mu Fz at the nominal load (the force must stay inside it). That one curve is --combined if
+given, else the first --curve, else tmeasy (the car's).
 """
 import argparse
 import os
@@ -25,13 +27,18 @@ def main():
     parser = argparse.ArgumentParser(description="Plot the single-tyre rig CSV.")
     parser.add_argument("file", nargs="?", default="out/rig/tyre_rig.csv", help="rig CSV (default out/rig/tyre_rig.csv)")
     parser.add_argument("--curve", nargs="+", help="curves for the pure-slip panels (default: all in the file)")
-    parser.add_argument("--combined", default="tmeasy", help="curve for the combined panels (default tmeasy, the car's)")
+    parser.add_argument("--combined", help="curve for the combined panels (default: the first --curve, else tmeasy, "
+                                           "the car's)")
     parser.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
     args = parser.parse_args()
 
     data = pd.read_csv(args.file, comment="#")
     curves = args.curve or list(dict.fromkeys(data["curve"]))
-    unknown = [c for c in curves + [args.combined] if c not in set(data["curve"])]
+    # The combined panels show one curve: the one asked for, else the first curve picked for the pure-slip panels,
+    # else the car's. (They used to default to tmeasy even with --curve peak_slide, which hid which curve they were.)
+    if args.combined is None:
+        args.combined = args.curve[0] if args.curve else "tmeasy"
+    unknown = [c for c in dict.fromkeys(curves + [args.combined]) if c not in set(data["curve"])]
     if unknown:
         print("Unknown curve(s): " + ", ".join(unknown))
         print("In the file: " + ", ".join(dict.fromkeys(data["curve"])))

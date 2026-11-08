@@ -62,11 +62,13 @@ It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and d
 ```
 py tools/tyre_plot.py                                  reads out/rig/tyre_rig.csv
 py tools/tyre_plot.py --save out/plots/tyres/tyre_rig.png
+py tools/tyre_plot.py --curve peak_slide                      every panel on peak_slide
 py tools/tyre_plot.py --curve peak_slide tmeasy --combined peak_slide
 ```
 
 Fx against slip ratio and Fy against slip angle at each load (colour: load; dashed linear, dotted brush, dash-dot
-peak_slide, solid tmeasy), then the combined sweeps of one curve (tmeasy by default, the car's tyre): the side force
+peak_slide, solid tmeasy), then the combined sweeps of one curve (`--combined`, else the first `--curve`, else tmeasy,
+the car's tyre): the side force
 falling as the wheel slips, and Fy against Fx inside the grip circle. Make the CSV with `rallysim tyre_rig` (or
 `run_all.py`). Comparing peak_slide and tmeasy here shows what the two-load tables buy: tmeasy's side force peaks at
 about 9-10 degrees at every load, peak_slide's moves from 6 to 20.
@@ -104,7 +106,12 @@ values, and which line-1 facts (car parameters) differ between the files, so you
 ```
 py tools/plot_run.py out/runs/st_circle.csv time pos.z vel.z
 py tools/plot_run.py out/runs/st_circle.csv time pos.z --save pos_z.png
+py tools/plot_run.py out/runs/fw_brake.csv time energy.residual          the energy books' residual
+py tools/plot_run.py out/runs/fw_launch.csv time work.drive work.tyre energy.total   where the energy went
 ```
+
+Every four-wheel run carries its energy books (`energy.*`, `work.*`, `energy.residual`; `docs/telemetry_schema.md`).
+After a physics change, a residual that grows with time and does not halve when dt halves points at a bug.
 
 `yaw` is drawn unwrapped by `plot_run.py` and `compare.py`; `plot_run.py --wrapped` plots it as written. See
 [Wrapped and unwrapped yaw](#wrapped-and-unwrapped-yaw) below.

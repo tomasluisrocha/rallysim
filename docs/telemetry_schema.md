@@ -185,6 +185,7 @@ two models can be overlaid; the pedals replace `drive_force`, and each wheel add
 | 31-42 | `wheel.FR.*` | | Front-right wheel |
 | 43-54 | `wheel.RL.*` | | Rear-left wheel |
 | 55-66 | `wheel.RR.*` | | Rear-right wheel |
+| 67-77 | `energy.*`, `work.*` | J | The energy books, below |
 
 Each wheel block, in this order:
 
@@ -209,6 +210,26 @@ relaxed slips (the twist of the tyre, which the force comes from) are not logged
 changing (`slip_cap_scale` in `vehicle/tyre.hpp`: at full sliding while rolling, at the peak at rest), so a locked
 tmeasy wheel's relaxed slip is about -0.8 while it slides and the slip at its peak once stopped, not -1. As in the
 other files, the columns from `steer` on belong to the step that starts from that row's state.
+
+The energy books (book ch. 26.4; `vehicle/four_wheel_energy.hpp`), all in J. The stored terms are that row's state; the
+work columns add up every step before it, from the start of the run:
+
+| Column | Meaning |
+|---|---|
+| `energy.translation` | Body: ½ m \|v\|² |
+| `energy.rotation` | Body: ½ (Ix ωx² + Iy ωy² + Iz ωz²), body frame |
+| `energy.gravity` | Body: m g z (springs model; 0 in the planar model, which cancels gravity) |
+| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model) |
+| `energy.wheels` | Wheel spin: ½ I ω² for each wheel |
+| `energy.total` | The sum of the five above |
+| `work.drive` | Put in by the drive: drive torque × spin |
+| `work.brake` | Taken out by the brakes: brake torque × \|spin\| (0 while a wheel is locked) |
+| `work.damper` | Taken out by the dampers: the corner force beyond its spring × compression speed |
+| `work.tyre` | Taken out in the contact patches: tyre force × slip velocity |
+| `energy.residual` | `energy.total` − its value in the first row − (drive − brake − damper − tyre): near zero |
+
+The residual is a first-order integration error, not exactly zero, and halves when dt halves; a residual that does not
+shrink with dt is a physics bug. `tests/test_energy.cpp` bounds it on every four-wheel scenario.
 
 ## Tyre rig file
 
