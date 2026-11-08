@@ -1,4 +1,4 @@
-"""Run every scenario and make every picture, into the out/ layout (see tools/README.md).
+"""Run every scenario and make every picture, into the out/ layout (see docs/tools.md).
 
 Usage:
   py tools/run_all.py                         every scenario + the tyre rig, then the plots (no GIFs)

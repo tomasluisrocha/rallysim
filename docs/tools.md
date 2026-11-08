@@ -30,7 +30,7 @@ py tools/topdown.py out/runs/fw_handbrake.csv
 | `tyre_points.py` | A four-wheel run's tyres on their force curve, for every wheel and moment |
 | `compare.py` | Two runs overlaid channel by channel, with their difference |
 | `plot_run.py` | Any columns of a run against any other |
-| `simdata.py` | Not a tool: the `out/` paths, reading files, and the tyre curve in Python, shared by the others |
+| `simdata.py` | Not a standalone tool: shared paths, file readers and tyre curves used by the other tools |
 
 ### run_all.py
 
@@ -46,6 +46,10 @@ It asks `rallysim list` for the scenario names, so a new scenario added to `apps
 A scenario whose state stops being finite (a NaN or infinity, `core/finite.hpp`) is listed as FAILED with
 `rallysim`'s message (the field, step and time); its CSV ends where the run stopped, and the script exits with 1.
 
+The generated GIFs and plots are the quickest way to browse a complete run:
+
+![Generated four-wheel scenario output](img/fw_hairpin.png)
+
 ### topdown.py
 
 ```
@@ -57,6 +61,8 @@ py tools/topdown.py out/runs/fw_handbrake.csv --gif run.gif --start 2 --end 5
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
 It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and draws the car from line 1 of the file.
+
+![Top-down replay](img/tool-topdown.gif)
 
 ### view3d.py
 
@@ -76,6 +82,8 @@ forces (orange). Every force uses one scale, printed in the HUD. The camera is i
 arrows keep their true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel
 runs only. GIFs take about 4 s per second of run.
 
+![3D replay](img/tool-view3d.gif)
+
 ### tyre_plot.py
 
 ```
@@ -92,6 +100,15 @@ falling as the wheel slips, and Fy against Fx inside the grip circle. Make the C
 `run_all.py`). Comparing peak_slide and tmeasy here shows what the two-load tables buy: tmeasy's side force peaks at
 about 9-10 degrees at every load, peak_slide's moves from 6 to 20.
 
+Use this tool to study the tyre in isolation. The top-left and top-right
+panels are pure longitudinal and pure lateral tests: they show how stiffness,
+peak grip and sliding behaviour change with vertical load. The lower-left panel
+shows combined slip, where braking or driving consumes some of the force
+available for cornering. The lower-right panel shows the same result as a
+force envelope; every trace should remain inside the grey `mu Fz` grip circle.
+
+![Tyre force curves](img/tool-tyre-plot.png)
+
 ### tyre_points.py
 
 ```
@@ -107,6 +124,16 @@ Hard braking climbs the curve and pins at the locked edge; steady cornering sits
 slips in the file are the steady ones while the force comes from the relaxed ones, so in fast transients the
 points loop off the curve (that is the relaxation lag, not an error). Below 1 m/s (`--min-speed`) points are left out.
 
+Use this tool to study a complete four-wheel run rather than the tyre model in
+isolation. The top-left panel answers "how close is each wheel to its tyre
+curve?"; the top-right shows how each wheel shares its available grip between
+longitudinal and lateral force. The bottom panels show when slip builds and
+how much grip is used over time. This makes braking, corner entry, wheelspin
+and handbrake events easy to identify, while the wheel colours show which
+corner is responsible.
+
+![Tyre operating points](img/tool-tyre-points.png)
+
 ### compare.py
 
 ```
@@ -120,6 +147,8 @@ py tools/compare.py --against linear --all                    every run in both,
 A dashed, B solid, B - A underneath each channel. It prints the largest difference of each channel, both final
 values, and which line-1 facts (car parameters) differ between the files, so you can see what changed.
 
+![Run comparison](img/tool-compare.png)
+
 ### plot_run.py
 
 ```
@@ -129,24 +158,25 @@ py tools/plot_run.py out/runs/fw_brake.csv time energy.residual          the ene
 py tools/plot_run.py out/runs/fw_launch.csv time work.drive work.tyre energy.total   where the energy went
 ```
 
-Every four-wheel run carries its energy books (`energy.*`, `work.*`, `energy.residual`; `docs/telemetry_schema.md`).
+Every four-wheel run carries its energy books (`energy.*`, `work.*`, `energy.residual`; `telemetry_schema.md`).
 After a physics change, a residual that grows with time and does not halve when dt halves points at a bug.
 
 `yaw` is drawn unwrapped by `plot_run.py` and `compare.py`; `plot_run.py --wrapped` plots it as written. See
 [Wrapped and unwrapped yaw](#wrapped-and-unwrapped-yaw) below.
 
+![Energy plot](img/tool-plot-run.png)
+
 ## out/
 
 | Folder | Holds | Written by |
 |---|---|---|
-| `out/runs/` | One telemetry CSV per scenario (`docs/telemetry_schema.md`) | `rallysim <scenario>` |
+| `out/runs/` | One telemetry CSV per scenario (`telemetry_schema.md`) | `rallysim <scenario>` |
 | `out/rig/` | `tyre_rig.csv`: force against slip for each tyre curve, no car | `rallysim tyre_rig` |
 | `out/plots/views/` | A top-down picture of each run | `topdown.py --static` |
 | `out/plots/tyres/` | `tyre_rig.png`, and each four-wheel run's tyres on their curve | `tyre_plot.py`, `tyre_points.py` |
 | `out/plots/compare/` | Two runs overlaid, with their difference | `compare.py --save` |
 | `out/gif/` | The dashboard of each run as an animation | `topdown.py --gif` |
 | `out/snapshots/<name>/` | Saved copies of `runs/` and `rig/`, to compare later runs against | `run_all.py --snapshot <name>` |
-| `out/scratch/` | One-off experiments | by hand; nothing writes here on its own |
 
 `rallysim <scenario> [path]` writes to `out/runs/<scenario>.csv` (the rig to `out/rig/`) unless given a path;
 `rallysim list` prints the scenario names.
@@ -162,7 +192,7 @@ py tools/compare.py --against before --all     # what moved, run by run, into ou
 
 ## Keeping the tools in step with the C++
 
-- Look columns up by name, never by position (`docs/telemetry_schema.md`).
+- Look columns up by name, never by position (`telemetry_schema.md`).
 - `simdata.py` repeats the tyre of `vehicle/tyre.hpp` (`grip`, `tyre_forces` for every curve, `tmeasy_at`,
   `tmeasy_combine`, `pure_slip_curve`) so `tyre_points.py` can put the tyres on their curves. If the C++ tyre changes,
   change it there too: `tyre_points.py` warns when the two differ by more than 1 N on any row of

@@ -1,128 +1,133 @@
-# Decisions and conventions
+# Modelling decisions
 
-The book asks for the first decisions to be made before any code (chapter 1) and for every sign to be
-written down before it is coded (section 5.1). This file holds both. Record any change in the log at the end.
+This is the engineering record for the simulator's important modelling
+choices. It explains what the model currently means, why the main
+simplifications were chosen, and where a future change would affect the
+results. It is deliberately more detailed than the project README, but it is
+not a diary: implementation details belong in the code and measured output
+belongs in the tests or telemetry.
 
-## First decisions (chapter 1)
+The sources of truth are:
 
-| Decision | Choice here | Where it shows |
+- the headers and scenarios in the implementation;
+- the independent checks in `tests/`;
+- the file format documented in [telemetry_schema.md](telemetry_schema.md);
+- the tool behaviour documented in [tools.md](tools.md).
+
+## Project priorities
+
+The simulator prioritises:
+
+1. **Understandability** - each model should be small enough to inspect.
+2. **Determinism** - equal inputs should produce repeatable results.
+3. **Testability** - simplified models are useful when their limits are known.
+4. **Extensibility** - the bicycle and single-track models provide references
+   for the more detailed four-wheel model.
+
+This is why the project does not begin with a large production vehicle stack.
+The model is built in layers so that a new effect can be compared with a
+simpler model and with a physical or mathematical expectation.
+
+## Foundational conventions
+
+| Area | Decision | Reason |
 |---|---|---|
-| Language | C++17 for the core (header-only library `rallysim_core`), Python for plots | `CMakeLists.txt`, `tools/` |
-| Physics timestep | Fixed 1 ms (1000 Hz); the core never takes a variable dt | `dt = 0.001` in every scenario, `core/fixed_step.hpp` |
-| Units | SI everywhere in the core; conversions only at the edges | all headers, `docs/telemetry_schema.md` |
-| Coordinates | ISO 8855: x forward, y left, z up | `core/vec3.hpp`, `core/wrench.hpp` |
-| Ground truth | Closed forms and independent models in the tests; NGP and RBR only as plausibility checks | `tests/` |
-| Rendering | None yet; a 2D top-down replay of the telemetry | `tools/topdown.py` |
-| Determinism | Same inputs give identical output on one machine; `/fp:precise` and `-ffp-contract=off`, no fast-math | `CMakeLists.txt`, golden tests |
-| Licensing | Own code and own parameters only | |
+| Language | C++17 for the header-only core; Python for analysis and plots | Keeps the simulation portable and makes the analysis tools easy to iterate |
+| Time | Fixed 1 ms physics step; wheel spin uses smaller internal substeps | A fixed clock makes scripted runs reproducible, while wheel spin needs finer integration |
+| Units | SI units throughout the core and telemetry | Avoids hidden conversions between model components |
+| Coordinates | ISO 8855: x forward, y left, z up | Gives the vehicle quantities a consistent automotive convention |
+| Orientation | Body-to-world Hamilton quaternions, w first | Avoids Euler-angle singularities in the rigid-body state |
+| Wheel order | FL, FR, RL, RR everywhere | Makes telemetry, load transfer and tests unambiguous |
+| Floating point | No fast-math; precise floating point; finite values are required | Numerical failures should be visible rather than converted into plausible output |
+| Rendering | No renderer in the simulator; Python tools replay telemetry | Keeps visualisation separate from physics and makes generated views reproducible |
+| Output | CSV runs and generated images live under `out/` | The simulator remains a command-line program and generated data stays disposable |
 
-## Sign conventions (section 5.1)
+## Sign conventions
 
-| Quantity | Positive means | Note |
-|---|---|---|
-| Steering angle | Wheel turns left (counter-clockwise from above) | Matches positive yaw. Limited to `max_steer` |
-| Yaw angle | Counter-clockwise from world +x | `yaw_angle(q)` |
-| Yaw rate | Counter-clockwise from above | Right-hand rule about z; `omega.z` in the body frame |
-| Lateral velocity `v` | CG moving to the car's left | Body frame |
-| Body sideslip `beta` | Velocity of the CG points left of the heading | `atan2(v, u)` |
-| Slip angle | Wheel heading minus the direction the axle moves | So a positive slip angle gives a positive (leftward) force, which reduces it |
-| Lateral tyre force | To the left of the wheel | Axle frame, sideways to the wheel |
-| Lateral acceleration `a_lat` | Turning left | `speed * yaw_rate` |
-| Longitudinal force / `drive_force` | Pushes the car forward | Negative brakes. Applied at the rear axle, limited by its grip |
-| Load transfer | Accelerating moves load to the rear, a left turn to the right wheels | `axle_loads`, `loads_per_wheel` |
-| Quaternion | Body to world, Hamilton product, w first | `core/quat.hpp` |
-| Torque and angular velocity | Body frame, right-hand rule | `core/wrench.hpp`, `core/rigid_body.hpp` |
-| Wheel spin `omega` | Rolling forward | rad/s about the wheel axle |
-| Slip ratio | Wheel surface faster than the road (driving) | `(omega Re - vx) / max(|vx|, |omega Re|)`; -1 is a locked wheel going forward, +1 a wheel spinning at standstill |
-| Lateral slip | Wheel points left of where its contact patch moves | Tangent of the slip angle, so the same sign as the slip angle |
-| Tyre forces `Fx`, `Fy` | Forward and to the left, in the wheel frame | Positive slip gives positive force |
-| Drive torque | Pushes the wheel to roll forward | |
-| Brake torque | Always opposes the wheel's spin | Given as a magnitude >= 0; can stop the wheel but never reverse it |
-| Wheel order | FL, FR, RL, RR | Fixed everywhere, for determinism |
-| Suspension deflection | Compression | `deflection` in the telemetry; positive pushes the body up |
-| Roll | Right side down | ISO 8855, about the forward axis: positive leaning out of a left turn |
-| Pitch | Nose down | ISO 8855, about the left axis: positive diving under braking |
+- Steering angle is positive when the wheels turn left.
+- Yaw angle and yaw rate are positive counter-clockwise when viewed from above.
+- Lateral velocity, sideslip, lateral force and lateral acceleration are
+  positive to the vehicle's left.
+- Slip angle is wheel heading minus the direction of contact-patch travel.
+  A positive slip angle therefore produces a positive lateral force.
+- Longitudinal force is positive forwards. Braking opposes wheel rotation and
+  never reverses it.
+- Slip ratio is positive when the wheel surface is faster than the road
+  (driving); a locked wheel moving forwards approaches -1.
+- Suspension deflection is compression.
+- Positive roll means the right side is down; positive pitch means the nose is
+  down.
+- Torque and angular velocity use the body frame and the right-hand rule.
 
-## Code layout
+## Model scope
 
-| Folder | Holds | May include |
-|---|---|---|
-| `core/` | Maths and generic machinery: vec3, quat, wrench, rigid body, fixed-step clock, telemetry writer, the non-finite guard | `core/` only |
-| `vehicle/` | The car models and their telemetry rows: bicycle, single-track, four-wheel; and the car's parts: tyre, wheel, drive and brakes, corner springs | `core/` |
-| `driver/` | What produces the inputs: keyframe scripts, speed-hold controller | `core/`, `vehicle/` |
-| `scenarios/` | One model + one driver + one script + a run length, and the runners | all of the above |
-| `apps/` | The `rallysim` program | `scenarios/` |
-| `tests/` | One `test_<name>.cpp` per area, registered with `rallysim_test(<name>)`, plus shared helpers (`check.hpp`, which also keeps Debug tests from opening dialogs on Windows) | anything |
-| `tools/` | Python tools that read the CSVs and draw (`tools/README.md`); `requirements.txt` | the CSV files only |
-| `.github/workflows/` | CI: `ci.yml` builds and runs every test, Release and Debug, on Windows (MSVC) and Linux (GCC), on every push | — |
+### Vehicle models
 
-Dependencies point one way only. `world/` (terrain, surfaces) and `data/` (car files and their loader) are
-created when the first phase needs them. Runs and pictures are written to `out/`, which git ignores; its folders and
-the tools that fill them are in `tools/README.md`.
+The project keeps three levels of vehicle model:
 
-## Decision log
+- **Bicycle:** a kinematic reference for path geometry and low-load
+  comparisons. It is useful below the limit, where tyre saturation and load
+  transfer are not the main question.
+- **Single-track:** a dynamic two-axle model with body velocity, slip angles,
+  lateral tyre forces and quasi-static load transfer. It is a compact
+  reference for the four-wheel car.
+- **Four-wheel:** individual wheels, wheel rotation, combined-slip tyres,
+  drive and brake torques, load transfer and optional corner springs. This is
+  the main exploratory model.
 
-| Date | Decision | Why |
-|---|---|---|
-| 2026-11 | Phase 2 bicycle integrates the CG, with the heading taken half way through the step | Second-order path accuracy; the circle closes within micrometres. The book's rear-axle form is tested as the `lr = 0` case |
-| 2026-11 | Phase 3 single-track runs on the 3D rigid body with gravity cancelled, not on separate planar equations | Reuses the phase 1 integrator; an independent planar model in the tests checks it |
-| 2026-11 | Load transfer is quasi-static, from estimated accelerations: `a_x` from the traction-limited drive force, `a_y = u r` | Costs nothing and avoids a force-load loop; ignores the v-dot part of fast transients (book chapter 15 warns about this) |
-| 2026-11 | Load sensitivity is linear: `mu(Fz) = mu0 (1 - k (Fz - Fz0) / Fz0)`, `k = 0.1`, `Fz0 = 3000 N` | The simplest form the book asks for in 6.3. Values are placeholders, not fitted |
-| 2026-11 | The rear axle shares its grip between drive force and side force (friction circle) | So every force obeys the friction limit (6.3 gate) |
-| 2026-11 | Slip angles use a forward speed of at least 1 m/s | Placeholder; the book (chapter 15) recommends blending to the kinematic model below 3 to 5 m/s, to do before the car has to start from rest |
-| 2026-11 | One `keyframe_script<T>` template for every scripted input, with a `lerp` per input type | Replaces three copies of the same interpolation; phase 4 adds more input types |
-| 2026-11 | Phase 4 tyre: linear in slip ratio and lateral slip, scaled together onto the friction circle when the total exceeds `mu(Fz) Fz` | Book 7.2 rungs 1 to 3; the simplest combined slip that is easy to test. Phase 5 replaces `vehicle/tyre.hpp` |
-| 2026-11 | Tyre values per tyre: `Cx = 90 kN`, `C_alpha = 30 kN/rad` (front; 35 rear to match the single-track), `mu = 1`, `k = 0.1`, `Fz0 = 3000 N` | `Cx` from the book (ch. 14); the rest halves of the single-track axle values, so the phase 4 gate compares like with like. Real tarmac tyres are stiffer (50-70 kN/rad), gravel softer |
-| 2026-11 | Relaxation lengths `0.2 m` longitudinal, `0.4 m` lateral | Inside the book's 0.2-0.5 m (ch. 14); the longitudinal one is usually the shorter |
-| 2026-11 | Relaxed slips, `sigma ds/dt + V s = slip velocity`, `V = max(|vx|, |omega R|)`, backward Euler | Steady state is the book's slip ratio; finite and stable at standstill and at any dt; builds over distance, not time |
-| 2026-11 | Wheel: `R = 0.315 m`, `I = 1.2 kg m^2` | `R` is `EffWheelRadius` in the NGP Fabia files and the book's value. `I` estimated: about 20 kg of tyre and rim at a 0.25 m radius of gyration plus hub and disc; the book quotes 2.0 from RBR files |
-| 2026-11 | Brake clamp: if the brake can stop the wheel within the step, it stops it exactly and holds it | Book 7.1: brakes stop the wheel but never reverse it |
-| 2026-11 | Phase 4 step 3: four-wheel car kept planar (gravity cancelled, tyre forces at CG height), loads from the same quasi-static transfer as the single-track, drive on the rear wheels shared equally, parallel steer | So it can be compared one to one with the single-track (the chapter 15 gate). Springs come in step 6, the drive split in step 4, Ackermann is an extension |
-| 2026-11 | `yaw_angle`, `body_velocity` and `velocity_in_body` moved from the single-track to `core/rigid_body.hpp` | Both cars use them |
-| 2026-11 | Phase 4 step 4: the car is driven by pedals (throttle, brake, handbrake, 0 to 1); `vehicle/drive_brake.hpp` turns them into wheel torques from `max_drive_torque` 6000 N m, `drive_split_front` (0 RWD default, 0.5 AWD, 1 FWD), `max_brake_torque` 6000 N m, `brake_bias_front` 0.70, `max_handbrake_torque` 3000 N m | Pedals are what a player or an AI produces and they survive phase 7, which replaces only the inside (engine, gearbox, differentials). 6000 N m at the wheels is a rally engine in a low gear; the brakes lock all four wheels; RWD default so the four-wheel car still compares with the single-track |
-| 2026-11 | Brake bias 0.70, not 0.65 | Measured: at 0.65 the rears lock before the fronts on mu = 1, because braking at 1 g puts 68% of this car's load on the front. Lower it (about 0.6) for gravel |
-| 2026-11 | Load transfer estimate from the wheel torques, each axle's force limited by mu times its load, settled with six fixed-point passes | Gives the right traction limit for any drive split, brake bias and handbrake without a formula per case |
-| 2026-11 | The speed controller lifts off the throttle while the handbrake is up | On a rear-drive car the drive torque otherwise beats the handbrake and the rears never lock; a driver puts the clutch in |
-| 2026-11 | Drive power limit `max_drive_power` 200 kW: available torque `min(T_max, P / omega)`, with omega the average spin of the driven wheels | Measured: with a fixed torque at any wheel speed a spinning wheel sped up for ever (750 m/s surface speed). A placeholder for an engine through an ideal gearbox; phase 7 replaces it |
-| 2026-11 | AWD tests and the launch scenario use a 30/70 front/rear split | Measured: 30% front reaches mu g (9.81 m/s^2), about the front's share of the load at 1 g; 50/50 only 6.76 m/s^2, because with open differentials the unloaded fronts spin and take the engine's speed up. Limited-slip differentials (phase 7) are the real fix |
-| 2026-11 | The handbrake scenario is a partial (0.7), short (0.3 s) pull with the wheel straightened after it | Measured: a full pull, or keeping the wheel turned in on throttle, spins the car (no countersteer in a script; locked rears have no side grip left) |
-| 2026-11 | The car's geometry and tyre grip go on line 1 of each telemetry file as `key=value` | The viewer draws the wheels where they are and computes how much grip each tyre uses, without copying the C++ defaults |
-| 2026-11 | `tools/topdown.py` rewritten: one description for every model (body pose, velocity, a list of wheels with force, load and grip), a dashboard (follow view, path map, wheel loads and grip use, inputs, timeline, play and pause), a static view with snapshots, and GIF export | The old viewer knew two file types, drew one front wheel and one force at the CG, and could not play a run |
-| 2026-11 | Phase 4 step 5: the relaxed slips (the tyre's twist) are capped at what the grip can hold, `|(Cx sx, C_alpha sy)| <= mu(Fz) Fz` | Measured: a car that stopped on locked wheels kept a twist of sigma (0.2 m) and was thrown backwards, rocking at 1.6 m/s. Capped, it is left with about 7 mm. The sliding force does not change |
-| 2026-11 | Low-speed damping of the contact patch, `damping_x` 5000 and `damping_y` 9500 N s/m, fading out linearly by 2.5 m/s of rolling speed | Soaks up the tyre's spring at standstill: a braked car settles within 0.5 s. `damping_y` is about critical for the lateral tyre spring; `damping_x` is held to `c R^2 dt / I < 0.5` (0.41) because it also acts on the wheel's spin and the explicit spin update would blow up (book ch. 14). An implicit spin update would allow more |
-| 2026-11 | The four-wheel telemetry logs the steady (kinematic) slips; `topdown.py` flags spin and slide only when something is rolling | The relaxed slips are capped now, so they no longer show how fast a tyre slides; at a standstill the steady slip is 0/0 |
-| 2026-11 | Phase 4 step 6: the car sits on a vertical spring and damper at each corner (`vehicle/corner.hpp`), 50 kN/m and 3800 N s/m, gravity acts and the tyre forces act on the ground | About 2.1 Hz and a damping ratio of 0.5, a typical rally ride. The load transfer, roll and pitch now come out of the springs and take time to build. Checked against closed forms: heave 2.054 Hz (formula 2.055), roll 1.286 deg (1.285), pitch 0.514 deg (0.513) |
-| 2026-11 | Each spring hangs from the body straight above its contact patch and is preloaded so the car rests level with its CG at `cg_height` | The car starts in balance; no drop and bounce at t = 0 |
-| 2026-11 | The flat model stays as `vertical_model::planar`; springs are the default | The phase 4 gate runs on both: the planar one compares one to one with the single-track, the springs one shows the steady state still matches (yaw rate within 0.13%) |
-| 2026-11 | The wheel's direction is the body's heading turned by the steer and laid flat on the ground | A rolled or pitched body must not tilt the tyre forces into the ground (flat ground for now; phase 8 brings a contact normal) |
-| 2026-11 | Handbrake flick scenario: 0.55 for 0.3 s (was 0.7) | Measured: with springs, braking pitches the body forward and unloads the rear, so at 0.7 the outer rear locks too and the car spins |
-| 2026-11 | Phase 4 step 7: golden runs for the five four-wheel scenarios (on springs), each checked first against something that shares none of its code: the understeer gradient, the roll formula and the single-track for the circle and lane change, `v^2 / 2 mu g` for braking (+3.0%), `mu g` then `P / (m_eff v)` for the launch, recovery for the handbrake flick | A wrong result cannot be frozen in as golden. Values to 1e-9, so a compiler's last-bit rounding does not fail them |
-| 2026-11 | Timestep convergence checked on the lane change and on braking at 2, 1 and 0.5 ms | Book 11.2: each halving of dt halved the change (lane change end 7.9e-5 then 3.9e-5 m; braking stop 8.6 then 4.1 mm), the first-order behaviour of semi-implicit Euler |
-| 2026-11 | Each wheel is sub-stepped: 4 spin updates of 0.25 ms per 1 ms body step (`wheel_params::substeps`), the body getting each wheel's average tyre force over the step | Book 5.4 and 14.4: the wheel (1.2 kg m^2 with ~3 kN at its rim) changes far faster than the body. Measured: with tyre damping of 30 kN s/m one 1 ms step makes the spin chatter (sign flip every step), four sub-steps settle it. Also halved the timestep error at 1 ms (lane change end 7.9e-5 -> 3.5e-5 m, brake stop 8.6 -> 2.2 mm) |
-| 2026-11 | `damping_x` raised from 5000 to 18 000 N s/m | Allowed by the sub-steps (`c R^2 (dt / 4) / I` = 0.37); about 0.8 of critical. A locked-wheel stop on the rig now rolls back only the tyre's twist (6.6 mm, was 10 mm) and is still within 0.5 s |
-| 2026-11 | Step steer and limit cornering rerun on four wheels (book 11.2, and phase 5's "rerun the phase 3 tests with four wheels") | Step steer within 0.3% (peak) and 9% (settling) of the linear model. At the limit the single-track's formula misses by 3-4%: the steered fronts' drags act at +-t/2 and, unequal (the outer is loaded more), turn the car out of the corner; with that term the four-wheel form matches within 0.13% |
-| 2026-11 | Telemetry schema 3 | Step 6 inserted columns into the four-wheel files instead of appending them, which by the schema rules needs a new number |
-| 2026-11 | `kPi` defined once in `core/vec3.hpp`; the tests and scenarios that typed pi out use it | C++17 has no `std::numbers`; one definition instead of six |
-| 2026-11 | Phase 5: the tyre has three curves, chosen by `tyre_params::curve` (`tyre_curve` linear, peak_slide, tmeasy); the car runs on tmeasy | Book 7.2's ladder, one rung at a time, each passing the rig and the gate (`tests/test_tyre_gate.cpp`) before the car got it. Linear stays: the closed-form tests need a tyre that holds `mu Fz` while it slides. Replaces "Phase 5 replaces `vehicle/tyre.hpp`" above |
-| 2026-11 | Single-tyre rig (`scenarios/tyre_rig.hpp`, `rallysim tyre_rig`, `tools/tyre_plot.py`) and gate test: zero force at zero slip and zero load, force with the sign of its slip, symmetric, never above `mu Fz`, initial slope = stiffness, exactly the grip at the peak, sliding share when locked, no kink at the joins, small combined slip linear in each direction, side force never rising as the slip ratio grows | Book 7.2 gate and 17.6, as code. Every curve is read through `pure_slip_curve(tyre, Fz, axis)`, so the same checks fit every model |
-| 2026-11 | peak_slide (rung 4): a cubic from slope 1 to a flat peak at `p`, a half-cosine down to `r` at `q`, flat after (`peak_slide_shape`); slips normalised by stiffness, `|(Cx sx, C_alpha sy)| / grip`, one lookup, force along the slip (book 17.8). Defaults `p 2`, `q 4`, `r 0.8` | The book's 17.9 shape (TMeasy's structure, editable by hand). Brush is the case `p 3`, `r 1`: the gate matches the book's `s - s^2/3 + s^3/27` (17.7) to 5.6e-16 |
-| 2026-11 | The shape is valid for `1.5 <= p <= 3` only | Above 3 the cubic overshoots the grip; below 1.5 it bulges above its starting slope, so braking in a corner would add side force (`f(s)/s` must not rise; its slope at 0 is `(3 - 2p) / p^2`). Checked in the gate |
-| 2026-11 | tmeasy (rung 5): each direction has its own table (stiffness, peak slip, full-sliding slip, sliding ratio) at `Fz0` and `2 Fz0`; stiffness interpolated quadratically through zero, slips and ratio linearly (`tmeasy_at`). The peak force is the grip `mu(Fz) Fz` | As TMeasy (Rill, book 17.9 and [B3]). TMeasy's peak forces at `Fz0` and `2 Fz0`, `mu0 Fz0` and `2 Fz0 mu0 (1 - k)`, interpolated its quadratic way give exactly our linear load sensitivity, so all curves share one grip and `tyre_grip`, the load-transfer estimate and the viewer did not change |
-| 2026-11 | tmeasy tables: along 90 / 160 kN, peak at 9.0 / 9.5%, sliding from 80%, 75% left; across 30 / 55 kN/rad, peak at tan 0.165 / 0.175 (9.4 / 9.9 deg), sliding from tan 0.7, 85% left (each at `Fz0` / `2 Fz0`) | Placeholders shaped after published car-tyre curves (peaks near 9 deg and 10%, a slow fall to about 75% locked), not fitted to a tyre. Measured: the side force peaks at 9.1 deg at 1500 N and 9.9 at 6000 N (peak_slide: 6 and 20, because its stiffness does not grow with load); `p` stays within 1.55 to 2.95 from 500 N to 10 kN |
-| 2026-11 | tmeasy combined slip: each slip over its own peak slip, `sigma = |(sx / sMx, sy / sMy)|` (1 = the peak in every direction), the curve's numbers blended by the slip's direction, one lookup; the force split along `(kx sx, ky sy)`, not along the normalised slip | Lets each direction keep its own curve under one grip. Measured: split along the normalised slip, a little slip ratio raised the side force, because the directions' `k sM` differ (8100 against 4950 N); split along `(kx sx, ky sy)` each direction is exactly linear at small slip and the side force can only fall. The plain peak-slip form, not Rill's weighted normalisation |
-| 2026-11 | The car's tmeasy stiffnesses are scaled so they equal its `Cx`, `C_alpha` at each axle's static wheel load (`car_tyre`) | Measured: scaled at `Fz0` instead, the fronts (2825 N at rest) came out 5% softer and the rears (3061 N) 2% stiffer than the linear car, which doubled the understeer gradient (0.3 g yaw rate 7-13% low). At the static load the 0.3 g turns match the single-track within 2.3%, and `set_tyre_curve()` gives the same car on the older curves |
-| 2026-11 | Slip cap per curve (`slip_cap_scale`): while rolling at full sliding (linear: where it reaches the grip), blending down to the peak below `damping_fade_speed` (2.5 m/s) | A sliding tyre must be able to slide down its fall-off, but a stopped tyre holds no more than its peak force. Measured roll-back after a locked stop from 20 m/s: 18 mm linear; peak_slide 35 mm capped at full sliding, 25 mm blended; tmeasy 30 mm (twist 18 + pitch-back 10). Replaces the phase 4 step 5 cap above |
-| 2026-11 | Tests whose closed forms assume a tyre that holds `mu Fz` while sliding run the same car on linear (`set_tyre_curve`): understeer gradient, step response, friction limit, `flat_grip()` braking and traction limits, the wheel-lift test. The 0.3 g turns, the lane change and the rest run on the car's tyre | Book 7.2: rerun the phase 3 tests with four wheels on the new tyre; they pass (yaw rate within 2.3%, lane change 2.2 cm). Measured on peak_slide, the understeer gradient grows 7-11% as the curve bends |
-| 2026-11 | New phase 5 tests on peak_slide and tmeasy: locked braking at `sliding_ratio g`, a squeezed brake pedal and a squeezed throttle beating full ones | Measured on tmeasy: locked 0.750 g, best pedal 0.60 gives 0.935 g; RWD full throttle 4.41 m/s^2, 0.42 squeezed in gives 6.06. A locked or spinning wheel stays so until the pedal is eased (its tyre pushes back with less than the torque); stamped from zero the fronts lock before the load moves forward, so the pedal is squeezed in over 0.2 s, as a driver would |
-| 2026-11 | Golden runs re-recorded on tmeasy; their independent checks: braking `v^2 / (2 r mu g)` with `r` the sliding share (42.464 m against 42.474), the launch's spinning rears at their sliding share (0.750) with the fronts not spinning, short of `mu g` by more than 20% | The scenarios run on the car's tyre, and the brake and handbrake scenarios changed. The launch: the power limit divides by the average driven-wheel speed, which the spinning rears drive up, so the fronts get too little torque to spin. Replaces the `v^2 / 2 mu g` and `mu g` checks above |
-| 2026-11 | `fw_brake` runs 5 s (was 4); handbrake flick pull 0.40 (was 0.55) | A locked tmeasy stop takes 3.3 s and 42.5 m. Measured flick on tmeasy: 0.34 gives 4 deg, 0.40 gives 7, 0.42 gives 9, 0.44 spins (a sliding rear loses grip as it slides more, so slides stay small or run away); on peak_slide the edge was 0.40. Replaces the 0.55 entry above |
-| 2026-11 | Rungs 6 (Magic Formula) and 7 (surface curves) not done; tmeasy has no self-aligning torque, camber or rolling resistance | The book: the Magic Formula is "not more accurate by itself; the coefficients are the model", for when there is data. Surface curves are chapter 9; camber is phase 6; aligning torque matters for steering feel only |
-| 2026-11 | Tools: `out/` split into `runs/`, `rig/`, `plots/`, `gif/`, `snapshots/`, `scratch/`; `run_all.py`, `tyre_points.py`, `compare.py` and the shared `simdata.py` (see `tools/README.md`); each tyre's curve and tables go on line 1 of the four-wheel files | Comparing a physics change against a snapshot is one command. `simdata.py` repeats the C++ tyre and matches the rig to 0.005 N on every row. New line-1 keys need no schema change |
-| 2026-11 | CI (`.github/workflows/ci.yml`): every push and pull request builds and runs all tests, Release and Debug, on Windows (MSVC, `windows-2025`) and Linux (GCC 15.2, `ubuntu-26.04`); `checkout@v5`; a newer push cancels the older run on the same branch | Book ch. 26, tier T2 (CI on every commit, golden runs). The runners are pinned, because a new image can change a compiler's last bits and with them the golden values: an upgrade is then a deliberate commit. First run: no warnings at `/W4` or `-Wall -Wextra`, and MSVC and GCC agree on every golden value to 1e-9 |
-| 2026-11 | Non-finite guard: `non_finite_field(state)` for the rigid body, the bicycle and the four-wheel car names the first field that is NaN or infinite; the runners call `require_finite` (`core/finite.hpp`) on the initial state and after every step, and throw with the field, step and time; `telemetry_writer::row` refuses a non-finite value, naming the column and row; `rallysim` prints the error and exits with 1 | Book ch. 26: "fail the build on NaN or infinity anywhere in the state". A NaN does not crash: it spreads through the state in a step or two and the run goes on, and MSVC would write it as `-nan(ind)`, which pandas reads as text. Checked after `step()`, not inside it, so the physics loop is untouched; code that calls `step()` directly (some tests, later the viewer) calls `require_finite` itself. Test: a NaN steer stops the run at step 2 |
-| 2026-11 | `normalized()` (vec3, quat) asserts `!(n <= 0)`, not `n > 0` | The assert guards against dividing by zero. Written as `n > 0` it also fired on a NaN (inside `step()`, before the runner's check), with no field or step to go on; now a NaN passes and the guard reports it a step later, by name |
-| 2026-11 | Debug tests on Windows send failed asserts and `abort()` to the console instead of a dialog (`tests/check.hpp`) | A dialog waits for a click; on the CI runner nobody clicks and the job would hang until GitHub's timeout. Checked: a failing assert prints and exits with code 3 at once |
-| 2026-11 | Energy books for the four-wheel car (`vehicle/four_wheel_energy.hpp`): the stored energy (body motion and rotation, gravity, corner springs, wheel spin) against the work of the drive, brakes, dampers and tyre slip; residual `(E - E0) - work`. Kept by the runner when it writes telemetry (11 columns appended, no schema change) or when a caller asks for them; a plain run pays nothing | Book ch. 26.4, "the quickest single detector of physics bugs", and phase 7's gate. Only for the four-wheel car: the bicycle has no forces, and the single-track is a finished reference that nothing builds on |
-| 2026-11 | The books add each step's rates at the start of the step (rectangle rule), like the step itself | Measured: residual 0.001-0.41% of the energy that flows, and on every scenario it halves exactly when dt halves (ratio 0.49-0.50), so it is integration error, not a leak. A free bounce on the springs balances to 0.01 J. The test bounds it at 0.5% and checks the halving |
-| 2026-11 | Damper work is the corner force beyond its spring, `(Fz - spring) x compression speed`, not `c x speed^2` | The corner only pushes: when the damper would pull harder than the spring pushes, the force is 0, not spring + damper. This counts what the corner really did |
-| 2026-11 | `fw_hairpin`: a handbrake U-turn (AWD 30/70, 8 m/s, steer 0.4, full handbrake 0.3 s); after the handbrake a heading-hold driver (`driver/heading_hold.hpp`) steers to the reversed heading: `steer = atan2(v + lf r, u) + 0.35 (r_wanted - r)`, `r_wanted = clamp(2.5 x heading error, +-1.2 rad/s)` | Measured: open-loop the turn only landed on a knife edge (pull 0.73 turned 83 deg, 0.74 171, 0.75 spun). With the driver it turns 180 deg for pulls 0.5-1.0, steer 0.3-0.5, on tmeasy and peak_slide (37 and 39 deg of sideslip). Steering as if the car gripped (`L r / u`) turned it the wrong way; aiming the front wheels along the front axle's travel is the countersteer. `fw_handbrake` stays the recoverable flick |
+The four-wheel model is not yet a complete rally simulator. The ground is
+currently flat, terrain and surface data are reserved for later work, and the
+engine, gearbox and differential are represented by simple controllable
+torques.
+
+### Tyres
+
+The tyre supports three curve families: linear, peak-slide and TMeasy-inspired.
+The car currently uses the TMeasy-inspired curve, while the other curves
+remain useful for comparisons and tests.
+
+Longitudinal and lateral forces share a friction limit. When the combined
+force exceeds the available grip, it is scaled onto the friction circle. The
+tyre also models relaxation length, so force builds over distance rather than
+appearing instantaneously. These choices are intentionally simple enough to
+compare against the tyre rig and to replace independently later.
+
+### Loads and suspension
+
+The planar four-wheel mode uses a quasi-static estimate of longitudinal and
+lateral load transfer. The spring mode applies gravity and a spring/damper at
+each corner, allowing heave, pitch and roll to emerge from the rigid-body
+motion. Both modes are retained: the planar mode is easier to compare directly
+with the single-track model, while the spring mode is more representative of
+the vehicle's vertical behaviour.
+
+## Architecture and dependency direction
+
+- `core/` contains maths, rigid-body integration, fixed-step timing,
+  telemetry and finite-value checks.
+- `vehicle/` contains bicycle, single-track and four-wheel models plus tyres,
+  wheels, brakes and suspension.
+- `driver/` contains scripted inputs and controllers.
+- `scenarios/` combines a model, driver and run length.
+- `apps/` contains the `rallysim` command-line program.
+- `tests/` contains focused tests and independent reference checks.
+- `tools/` reads telemetry and never changes the physics.
+
+Dependencies point from the application toward the core. `world/` and `data/`
+are reserved for future terrain, surfaces and vehicle-data loading.
+
+## Validation policy
+
+Every new effect should have at least one check that does not simply repeat
+the implementation:
+
+- closed-form results for geometry, energy, suspension or limiting cases;
+- an independent bicycle or single-track comparison where appropriate;
+- finite-state and invariant checks for every simulation step;
+- timestep-convergence checks for integration-sensitive behaviour;
+- golden runs only after the result has passed an independent plausibility
+  check.
+
+Telemetry is part of the debugging surface. New values should be named,
+unit-labelled and documented in [telemetry_schema.md](telemetry_schema.md).
+The Python tools should read columns by name rather than by position.

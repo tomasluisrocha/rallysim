@@ -57,7 +57,7 @@ static bool write_four_wheel(const four_wheel_run &scenario, const std::string &
 }
 
 // Every scenario the app can write, with the folder under out/ its file goes to when no path is given: runs (one
-// telemetry file per scenario) go to out/runs, the tyre rig (force curves, not a run) to out/rig. See tools/README.md.
+// telemetry file per scenario) go to out/runs, the tyre rig (force curves, not a run) to out/rig. See docs/tools.md.
 struct scenario
 {
     const char *name;
