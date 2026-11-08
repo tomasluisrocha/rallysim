@@ -37,7 +37,6 @@ int main()
 {
     const four_wheel_params p; // the springs model is the default
     const Real dt = 0.001, m = 1200, h = 0.5, L = 2.5, t = 1.5, g = kGravity, k = 50000, c = 3800;
-    const Real pi = 3.14159265358979323846;
 
     // one corner: pushes, never pulls
     {
@@ -95,7 +94,7 @@ int main()
             before = now;
         }
         const Real f_heave = 1 / (crossings[2] - crossings[0]);
-        const Real expected = std::sqrt(4 * k / m) / (2 * pi);
+        const Real expected = std::sqrt(4 * k / m) / (2 * kPi);
         std::printf("heave, undamped: %.4f Hz (sqrt(sum k / m) / 2 pi = %.4f Hz)\n", f_heave, expected);
         check_true("heave: three zero crossings found", found == 3);
         check_near("heave: undamped frequency within 2%", f_heave, expected, 0.02 * expected);
@@ -109,7 +108,7 @@ int main()
             lowest = std::min(lowest, d.body.pos.z - h);
         }
         const Real zeta = 4 * c / (2 * std::sqrt(4 * k * m));
-        const Real undershoot = std::exp(-pi * zeta / std::sqrt(1 - zeta * zeta));
+        const Real undershoot = std::exp(-kPi * zeta / std::sqrt(1 - zeta * zeta));
         std::printf("heave, damped: undershoot %.3f of the lift (zeta %.3f, exp(-pi zeta / sqrt(1 - zeta^2)) = %.3f)\n",
                     -lowest / 0.01, zeta, undershoot);
         check_near("heave: damped undershoot within 15%", -lowest / 0.01, undershoot, 0.15 * undershoot);
@@ -129,7 +128,7 @@ int main()
         const Real k_roll = (k * t * t + k * t * t) / 2;
         const Real expected_roll = m * a_y * h / (k_roll - m * g * h);
         std::printf("steady turn: a_y %.3f m/s^2, roll %.3f deg (m a_y h / (K - m g h) = %.3f deg)\n", a_y,
-                    roll * 180 / pi, expected_roll * 180 / pi);
+                    roll * 180 / kPi, expected_roll * 180 / kPi);
         check_true("roll: positive (right side down) in a left turn", roll > 0);
         check_near("roll: angle within 3% of m a_y h / (K_roll - m g h)", roll, expected_roll, 0.03 * expected_roll);
 
@@ -160,7 +159,7 @@ int main()
         const Real k_pitch = 2 * (k * 1.3 * 1.3 + k * 1.2 * 1.2);
         const Real expected_pitch = m * decel * h / (k_pitch - m * g * h);
         std::printf("steady braking: %.3f m/s^2, pitch %.3f deg (m a h / (K - m g h) = %.3f deg)\n", decel,
-                    pitch * 180 / pi, expected_pitch * 180 / pi);
+                    pitch * 180 / kPi, expected_pitch * 180 / kPi);
         check_true("pitch: positive (nose down) under braking", pitch > 0);
         check_near("pitch: angle within 5% of m a_x h / (K_pitch - m g h)", pitch, expected_pitch, 0.05 * expected_pitch);
 
@@ -206,11 +205,11 @@ int main()
             step(s, q, in, r.dt);
         }
         std::printf("lift: inner front off the ground for %.2f s, lowest load %.1f N, largest roll %.2f deg\n", lifted_for,
-                    lowest, worst_roll * 180 / pi);
+                    lowest, worst_roll * 180 / kPi);
         check_true("lift: the inner front wheel leaves the ground (load zero, spring extended) and stays up", lifted_for > 2.0);
         check_true("lift: no load is ever negative", lowest >= 0);
         check_true("lift: the other three wheels stay on the ground", others_down);
-        check_true("lift: the car stays upright", worst_roll < 5 * pi / 180);
+        check_true("lift: the car stays upright", worst_roll < 5 * kPi / 180);
     }
 
     // a right run mirrors a left run, roll included; the same run gives the same bits

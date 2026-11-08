@@ -5,6 +5,7 @@
 namespace rallysim
 {
 	using Real = double;
+	inline constexpr Real kPi = 3.14159265358979323846;
 
 	struct vec3
 	{

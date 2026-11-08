@@ -5,8 +5,6 @@
 
 using namespace rallysim;
 
-static const Real pi = 3.14159265358979323846;
-
 // Rotates (1,0,0) with nsteps of integrate at 1 rad/s about z, for a total rotation of `angle`,
 // and returns the error against the exact answer (cos, sin, 0).
 static Real integrate_error(Real angle, int nsteps)
@@ -23,9 +21,9 @@ int main()
 {
     const quat id;
     const quat q1 = from_axis_angle(vec3{1, 2, 3}, 0.7); // an arbitrary unit rotation
-    const quat qx90 = from_axis_angle(vec3{1, 0, 0}, pi / 2);
-    const quat qy90 = from_axis_angle(vec3{0, 1, 0}, pi / 2);
-    const quat qz90 = from_axis_angle(vec3{0, 0, 1}, pi / 2);
+    const quat qx90 = from_axis_angle(vec3{1, 0, 0}, kPi / 2);
+    const quat qy90 = from_axis_angle(vec3{0, 1, 0}, kPi / 2);
+    const quat qz90 = from_axis_angle(vec3{0, 0, 1}, kPi / 2);
     const Real s = std::sqrt(0.5); // sin 45 deg = cos 45 deg
 
     // identity and default
@@ -42,7 +40,7 @@ int main()
     check_quat("normalized value", normalized(quat{0, 3, 0, 4}), quat{0, 0.6, 0, 0.8});
 
     // product: composition and order
-    check_quat("two 90 deg z = one 180 deg z", qz90 * qz90, from_axis_angle(vec3{0, 0, 1}, pi));
+    check_quat("two 90 deg z = one 180 deg z", qz90 * qz90, from_axis_angle(vec3{0, 0, 1}, kPi));
     {
         const quat ab = qx90 * qy90, ba = qy90 * qx90;
         const bool same = std::fabs(ab.w - ba.w) < 1e-9 && std::fabs(ab.x - ba.x) < 1e-9 &&
@@ -57,8 +55,8 @@ int main()
     // from_axis_angle
     check_quat("angle 0 = identity", from_axis_angle(vec3{0, 1, 0}, 0.0), id);
     check_quat("90 deg about z", qz90, quat{s, 0, 0, s});
-    check_quat("180 deg about z", from_axis_angle(vec3{0, 0, 1}, pi), quat{0, 0, 0, 1});
-    check_quat("non-unit axis same as unit axis", from_axis_angle(vec3{0, 0, 5}, pi / 2), qz90);
+    check_quat("180 deg about z", from_axis_angle(vec3{0, 0, 1}, kPi), quat{0, 0, 0, 1});
+    check_quat("non-unit axis same as unit axis", from_axis_angle(vec3{0, 0, 5}, kPi / 2), qz90);
     check_near("from_axis_angle has norm 1", norm(from_axis_angle(vec3{3, -4, 12}, 1.234)), 1.0);
 
     // to_world: identity, the sign cases, and length preserved

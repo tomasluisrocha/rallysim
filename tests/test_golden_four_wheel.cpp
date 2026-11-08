@@ -79,8 +79,6 @@ static four_wheel_state trace(const four_wheel_run &r, const std::function<void(
     return s;
 }
 
-static const Real pi = 3.14159265358979323846;
-
 // Circle: 20 s at 6 m/s (held), steer step to 0.2 rad at 1 s.
 static void test_circle()
 {
@@ -210,9 +208,9 @@ static void test_handbrake()
 
     // the tail steps out, and the car recovers to going straight at the held speed
     const body_velocity v = velocity_in_body(s.body);
-    std::printf("handbrake: peak sideslip %.1f deg\n", peak_beta * 180 / pi);
-    check_true("handbrake: the tail steps out (sideslip between 5 and 15 degrees)", peak_beta > 5 * pi / 180 && peak_beta < 15 * pi / 180);
-    check_near("handbrake: and the car recovers (sideslip back near zero)", std::atan2(v.v, v.u), 0.0, 2 * pi / 180);
+    std::printf("handbrake: peak sideslip %.1f deg\n", peak_beta * 180 / kPi);
+    check_true("handbrake: the tail steps out (sideslip between 5 and 15 degrees)", peak_beta > 5 * kPi / 180 && peak_beta < 15 * kPi / 180);
+    check_near("handbrake: and the car recovers (sideslip back near zero)", std::atan2(v.v, v.u), 0.0, 2 * kPi / 180);
     check_near("handbrake: at the held speed", v.u, 15.0, 0.1);
 }
 

@@ -238,11 +238,11 @@ int main()
             max_r_without = std::max(max_r_without, b.body.omega.z);
         }
         std::printf("handbrake: peak yaw rate %.3f rad/s (without %.3f), peak sideslip %.1f deg\n",
-                    max_r_with, max_r_without, worst_beta * 180 / 3.14159265358979);
+                    max_r_with, max_r_without, worst_beta * 180 / kPi);
         check_true("handbrake: the rear wheels lock", rears_locked);
         check_true("handbrake: the front wheels keep turning", fronts_turning);
         check_true("handbrake: the car rotates at least 30% faster than without it", max_r_with > 1.3 * max_r_without);
-        check_true("handbrake: the tail swings out (sideslip over 5 degrees)", worst_beta > 5 * 3.14159265358979 / 180);
+        check_true("handbrake: the tail swings out (sideslip over 5 degrees)", worst_beta > 5 * kPi / 180);
     }
 
     // the handbrake scenario: the rear steps out a little and the car recovers, still going forward
@@ -257,11 +257,11 @@ int main()
             peak_beta = std::max(peak_beta, std::fabs(std::atan2(v.v, v.u)));
         }
         const body_velocity v = velocity_in_body(s.body);
-        std::printf("handbrake flick: peak sideslip %.1f deg, at the end %.1f deg\n", peak_beta * 180 / 3.14159265358979,
-                    std::atan2(v.v, v.u) * 180 / 3.14159265358979);
-        check_true("handbrake flick: the rear steps out (over 4 degrees)", peak_beta > 4 * 3.14159265358979 / 180);
+        std::printf("handbrake flick: peak sideslip %.1f deg, at the end %.1f deg\n", peak_beta * 180 / kPi,
+                    std::atan2(v.v, v.u) * 180 / kPi);
+        check_true("handbrake flick: the rear steps out (over 4 degrees)", peak_beta > 4 * kPi / 180);
         check_true("handbrake flick: and the car recovers (under 2 degrees at the end, going forward)",
-                   std::fabs(std::atan2(v.v, v.u)) < 2 * 3.14159265358979 / 180 && v.u > 10);
+                   std::fabs(std::atan2(v.v, v.u)) < 2 * kPi / 180 && v.u > 10);
     }
 
     // standstill (phase 4, step 5): the car stops and stays stopped, a parked car does not creep, and letting

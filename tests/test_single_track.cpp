@@ -267,7 +267,7 @@ int main()
         check_near("body velocity: v at heading 0", a.v, 0.0);
 
         rigid_body_state s;
-        s.q = from_axis_angle(vec3{0, 0, 1}, 3.14159265358979323846 / 2); // facing +y
+        s.q = from_axis_angle(vec3{0, 0, 1}, kPi / 2); // facing +y
         s.vel = vec3{10, 0, 0};                                            // moving along world x
         s.omega = vec3{0, 0, 0.3};
         const body_velocity b = velocity_in_body(s);

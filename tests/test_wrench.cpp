@@ -6,12 +6,10 @@
 
 using namespace rallysim;
 
-static const Real pi = 3.14159265358979323846;
-
 int main()
 {
     const quat id;
-    const quat z90 = from_axis_angle(vec3{0, 0, 1}, pi / 2);
+    const quat z90 = from_axis_angle(vec3{0, 0, 1}, kPi / 2);
 
     // an empty wrench is zero
     {

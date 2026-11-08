@@ -39,8 +39,13 @@ ignore them, and adding keys needs no schema change.
 | `springs` | - | four-wheel | 1 if the car is on springs, 0 for the flat (planar) model |
 | `spring_front`, `damper_front` | N/m, N s/m | four-wheel | Spring and damper rate of each front corner |
 | `spring_rear`, `damper_rear` | N/m, N s/m | four-wheel | Of each rear corner |
+| `cx_front`, `calpha_front` | N, N/rad | four-wheel | Front tyre stiffness: per unit of slip ratio, per rad of slip angle |
+| `curve_front` | - | four-wheel | Front tyre curve: 0 linear, 1 peak_slide (`tyre_curve` in `vehicle/tyre.hpp`) |
+| `peak_slip_front`, `sliding_slip_front`, `sliding_ratio_front` | -, -, - | four-wheel | Shape of the peak_slide curve (normalised slips; sliding force over peak force) |
+| `cx_rear`, `calpha_rear`, `curve_rear`, `peak_slip_rear`, `sliding_slip_rear`, `sliding_ratio_rear` | | four-wheel | The same for the rear tyre |
 
-Files written before these keys existed have none; `tools/topdown.py` then draws the default car.
+Files written before these keys existed have none; `tools/topdown.py` then draws the default car, and
+`tools/tyre_points.py` uses the default tyre.
 
 ## Columns (rigid body)
 

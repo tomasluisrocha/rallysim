@@ -15,7 +15,7 @@ namespace rallysim
 
         const Real steer = 0.2;
         const Real radius = std::hypot(r.params.lr, r.params.wheelbase() / std::tan(steer));
-        r.steps = std::lround(2.0 * 3.14159265358979323846 * radius / r.initial.v / r.dt);
+        r.steps = std::lround(2.0 * kPi * radius / r.initial.v / r.dt);
 
         r.script.keys = {{0.0, bicycle_input{steer, 0.0}}};
         return r;

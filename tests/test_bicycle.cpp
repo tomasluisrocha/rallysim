@@ -5,8 +5,6 @@
 
 using namespace rallysim;
 
-static const Real pi = 3.14159265358979323846;
-
 // Runs a constant-steer, constant-speed turn for exactly half a lap in `n` steps and returns the
 // final state. The step is T_half / n, so the half lap ends exactly on a step.
 static bicycle_state half_lap(const bicycle_params &p, Real steer, Real v, int n)
@@ -14,7 +12,7 @@ static bicycle_state half_lap(const bicycle_params &p, Real steer, Real v, int n
     const Real L = p.wheelbase();
     const Real beta = std::atan(p.lr / L * std::tan(steer));
     const Real yaw_rate = v * std::cos(beta) * std::tan(steer) / L;
-    const Real dt = (pi / yaw_rate) / n;
+    const Real dt = (kPi / yaw_rate) / n;
     bicycle_state s;
     s.v = v;
     for (int i = 0; i < n; ++i)
@@ -102,7 +100,7 @@ int main()
         const Real err = half_lap_error(p, 0.2, 10.0, 4000);
         std::printf("half-lap position error with 4000 steps: %.3g m\n", err);
         check_true("half lap: position within 2e-6 m", err < 2e-6);
-        check_near("half lap: heading turned by pi", half_lap(p, 0.2, 10.0, 4000).yaw, pi, 1e-9);
+        check_near("half lap: heading turned by pi", half_lap(p, 0.2, 10.0, 4000).yaw, kPi, 1e-9);
     }
 
     // converges: doubling the number of steps must shrink the error by about 4 (second order)
@@ -151,7 +149,7 @@ int main()
         rear_axle.lr = 0.0;
         const Real steer = 0.2, v = 10.0;
         const Real R = 2.5 / std::tan(steer);
-        const Real T = 2.0 * pi * R / v;
+        const Real T = 2.0 * kPi * R / v;
         const int n = static_cast<int>(std::lround(T / dt)); // dt = 1 ms, so the lap may end up to half a step off
         bicycle_state s;
         s.v = v;
@@ -161,16 +159,16 @@ int main()
 
         const Real L = p.wheelbase();
         const Real beta = std::atan(p.lr / L * std::tan(steer));
-        const Real T_cg = 2.0 * pi * std::hypot(p.lr, L / std::tan(steer)) / v;
+        const Real T_cg = 2.0 * kPi * std::hypot(p.lr, L / std::tan(steer)) / v;
         check_near("lap (CG): period = 2 pi R_cg / v equals 2 pi / yaw rate",
-                   T_cg, 2.0 * pi / (v * std::cos(beta) * std::tan(steer) / L), 1e-12);
+                   T_cg, 2.0 * kPi / (v * std::cos(beta) * std::tan(steer) / L), 1e-12);
         const int m = static_cast<int>(std::lround(T_cg / dt));
         bicycle_state c;
         c.v = v;
         for (int i = 0; i < m; ++i)
             step(c, p, bicycle_input{steer, 0.0}, dt);
         check_true("lap (CG): back within 1 cm of the start at dt = 1 ms", std::hypot(c.x, c.y) < 0.01);
-        check_near("lap (CG): heading turned by 2 pi", c.yaw, 2.0 * pi, 1e-2);
+        check_near("lap (CG): heading turned by 2 pi", c.yaw, 2.0 * kPi, 1e-2);
     }
 
     // reversing: with negative speed the heading turns the other way, and driving backwards for as

@@ -1,7 +1,10 @@
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <system_error>
+#include <vector>
 #include "scenarios/bicycle_circle.hpp"
 #include "scenarios/bicycle_lane_change.hpp"
 #include "scenarios/bicycle_slalom.hpp"
@@ -12,6 +15,7 @@
 #include "scenarios/single_track_circle.hpp"
 #include "scenarios/single_track_lane_change.hpp"
 #include "scenarios/thrown_body.hpp"
+#include "scenarios/tyre_rig.hpp"
 
 using namespace rallysim;
 
@@ -51,11 +55,64 @@ static bool write_four_wheel(const four_wheel_run &scenario, const std::string &
     return true;
 }
 
+// Every scenario the app can write, with the folder under out/ its file goes to when no path is given: runs (one
+// telemetry file per scenario) go to out/runs, the tyre rig (force curves, not a run) to out/rig. See tools/README.md.
+struct scenario
+{
+    const char *name;
+    const char *folder;
+    std::function<bool(const std::string &)> write;
+};
+
+static const std::vector<scenario> &scenarios()
+{
+    static const std::vector<scenario> list{
+        {"thrown", "runs", [](const std::string &p) { return write_rigid_body(thrown_body(), p); }},
+        {"driven", "runs", [](const std::string &p) { return write_rigid_body(driven_body(), p); }},
+        {"circle", "runs", [](const std::string &p) { return write_bicycle(bicycle_circle(), p); }},
+        {"lane", "runs", [](const std::string &p) { return write_bicycle(bicycle_lane_change(), p); }},
+        {"slalom", "runs", [](const std::string &p) { return write_bicycle(bicycle_slalom(), p); }},
+        {"st_circle", "runs", [](const std::string &p) { return write_single_track(single_track_circle(), p); }},
+        {"st_lane", "runs", [](const std::string &p) { return write_single_track(single_track_lane_change(), p); }},
+        {"fw_circle", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_circle(), p); }},
+        {"fw_lane", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_lane_change(), p); }},
+        {"fw_brake", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_brake(), p); }},
+        {"fw_launch", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_launch(), p); }},
+        {"fw_handbrake", "runs", [](const std::string &p) { return write_four_wheel(four_wheel_handbrake(), p); }},
+        {"tyre_rig", "rig", [](const std::string &p) { return write_tyre_rig(p); }},
+    };
+    return list;
+}
+
+static void usage()
+{
+    std::printf("usage: rallysim <scenario> [output.csv]\n"
+                "       rallysim list          (the scenario names, one per line)\n"
+                "  output defaults to out/runs/<scenario>.csv (out/rig/ for tyre_rig)\n  scenarios:");
+    for (const scenario &s : scenarios())
+        std::printf(" %s", s.name);
+    std::printf("\n");
+}
+
 int main(int argc, char **argv)
 {
     const std::string name = (argc > 1) ? argv[1] : "thrown";
-    // Without a path the run goes to out/<scenario>.csv (out/ is ignored by git).
-    const std::string path = (argc > 2) ? argv[2] : "out/" + name + ".csv";
+    if (name == "list")
+    {
+        for (const scenario &s : scenarios())
+            std::printf("%s\n", s.name);
+        return 0;
+    }
+    const auto found = std::find_if(scenarios().begin(), scenarios().end(),
+                                    [&](const scenario &s) { return name == s.name; });
+    if (found == scenarios().end())
+    {
+        usage();
+        return 1;
+    }
+
+    // Without a path the file goes to out/<folder>/<scenario>.csv (out/ is ignored by git).
+    const std::string path = (argc > 2) ? argv[2] : std::string("out/") + found->folder + "/" + name + ".csv";
     const std::filesystem::path folder = std::filesystem::path(path).parent_path();
     if (!folder.empty())
     {
@@ -63,39 +120,7 @@ int main(int argc, char **argv)
         std::filesystem::create_directories(folder, ec); // if this fails, opening the file reports it
     }
 
-    bool ok = false;
-    if (name == "thrown")
-        ok = write_rigid_body(thrown_body(), path);
-    else if (name == "driven")
-        ok = write_rigid_body(driven_body(), path);
-    else if (name == "circle")
-        ok = write_bicycle(bicycle_circle(), path);
-    else if (name == "lane")
-        ok = write_bicycle(bicycle_lane_change(), path);
-    else if (name == "slalom")
-        ok = write_bicycle(bicycle_slalom(), path);
-    else if (name == "st_circle")
-        ok = write_single_track(single_track_circle(), path);
-    else if (name == "st_lane")
-        ok = write_single_track(single_track_lane_change(), path);
-    else if (name == "fw_circle")
-        ok = write_four_wheel(four_wheel_circle(), path);
-    else if (name == "fw_lane")
-        ok = write_four_wheel(four_wheel_lane_change(), path);
-    else if (name == "fw_brake")
-        ok = write_four_wheel(four_wheel_brake(), path);
-    else if (name == "fw_launch")
-        ok = write_four_wheel(four_wheel_launch(), path);
-    else if (name == "fw_handbrake")
-        ok = write_four_wheel(four_wheel_handbrake(), path);
-    else
-    {
-        std::printf("usage: rallysim [thrown|driven|circle|lane|slalom|st_circle|st_lane|\n"
-                    "                 fw_circle|fw_lane|fw_brake|fw_launch|fw_handbrake] [output.csv]\n"
-                    "  output defaults to out/<scenario>.csv\n");
-        return 1;
-    }
-
+    const bool ok = found->write(path);
     if (!ok)
     {
         std::printf("could not open %s for writing\n", path.c_str());

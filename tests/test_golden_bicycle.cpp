@@ -54,7 +54,7 @@ static void test_circle()
 
     // The gate: one lap puts the car back at the start, within 1 cm.
     check_true("circle: back within 1 cm of the start", std::hypot(s.x, s.y) < 0.01);
-    check_near("circle: heading turned by one lap", s.yaw, 2.0 * 3.14159265358979323846, 1e-3);
+    check_near("circle: heading turned by one lap", s.yaw, 2.0 * kPi, 1e-3);
 }
 
 // Lane change: 15 m/s, triangle-wave steer of 0.02 rad, 7 s.

@@ -63,17 +63,20 @@ namespace rallysim
     }
 
     // The relaxed slips stand for how far the contact patch is twisted (sigma times the slip). A tyre cannot be
-    // twisted further than its grip can hold: beyond that the patch slides. So if the force the slips would make,
-    // (Cx sx, C_alpha sy), is more than the grip at load fz, both are scaled back onto the friction circle. The
-    // force does not change (tyre_forces caps it the same way), but a tyre that stops sliding is left twisted
-    // by a few millimetres instead of by sigma (20 cm for a locked wheel), which threw a stopped car backwards.
+    // twisted further than its force needs: beyond that the patch only slides. So the slips are capped at the
+    // normalised slip where the force stops changing (max_normalised_slip: 1 for the linear tyre, where it
+    // reaches the grip; sliding_slip for peak_slide, where it slides fully). If (Cx sx, C_alpha sy) is longer
+    // than that limit times the grip at load fz, both are scaled back along their direction. The force does not
+    // change (the curve is flat there), but a tyre that stops sliding is left twisted by millimetres instead of
+    // by sigma (20 cm for a locked wheel), which threw a stopped car backwards.
     inline void cap_slips(wheel_state &s, const tyre_params &t, Real fz)
     {
         const Real grip = tyre_grip(t, fz);
         const Real size = std::hypot(t.longitudinal_stiffness * s.slip_ratio, t.cornering_stiffness * s.lateral_slip);
-        if (size > grip)
+        const Real limit = max_normalised_slip(t) * grip;
+        if (size > limit)
         {
-            const Real scale = grip / size; // zero in the air: an unloaded tyre is not twisted
+            const Real scale = limit / size; // zero in the air: an unloaded tyre is not twisted
             s.slip_ratio *= scale;
             s.lateral_slip *= scale;
         }

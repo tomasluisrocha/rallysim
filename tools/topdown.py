@@ -10,10 +10,10 @@ Reads the telemetry only; it never touches the physics. It recognises each kind 
 The car's geometry comes from line 1 of the file (lf, lr, tracks, tyre grip); older files get the default car.
 
 Usage:
-  py tools/topdown.py out/fw_handbrake.csv                     dashboard: play, pause, scrub
-  py tools/topdown.py out/fw_handbrake.csv --at 3.0 --save out/frame.png      one dashboard frame
-  py tools/topdown.py out/fw_handbrake.csv --static --save out/path.png       the path with snapshots
-  py tools/topdown.py out/fw_handbrake.csv --gif out/run.gif --start 2 --end 5 the dashboard as a GIF
+  py tools/topdown.py out/runs/fw_handbrake.csv                dashboard: play, pause, scrub
+  py tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png one dashboard frame
+  py tools/topdown.py out/runs/fw_handbrake.csv --static --save out/plots/views/fw_handbrake.png the path with snapshots
+  py tools/topdown.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake.gif --start 2 --end 5 the dashboard as a GIF
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed x2 / /2, home/end.
 """

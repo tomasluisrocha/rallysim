@@ -49,7 +49,13 @@ namespace rallysim
                 {"drive_split_front", p.drive_brake.drive_split_front},
                 {"springs", p.vertical == vertical_model::springs ? 1.0 : 0.0},
                 {"spring_front", p.front_corner.spring_rate}, {"damper_front", p.front_corner.damper_rate},
-                {"spring_rear", p.rear_corner.spring_rate}, {"damper_rear", p.rear_corner.damper_rate}};
+                {"spring_rear", p.rear_corner.spring_rate}, {"damper_rear", p.rear_corner.damper_rate},
+                {"cx_front", p.front_tyre.longitudinal_stiffness}, {"calpha_front", p.front_tyre.cornering_stiffness},
+                {"curve_front", static_cast<Real>(p.front_tyre.curve)}, {"peak_slip_front", p.front_tyre.peak_slip},
+                {"sliding_slip_front", p.front_tyre.sliding_slip}, {"sliding_ratio_front", p.front_tyre.sliding_ratio},
+                {"cx_rear", p.rear_tyre.longitudinal_stiffness}, {"calpha_rear", p.rear_tyre.cornering_stiffness},
+                {"curve_rear", static_cast<Real>(p.rear_tyre.curve)}, {"peak_slip_rear", p.rear_tyre.peak_slip},
+                {"sliding_slip_rear", p.rear_tyre.sliding_slip}, {"sliding_ratio_rear", p.rear_tyre.sliding_ratio}};
     }
 
     inline std::vector<std::string> four_wheel_units()

@@ -55,7 +55,8 @@ written down before it is coded (section 5.1). This file holds both. Record any 
 | `tests/` | One `test_<name>.cpp` per area, registered with `rallysim_test(<name>)`, plus shared helpers | anything |
 
 Dependencies point one way only. `world/` (terrain, surfaces) and `data/` (car files and their loader) are
-created when the first phase needs them. Runs are written to `out/`, which git ignores.
+created when the first phase needs them. Runs and pictures are written to `out/`, which git ignores; its folders and
+the tools that fill them are in `tools/README.md`.
 
 ## Decision log
 
