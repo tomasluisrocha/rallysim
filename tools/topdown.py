@@ -29,7 +29,6 @@ from pathlib import Path
 
 import matplotlib
 import numpy as np
-import pandas as pd
 
 import input_bars
 import simdata
@@ -51,10 +50,6 @@ SPIN_SLIP = 0.15         # slip ratio beyond which a wheel counts as spinning (o
 COLOURS = {"velocity": "tab:green", "net": "#e67e22", "moment": "#8e44ad"}
 STATE_EDGES = {"LOCK": "black", "SPIN": "magenta", "SLIDE": "deepskyblue", "AIR": "0.6"}
 
-# The default car, for files written before the geometry was put on line 1.
-DEFAULT_META = {"lf": 1.3, "lr": 1.2, "track_front": 1.5, "track_rear": 1.5, "max_steer": 0.6,
-                "wheel_radius": 0.315, "mu_front": 1.0, "k_front": 0.1, "fz0_front": 3000.0,
-                "mu_rear": 1.0, "k_rear": 0.1, "fz0_rear": 3000.0}
 
 
 # ----------------------------------------------------------------------------------------------------------
@@ -103,22 +98,6 @@ class Run:
     accel_source: str = ""
 
 
-def read_meta(path):
-    """key=value pairs on line 1, between dt and the units."""
-    with open(path, encoding="utf-8") as f:
-        first = f.readline()
-    meta = {}
-    if first.startswith("#"):
-        for token in first[1:].split("units:")[0].split():
-            key, sep, value = token.partition("=")
-            if sep:
-                try:
-                    meta[key] = float(value)
-                except ValueError:
-                    pass
-    return meta
-
-
 def body_acceleration(t, vx, vy, yaw):
     """Change of the CG velocity over time in the body's axes: (forward, left), m/s^2."""
     if len(t) < 2:
@@ -149,9 +128,8 @@ def symmetric(values, floor):
 
 
 def load(path):
-    df = pd.read_csv(path, comment="#")
-    meta = dict(DEFAULT_META)
-    meta.update(read_meta(path))
+    df, file_meta = simdata.read_run(path)
+    meta = simdata.with_car_defaults(file_meta)  # the tyres' own defaults come from simdata.tyre_from_meta
     cols = set(df.columns)
     t = df["time"].to_numpy() if "time" in cols else np.arange(len(df), dtype=float)
 
@@ -183,8 +161,7 @@ def load(path):
         for label, (x, y) in positions.items():
             end = "front" if label[0] == "F" else "rear"
             fz = df[f"wheel.{label}.Fz"].to_numpy()
-            mu, k, fz0 = meta[f"mu_{end}"], meta[f"k_{end}"], meta[f"fz0_{end}"]
-            grip = mu * np.clip(1 - k * (fz - fz0) / fz0, 0, None) * np.clip(fz, 0, None)
+            grip = simdata.grip(simdata.tyre_from_meta(meta, end), fz)
             run.wheels.append(Wheel(label, x, y, steer if end == "front" else zero,
                                     df[f"wheel.{label}.Fx"].to_numpy(), df[f"wheel.{label}.Fy"].to_numpy(),
                                     fz, grip, df[f"wheel.{label}.omega"].to_numpy(),

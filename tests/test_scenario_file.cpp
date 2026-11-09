@@ -163,6 +163,19 @@ int main()
         check_one_error("--set: a bad value", kMinimal, "--set:", "mass: not a number", {{"mass", "abc"}});
     }
 
+    // ---- --set of the ride height and the wheel: the start is built for the new car ---------------------------
+    {
+        const four_wheel_run r = load("[run]\nduration = 1 s\n[start]\nspeed = 25\n",
+                                      {{"cg_height", "0.6"}, {"wheel_radius", "0.33"}});
+        check_near("--set car: starts at the new ride height", r.initial.body.pos.z, 0.6, 0);
+        check_near("--set car: wheels roll for the new radius", r.initial.wheels[RR].omega * 0.33, 25, 1e-12);
+        // settled: the springs carry exactly the weight, so the car does not start with a bounce
+        const four_wheel_forces f = evaluate(r.initial, r.params, four_wheel_input{});
+        check_near("--set car: starts settled", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
+                   r.params.chassis.mass * kGravity, 1e-6);
+        check_near("--set car: each spring at its static load", f.fz[FL], r.params.static_load(FL), 1e-6);
+    }
+
     // ---- no [driver]: the run still runs -----------------------------------------------------------------------
     {
         four_wheel_run r = load("[run]\nduration = 100 ms\n[start]\nspeed = 10\n");

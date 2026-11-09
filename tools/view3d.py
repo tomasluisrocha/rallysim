@@ -73,7 +73,8 @@ class Run:
     """What the view needs from a four-wheel telemetry file, as arrays over the rows."""
 
     def __init__(self, path, exaggerate):
-        data, meta = simdata.read_run(path)
+        data, file_meta = simdata.read_run(path)
+        meta = simdata.with_car_defaults(file_meta)
         if not simdata.is_four_wheel(data):
             sys.exit(f"{path}: not a four-wheel run (view3d needs the wheel.* columns)")
         missing = [k for k in ("roll", "pitch", "pos.z") if k not in data.columns]
@@ -88,7 +89,7 @@ class Run:
         self.x, self.y, self.yaw = col("pos.x"), col("pos.y"), np.unwrap(col("yaw"))
         self.speed, self.u, self.v = col("speed"), col("u"), col("v")
         self.steer = col("steer")
-        max_steer = math.degrees(meta.get("max_steer", 0.6))
+        max_steer = math.degrees(meta["max_steer"])
         self.steer_input = input_bars.Channel("steer", np.degrees(self.steer), -max_steer, max_steer, "{:+.1f}°",
                                        input_bars.COLOURS["steer"])
         self.pedals = [input_bars.Channel(k, col(k), 0, 1, "{:.0%}", input_bars.COLOURS[k])
@@ -98,17 +99,17 @@ class Run:
         # body pose, exaggerated about where it started
         self.exaggerate = exaggerate
         self.roll_true, self.pitch_true, self.z_true = col("roll"), col("pitch"), col("pos.z")
-        self.springs = meta.get("springs", 1.0) > 0.5
-        self.cg_height = meta.get("cg_height", 0.5)
+        self.springs = meta["springs"] > 0.5
+        self.cg_height = meta["cg_height"]
         z0 = self.z_true[0] if self.springs else self.cg_height
         z_true = self.z_true if self.springs else np.full_like(self.t, self.cg_height)  # planar: CG stays put
         self.z = z0 + exaggerate * (z_true - z0)
         self.roll, self.pitch = exaggerate * self.roll_true, exaggerate * self.pitch_true
 
         # geometry (line 1, with topdown's defaults for older files)
-        lf, lr = meta.get("lf", 1.3), meta.get("lr", 1.2)
-        tf, tr = meta.get("track_front", 1.5), meta.get("track_rear", 1.5)
-        self.radius = meta.get("wheel_radius", 0.315)
+        lf, lr = meta["lf"], meta["lr"]
+        tf, tr = meta["track_front"], meta["track_rear"]
+        self.radius = meta["wheel_radius"]
         self.body = (lf + OVERHANG, -(lr + OVERHANG), 0.5 * max(tf, tr) + BODY_WIDTH_MARGIN)
         self.wheel_xy = {"FL": (lf, tf / 2), "FR": (lf, -tf / 2), "RL": (-lr, tr / 2), "RR": (-lr, -tr / 2)}
 

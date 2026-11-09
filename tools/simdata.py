@@ -80,6 +80,16 @@ def read_run(path):
     return pd.read_csv(path, comment="#"), read_meta(path)
 
 
+# The car's geometry for files written before it was put on line 1: the default four-wheel car.
+CAR_DEFAULTS = {"lf": 1.3, "lr": 1.2, "track_front": 1.5, "track_rear": 1.5, "max_steer": 0.6, "wheel_radius": 0.315,
+                "cg_height": 0.5, "springs": 1.0}
+
+
+def with_car_defaults(meta):
+    """Line 1's facts, with CAR_DEFAULTS for the geometry an older file does not give."""
+    return {**CAR_DEFAULTS, **meta}
+
+
 HEADINGS = ("yaw",)  # world-frame headings: atan2 of the orientation, so they jump between +pi and -pi
 
 

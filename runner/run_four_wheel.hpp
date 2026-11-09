@@ -8,7 +8,6 @@
 #include "driver/scripts.hpp"
 #include "driver/speed_hold.hpp"
 #include "vehicle/four_wheel.hpp"
-#include "vehicle/four_wheel_registry.hpp"
 #include "vehicle/four_wheel_telemetry.hpp"
 
 namespace rallysim
@@ -31,29 +30,13 @@ namespace rallysim
         long steps = 0;
     };
 
-    // Parameter settings by name, (name, value) in the order given: rallysim --set, scenario files.
+    // Settings by name, (name, value) in the order given: rallysim --set, applied by the scenario loader.
     using settings = std::vector<std::pair<std::string, std::string>>;
-
-    // The run with every setting applied in order (apply() throws std::invalid_argument on a bad one), then the tyres
-    // refitted once and the start state built again for the new car: the scenario built it from the old one, so a
-    // new cg_height or wheel_radius would start the body at the wrong height or the wheels at the wrong spin. Every
-    // four-wheel scenario starts with four_wheel_initial, straight along x, so its speed is the start velocity's x.
-    // Without settings the run is returned as built, so it stays bit-identical.
-    inline four_wheel_run with_settings(four_wheel_run r, const settings &set)
-    {
-        if (set.empty())
-            return r;
-        for (const auto &[name, value] : set)
-            apply(r.params, name, value);
-        rebuild_tyres(r.params);
-        r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
-        return r;
-    }
 
     // The commands for time t: the script, with the throttle and brake replaced by the speed controller
     // (driver/speed_hold.hpp), aiming at hold_speed's target for time t, when it is given, and the steer by the
-    // heading-hold driver
-    // (driver/heading_hold.hpp) from hold_heading_from on. The handbrake always comes from the script.
+    // heading-hold driver (driver/heading_hold.hpp) from hold_heading_from on. The handbrake always comes from the
+    // script.
     // While the handbrake is up the speed controller lifts off the throttle, as a driver does (clutch in):
     // otherwise the drive torque on the rear wheels would fight the handbrake.
     inline four_wheel_input driver_input(const four_wheel_run &r, const four_wheel_state &s, Real t)
