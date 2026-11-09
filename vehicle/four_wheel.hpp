@@ -47,17 +47,26 @@ namespace rallysim
     // load, the car at rest has exactly the linear car's stiffnesses, so set_tyre_curve() still puts the same car on
     // the older curves, and what differs at speed is the tmeasy tyre itself (load transfer, the curve's bend).
     // The rest (grip, load sensitivity, relaxation) is the defaults.
-    inline tyre_params car_tyre(Real longitudinal_stiffness, Real cornering_stiffness, Real static_load)
+    //
+    // fit_stiffness does the scaling on a tyre in place: its tmeasy tables are scaled so that at `static_load` their
+    // stiffnesses are the tyre's longitudinal_stiffness and cornering_stiffness. Only the stiffnesses change, so
+    // grip and the rest stay as they are, and a tyre that already fits is left as it was.
+    inline void fit_stiffness(tyre_params &t, Real static_load)
     {
-        tyre_params t;
-        const Real along = longitudinal_stiffness / tmeasy_at(t.tmeasy_x, static_load, t.nominal_load).stiffness;
-        const Real across = cornering_stiffness / tmeasy_at(t.tmeasy_y, static_load, t.nominal_load).stiffness;
-        t.longitudinal_stiffness = longitudinal_stiffness;
-        t.cornering_stiffness = cornering_stiffness;
+        const Real along = t.longitudinal_stiffness / tmeasy_at(t.tmeasy_x, static_load, t.nominal_load).stiffness;
+        const Real across = t.cornering_stiffness / tmeasy_at(t.tmeasy_y, static_load, t.nominal_load).stiffness;
         t.tmeasy_x.nominal.stiffness *= along;
         t.tmeasy_x.double_load.stiffness *= along;
         t.tmeasy_y.nominal.stiffness *= across;
         t.tmeasy_y.double_load.stiffness *= across;
+    }
+
+    inline tyre_params car_tyre(Real longitudinal_stiffness, Real cornering_stiffness, Real static_load)
+    {
+        tyre_params t;
+        t.longitudinal_stiffness = longitudinal_stiffness;
+        t.cornering_stiffness = cornering_stiffness;
+        fit_stiffness(t, static_load);
         t.curve = tyre_curve::tmeasy;
         return t;
     }
@@ -112,6 +121,15 @@ namespace rallysim
         }
         Real static_deflection(std::size_t i) const { return static_load(i) / corner(i).spring_rate; }
     };
+
+    // Refits both tyres' stiffness tables to the car as it is now (fit_stiffness at each axle's load at rest). The
+    // tyres are fitted when the params are built, so after changing mass, lf, lr or a tyre's stiffness, call this
+    // once, after all the changes: then the order of the changes does not matter.
+    inline void rebuild_tyres(four_wheel_params &p)
+    {
+        fit_stiffness(p.front_tyre, p.static_load(FL));
+        fit_stiffness(p.rear_tyre, p.static_load(RL));
+    }
 
     struct four_wheel_state
     {
