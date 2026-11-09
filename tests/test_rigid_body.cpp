@@ -170,5 +170,37 @@ int main()
         check_true("determinism: two identical runs give identical state", identical(a, b));
     }
 
+    // velocity_in_body: the six ISO 8855 vehicle velocities u, v, w, p, q, r
+    {
+        // level, heading 0.3 rad, moving along the heading at 10 m/s and climbing at 2 m/s, turning about all axes
+        rigid_body_state s;
+        s.q = from_axis_angle(vec3{0, 0, 1}, 0.3);
+        s.vel = {10 * std::cos(0.3), 10 * std::sin(0.3), 2.0};
+        s.omega = {0.1, 0.2, 0.3};
+        const body_velocity b = velocity_in_body(s);
+        check_near("body velocity, level: u is the speed along the heading", b.u, 10.0, 1e-12);
+        check_near("body velocity, level: v is zero (no sideslip)", b.v, 0.0, 1e-12);
+        check_near("body velocity, level: w is the climb rate", b.w, 2.0, 1e-12);
+        check_near("body velocity: p is omega.x (roll rate)", b.p, 0.1, 1e-12);
+        check_near("body velocity: q is omega.y (pitch rate)", b.q, 0.2, 1e-12);
+        check_near("body velocity: r is omega.z (yaw rate)", b.r, 0.3, 1e-12);
+
+        // pitched nose down by 0.1 rad, moving level along world x: the body's z axis leans forward, so w picks up
+        // u tan(pitch) although nothing moves up or down. w is not the rate of climb; vel.z is.
+        rigid_body_state t;
+        t.q = from_axis_angle(vec3{0, 1, 0}, 0.1);
+        t.vel = {10, 0, 0};
+        const body_velocity c = velocity_in_body(t);
+        check_near("body velocity, pitched: the pitch is nose down", pitch_angle(t.q), 0.1, 1e-12);
+        check_near("body velocity, pitched: u is the speed along the tilted body", c.u, 10 * std::cos(0.1), 1e-12);
+        check_near("body velocity, pitched: w = u tan(pitch) with no vertical motion", c.w, c.u * std::tan(0.1), 1e-12);
+        check_near("body velocity, pitched: the world vertical speed is zero", t.vel.z, 0.0, 1e-12);
+
+        // the planar shorthand means (u, v, r) whatever order the fields are in; w, p and q start at zero
+        const body_velocity planar{20, 0.5, 0.2};
+        check_true("body velocity: {u, v, r} means u, v, r", planar.u == 20 && planar.v == 0.5 && planar.r == 0.2);
+        check_true("body velocity: w, p and q default to zero", planar.w == 0 && planar.p == 0 && planar.q == 0);
+    }
+
     return finish("rigid_body");
 }

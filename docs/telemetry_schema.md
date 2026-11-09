@@ -6,7 +6,7 @@ plus one for the final state. The simulator writes it; the tools in `tools/` onl
 ## File layout
 
 ```
-# schema=3 dt=0.001 units: step[count] time[s] pos.x[m] ...
+# schema=4 dt=0.001 units: step[count] time[s] pos.x[m] ...
 step,time,pos.x,...
 0,0,0,...
 ```
@@ -143,9 +143,12 @@ whole axle, and when an axle lifts the other one carries the whole car.
 so moving load between the two wheels of an axle lowers the axle's grip. `axle.front.Fy` is limited by
 `axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
 
+Schema 4 regrouped the four-wheel body columns (see the four-wheel table) and added `w`, `vel.z`, `roll_rate`,
+`pitch_rate` and `a_long`.
+
 Schema 3 inserted columns into the four-wheel files rather than appending them: `pos.z`, `roll` and `pitch` after
 `a_lat`, and `deflection`, `deflVel`, `springF` and `damperF` at the end of each wheel's block. Readers that look columns
-up by name (both tools in `tools/`) read schema 2 and 3 files alike; anything that counts columns does not.
+up by name (every tool in `tools/`) read schema 2, 3 and 4 files alike; anything that counts columns does not.
 
 Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
 names above, so a plot script can build a name from an axle or wheel label (book, section 11.1).
@@ -158,34 +161,46 @@ meaning as in the bicycle files, which makes the two models easy to overlay.
 
 ## Columns (four-wheel car)
 
-The file layout is the same. The first columns match the single-track's where they mean the same thing, so the
-two models can be overlaid; the pedals replace `drive_force`, and each wheel adds a block of columns.
+The file layout is the same. The body columns come in groups (book, section 11.1): time, the driver's inputs, where
+the car is, how it moves, then values worked out from those. Each wheel then adds a block of columns, and the energy
+books end the row. Columns named as in the single-track files mean the same thing, so the two models can be overlaid;
+the pedals replace `drive_force`.
 
 | # | Name | Unit | Meaning |
 |---|---|---|---|
 | 1 | `step` | count | Step index, starting at 0 |
 | 2 | `time` | s | `step * dt` |
-| 3 | `pos.x` | m | Centre of gravity, world frame |
-| 4 | `pos.y` | m | |
-| 5 | `yaw` | rad | Heading of the body, counter-clockwise from +x |
-| 6 | `speed` | m/s | Length of the velocity of the CG |
-| 7 | `steer` | rad | Front wheel angle the model used (limited to max_steer), positive = left; both front wheels |
-| 8 | `throttle` | 0-1 | Throttle pedal, as given (the speed controller's output when a scenario holds speed) |
-| 9 | `brake` | 0-1 | Brake pedal, as given |
-| 10 | `handbrake` | 0-1 | Handbrake, as given |
-| 11 | `u` | m/s | Forward speed of the CG, in the car's frame |
-| 12 | `v` | m/s | Sideways speed of the CG, positive to the left |
-| 13 | `yaw_rate` | rad/s | Angular velocity about the vertical axis |
-| 14 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
-| 15 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
-| 16 | `pos.z` | m | Height of the CG above the ground (0 in the planar model) |
-| 17 | `roll` | rad | Body roll, positive with the right side down (leaning out of a left turn) |
-| 18 | `pitch` | rad | Body pitch, positive nose down (diving under braking) |
-| 19-30 | `wheel.FL.*` | | Front-left wheel, the twelve fields below |
-| 31-42 | `wheel.FR.*` | | Front-right wheel |
-| 43-54 | `wheel.RL.*` | | Rear-left wheel |
-| 55-66 | `wheel.RR.*` | | Rear-right wheel |
-| 67-77 | `energy.*`, `work.*` | J | The energy books, below |
+| 3 | `steer` | rad | Front wheel angle the model used (limited to max_steer), positive = left; both front wheels |
+| 4 | `throttle` | 0-1 | Throttle pedal, as given (the speed controller's output when a scenario holds speed) |
+| 5 | `brake` | 0-1 | Brake pedal, as given |
+| 6 | `handbrake` | 0-1 | Handbrake, as given |
+| 7 | `pos.x` | m | Centre of gravity, world frame |
+| 8 | `pos.y` | m | |
+| 9 | `pos.z` | m | Height of the CG above the ground (0 in the planar model) |
+| 10 | `roll` | rad | Body roll, positive with the right side down (leaning out of a left turn) |
+| 11 | `pitch` | rad | Body pitch, positive nose down (diving under braking) |
+| 12 | `yaw` | rad | Heading of the body, counter-clockwise from +x |
+| 13 | `u` | m/s | Forward speed of the CG, along the body's x axis |
+| 14 | `v` | m/s | Sideways speed of the CG, along the body's y axis, positive to the left |
+| 15 | `w` | m/s | Speed of the CG along the body's z axis, positive up. Tilts with the body, so not the climb rate: see `vel.z` |
+| 16 | `roll_rate` | rad/s | Angular velocity about the body's x axis (ISO p), positive with the right side going down |
+| 17 | `pitch_rate` | rad/s | Angular velocity about the body's y axis (ISO q), positive with the nose going down |
+| 18 | `yaw_rate` | rad/s | Angular velocity about the body's z axis (ISO r), positive turning left |
+| 19 | `speed` | m/s | `hypot(u, v)`: the speed of the CG, leaving out `w` |
+| 20 | `beta` | rad | Body sideslip: angle between the heading and the velocity of the CG |
+| 21 | `vel.z` | m/s | Vertical speed of the CG, world frame, positive up: the heave rate |
+| 22 | `a_long` | m/s^2 | The force on the body along its heading on the ground, over the mass (the tyres' net push); positive forwards |
+| 23 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
+| 24-35 | `wheel.FL.*` | | Front-left wheel, the twelve fields below |
+| 36-47 | `wheel.FR.*` | | Front-right wheel |
+| 48-59 | `wheel.RL.*` | | Rear-left wheel |
+| 60-71 | `wheel.RR.*` | | Rear-right wheel |
+| 72-82 | `energy.*`, `work.*` | J | The energy books, below |
+
+Columns 13-18 are the six ISO vehicle velocities (`body_velocity`), in the body's axes, so they tilt with the body;
+the position, the angles and `vel.z` are in the world frame. So a rate is its angle's slope only while the car is
+level: in a steady turn, rolled, `pitch_rate` is `yaw_rate * tan(roll)` although the pitch does not change. `a_long` comes from the forces and `a_lat` from the
+motion (`speed * yaw_rate`, exact in a steady turn), so in fast transients they are not worked out the same way.
 
 Each wheel block, in this order:
 
@@ -209,7 +224,7 @@ axes. The slips are the patch's steady slips, worked out from the wheel's spin a
 relaxed slips (the twist of the tyre, which the force comes from) are not logged: they are capped where the force stops
 changing (`slip_cap_scale` in `vehicle/tyre.hpp`: at full sliding while rolling, at the peak at rest), so a locked
 tmeasy wheel's relaxed slip is about -0.8 while it slides and the slip at its peak once stopped, not -1. As in the
-other files, the columns from `steer` on belong to the step that starts from that row's state.
+other files, a row's inputs and forces belong to the step that starts from that row's state.
 
 The energy books (book ch. 26.4; `vehicle/four_wheel_energy.hpp`), all in J. The stored terms are that row's state; the
 work columns add up every step before it, from the start of the run:

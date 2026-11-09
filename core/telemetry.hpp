@@ -15,7 +15,9 @@ namespace rallysim
     // 2: single-track axle and wheel columns renamed to dotted paths.
     // 3: four-wheel columns inserted (not appended): pos.z, roll, pitch after a_lat, and deflection, deflVel,
     //    springF, damperF at the end of each wheel's block.
-    inline constexpr int kTelemetrySchema = 3;
+    // 4: four-wheel body columns regrouped (time, inputs, where the car is, how it moves, then values worked out
+    //    from those), with w, vel.z, roll_rate, pitch_rate and a_long added.
+    inline constexpr int kTelemetrySchema = 4;
 
     // Constant facts about the run that are not columns, such as the car's geometry, written as key=value on
     // line 1 so a viewer can draw the car to scale. Keys have no spaces and no '='.

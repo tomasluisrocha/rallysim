@@ -34,11 +34,16 @@ namespace rallysim
                 "energy.total", "work.drive", "work.brake", "work.damper", "work.tyre", "energy.residual"};
     }
 
+    // The body columns come in groups (book, section 11.1): time, the driver's inputs, where the car is (world
+    // position, then roll, pitch and yaw), how it moves (body_velocity's u, v, w, p, q, r, in that order), then
+    // values worked out from those. Then each wheel's block and the energy books.
     inline std::vector<std::string> four_wheel_columns()
     {
-        std::vector<std::string> c{"step", "time", "pos.x", "pos.y", "yaw", "speed",
-                                   "steer", "throttle", "brake", "handbrake", "u", "v", "yaw_rate", "beta", "a_lat",
-                                   "pos.z", "roll", "pitch"};
+        std::vector<std::string> c{"step", "time",
+                                   "steer", "throttle", "brake", "handbrake",
+                                   "pos.x", "pos.y", "pos.z", "roll", "pitch", "yaw",
+                                   "u", "v", "w", "roll_rate", "pitch_rate", "yaw_rate",
+                                   "speed", "beta", "vel.z", "a_long", "a_lat"};
         for (std::size_t i = 0; i < kWheels; ++i)
             for (const std::string &field : wheel_fields())
                 c.push_back(std::string("wheel.") + wheel_label(i) + "." + field);
@@ -93,9 +98,11 @@ namespace rallysim
 
     inline std::vector<std::string> four_wheel_units()
     {
-        std::vector<std::string> u{"count", "s", "m", "m", "rad", "m/s",
-                                   "rad", "0-1", "0-1", "0-1", "m/s", "m/s", "rad/s", "rad", "m/s^2",
-                                   "m", "rad", "rad"};
+        std::vector<std::string> u{"count", "s",
+                                   "rad", "0-1", "0-1", "0-1",
+                                   "m", "m", "m", "rad", "rad", "rad",
+                                   "m/s", "m/s", "m/s", "rad/s", "rad/s", "rad/s",
+                                   "m/s", "rad", "m/s", "m/s^2", "m/s^2"};
         for (std::size_t i = 0; i < kWheels; ++i)
             for (const std::string &unit : wheel_units())
                 u.push_back(unit);
@@ -104,26 +111,36 @@ namespace rallysim
         return u;
     }
 
-    // `input` is the command applied at this step (the pedals as given, the steer limited); everything after it
-    // is computed by evaluate(), the same function the step uses. slipRatio and slipAngle are the steady
-    // (kinematic) slips of the contact patch, from the wheel's spin and the patch velocity: -1 is a locked wheel
-    // sliding forward. The relaxed slips inside the wheel are capped where the force stops changing
-    // (slip_cap_scale), so they say how far the tyre is twisted, not how fast it slides. Fx and Fy are in the
-    // wheel's frame; driveTorque and brakeTorque are what the pedals put on that wheel. deflection, deflVel,
-    // springF and damperF are the corner's suspension (zero in the planar model). pos.z is the CG's height; roll
-    // and pitch follow ISO 8855 (positive: right side down, nose down). The energy columns are this state's
-    // stored energy and `books`' work and residual: the books must hold the work of every step before this one.
-    // See docs/telemetry_schema.md.
+    // `input` is the command applied at this step (the pedals as given, the steer limited); the motion and the
+    // forces are computed by evaluate(), the same function the step uses. pos.z is the CG's height; roll and pitch
+    // follow ISO 8855 (positive: right side down, nose down). u, v, w and the three rates are body_velocity, in the
+    // body's axes: w tilts with the body, so it is not heave; vel.z, the world vertical speed, is. a_long is the
+    // force the step applies to the body, along the car's heading on the ground, over the mass; only the tyres push
+    // along the ground (the springs and gravity act vertically), so it is their net push. a_lat is speed x yaw_rate,
+    // the steady-turn form, so in fast transients the two are not worked out the same way.
+    //
+    // slipRatio and slipAngle are the steady (kinematic) slips of the contact patch, from the wheel's spin and the
+    // patch velocity: -1 is a locked wheel sliding forward. The relaxed slips inside the wheel are capped where the
+    // force stops changing (slip_cap_scale), so they say how far the tyre is twisted, not how fast it slides. Fx and
+    // Fy are in the wheel's frame; driveTorque and brakeTorque are what the pedals put on that wheel. deflection,
+    // deflVel, springF and damperF are the corner's suspension (zero in the planar model). The energy columns are
+    // this state's stored energy and `books`' work and residual: the books must hold the work of every step before
+    // this one. See docs/telemetry_schema.md.
     inline std::vector<Real> four_wheel_row(long step, Real dt, const four_wheel_state &s,
                                             const four_wheel_params &p, const four_wheel_input &input,
                                             const energy_books &books)
     {
         const four_wheel_forces f = evaluate(s, p, input);
         const Real speed = std::hypot(f.vel.u, f.vel.v);
-        std::vector<Real> row{static_cast<Real>(step), step * dt, s.body.pos.x, s.body.pos.y, yaw_angle(s.body.q), speed,
+        const Real yaw = yaw_angle(s.body.q);
+        const vec3 force = four_wheel_wrench(s, p, f).force; // world frame
+        const Real a_long = (force.x * std::cos(yaw) + force.y * std::sin(yaw)) / p.chassis.mass;
+        std::vector<Real> row{static_cast<Real>(step), step * dt,
                               f.steer, input.throttle, input.brake, input.handbrake,
-                              f.vel.u, f.vel.v, f.vel.r, std::atan2(f.vel.v, f.vel.u),
-                              speed * f.vel.r, s.body.pos.z, roll_angle(s.body.q), pitch_angle(s.body.q)};
+                              s.body.pos.x, s.body.pos.y, s.body.pos.z,
+                              roll_angle(s.body.q), pitch_angle(s.body.q), yaw,
+                              f.vel.u, f.vel.v, f.vel.w, f.vel.p, f.vel.q, f.vel.r,
+                              speed, std::atan2(f.vel.v, f.vel.u), s.body.vel.z, a_long, speed * f.vel.r};
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             const wheel_state &w = s.wheels[i];

@@ -214,12 +214,15 @@ int main()
     // telemetry: one value per column, under the right name
     {
         const std::vector<std::string> names = four_wheel_columns(), units = four_wheel_units();
-        const four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
+        four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
+        s.body.vel.z = 0.3;     // climbing, so w and vel.z are not zero
+        s.body.omega.x = 0.05;  // rolling (right side going down)
+        s.body.omega.y = -0.02; // pitching (nose going up)
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const energy_books books(s, p); // no work done yet: the residual is zero
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in, books);
-        check_true("telemetry: 18 + 4 x 12 + 11 energy columns, units and values",
-                   names.size() == 77 && units.size() == 77 && row.size() == 77);
+        check_true("telemetry: 23 + 4 x 12 + 11 energy columns, units and values",
+                   names.size() == 82 && units.size() == 82 && row.size() == 82);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);
@@ -235,8 +238,28 @@ int main()
         check_column(names, row, "yaw_rate", 0.25, 1e-12);
         check_column(names, row, "beta", std::atan2(0.4, 12.0), 1e-12);
         check_column(names, row, "energy.total", energy_of(s, p).total());
-        check_column(names, row, "energy.translation", 0.5 * p.chassis.mass * (12.0 * 12.0 + 0.4 * 0.4), 1e-9);
+        check_column(names, row, "energy.translation", 0.5 * p.chassis.mass * (12.0 * 12.0 + 0.4 * 0.4 + 0.3 * 0.3), 1e-9);
         check_column(names, row, "energy.residual", 0.0);
+
+        // the vertical motion and the body rates: the body is level (only yawed), so its z axis is the world's and w
+        // is the climb rate; the rates are the body-frame angular velocity
+        check_column(names, row, "w", 0.3, 1e-12);
+        check_column(names, row, "vel.z", 0.3, 1e-12);
+        check_column(names, row, "roll_rate", 0.05, 1e-12);
+        check_column(names, row, "pitch_rate", -0.02, 1e-12);
+        // a_long by hand, without four_wheel_wrench: each tyre force turned into the world by its wheel's directions,
+        // taken along the heading, summed, over the mass
+        {
+            const vec3 heading{std::cos(0.3), std::sin(0.3), 0};
+            Real along = 0;
+            for (std::size_t w = 0; w < kWheels; ++w)
+            {
+                const contact_geometry c = contact_of(p, s.body, w, f.steer);
+                along += dot(f.tyre[w].fx * c.forward + f.tyre[w].fy * c.left, heading);
+            }
+            check_column(names, row, "a_long", along / p.chassis.mass, 1e-9);
+        }
+        check_column(names, row, "a_lat", std::hypot(12.0, 0.4) * 0.25, 1e-12);
         for (const char *needed : {"pos.x", "pos.y", "yaw", "steer", "speed", "beta"})
             check_true("telemetry: tools/topdown.py can read it", index_of(names, needed) >= 0);
     }
