@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include "check.hpp"
+#include "scenarios/four_wheel_driving.hpp"
 #include "vehicle/four_wheel_registry.hpp"
 #include "vehicle/four_wheel_telemetry.hpp"
 
@@ -183,6 +184,26 @@ int main()
         check_true("rebuild: any order gives the same tyres", same_tables(a.front_tyre, b.front_tyre) &&
                                                                  same_tables(a.rear_tyre, b.rear_tyre));
         check_true("rebuild: keeps the curve", a.front_tyre.curve == tyre_curve::tmeasy);
+    }
+
+    // ---- with_settings: the scenario's start state follows the new car -------------------------------------
+    {
+        const four_wheel_run plain = four_wheel_brake();
+        const four_wheel_run same = with_settings(plain, {});
+        check_true("with_settings: no settings, no change", same.initial.body.pos.z == plain.initial.body.pos.z &&
+                                                               same.initial.wheels[FL].omega == plain.initial.wheels[FL].omega);
+
+        const four_wheel_run r = with_settings(plain, {{"cg_height", "0.6"}, {"wheel_radius", "0.33"}});
+        check_near("with_settings: starts at the new ride height", r.initial.body.pos.z, 0.6, 0);
+        check_near("with_settings: keeps the start speed", r.initial.body.vel.x, plain.initial.body.vel.x, 0);
+        check_near("with_settings: wheels roll for the new radius", r.initial.wheels[RR].omega,
+                   rolling_wheel(r.params.wheel, plain.initial.body.vel.x).omega, 0);
+        check_near("with_settings: rolling, not slipping", r.initial.wheels[RR].omega * 0.33, plain.initial.body.vel.x, 1e-12);
+        // settled: the springs carry exactly the weight, so the car does not start with a bounce
+        const four_wheel_forces f = evaluate(r.initial, r.params, four_wheel_input{});
+        check_near("with_settings: starts settled", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
+                   r.params.chassis.mass * kGravity, 1e-6);
+        check_near("with_settings: spring at its static load", f.fz[FL], r.params.static_load(FL), 1e-6);
     }
 
     return finish("registry");

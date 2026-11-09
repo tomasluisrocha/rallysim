@@ -60,3 +60,12 @@ rallysim_test(tyre_gate)
 rallysim_test(finite)
 rallysim_test(energy)
 rallysim_test(registry)
+
+# The command line: --set reaches a four-wheel car; a bad name, a missing value or a model without settings fails.
+add_test(NAME cli_set COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_set.csv
+         --set spring_front=60000 --set mu_rear=0.8)
+set_tests_properties(cli_set PROPERTIES PASS_REGULAR_EXPRESSION "with --set")
+add_test(NAME cli_set_unknown COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set sprng_front=1)
+add_test(NAME cli_set_no_value COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set spring_front)
+add_test(NAME cli_set_not_four_wheel COMMAND rallysim st_circle ${CMAKE_BINARY_DIR}/cli_bad.csv --set mass=1)
+set_tests_properties(cli_set_unknown cli_set_no_value cli_set_not_four_wheel PROPERTIES WILL_FAIL TRUE)
