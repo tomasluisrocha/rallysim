@@ -29,8 +29,9 @@ py tools/topdown.py out/runs/fw_handbrake.csv
 | `tyre_plot.py` | The tyre rig's force curves, every curve and load in one figure |
 | `tyre_points.py` | A four-wheel run's tyres on their force curve, for every wheel and moment |
 | `compare.py` | Two runs overlaid channel by channel, with their difference |
+| `sweep.py` | One scenario over a range of one setting, its results plotted against the setting |
 | `plot_run.py` | Any columns of a run against any other |
-| `simdata.py` | Not a standalone tool: shared paths, file readers and tyre curves used by the other tools |
+| `simdata.py` | Not a standalone tool: shared paths, file readers, running `rallysim`, and tyre curves used by the other tools |
 | `input_bars.py` | Not a standalone tool: the driver's inputs as bar charts, for `topdown.py` and `view3d.py` |
 
 ### run_all.py
@@ -158,6 +159,29 @@ values, and which line-1 facts (car parameters) differ between the files, so you
 
 ![Run comparison](img/tool-compare.png)
 
+### sweep.py
+
+```
+py tools/sweep.py fw_hairpin max_handbrake_torque 1000 2000 3000 4000
+py tools/sweep.py fw_hairpin max_handbrake_torque --range 1000 4000 7       7 values from 1000 to 4000
+py tools/sweep.py fw_circle spring_front --range 30 80 6 --unit kN/m --metric maxabs:roll --trace roll
+py tools/sweep.py fw_showcase driver.max_yaw_rate 40deg/s 60deg/s 80deg/s --set mu_rear=0.85
+```
+
+Runs the scenario once per value (`rallysim <scenario> --set <setting>=<value>`, several at once), so the setting is
+anything `--set` takes, units included, and `--set` holds other values for every run. A metric is
+`statistic:column` (`max`, `min`, `maxabs`, `mean`, `final`, `range`), angles shown in degrees; the defaults are
+the peak sideslip and yaw rate and the final heading and speed. The picture has each metric against the value, and
+`--trace` (default `yaw_rate`) over time for every value. A metric that does not change is drawn flat.
+
+The runs and `summary.csv` (one row per value) go to `out/sweeps/<scenario>__<setting>/`, the picture to
+`out/plots/sweeps/`.
+
+The handbrake flick against the handbrake's torque (`py tools/sweep.py fw_handbrake max_handbrake_torque --range
+2000 4000 9 --trace yaw`): up to 3000 N m the rear steps out and the car recovers; from 3250 N m it spins.
+
+![Sweep](img/tool-sweep.png)
+
 ### plot_run.py
 
 ```
@@ -184,6 +208,8 @@ After a physics change, a residual that grows with time and does not halve when 
 | `out/plots/views/` | A top-down picture of each run | `topdown.py --static` |
 | `out/plots/tyres/` | `tyre_rig.png`, and each four-wheel run's tyres on their curve | `tyre_plot.py`, `tyre_points.py` |
 | `out/plots/compare/` | Two runs overlaid, with their difference | `compare.py --save` |
+| `out/plots/sweeps/` | One picture per sweep | `sweep.py` |
+| `out/sweeps/<scenario>__<setting>/` | A sweep's runs and its `summary.csv` | `sweep.py` |
 | `out/gif/` | Each run's dashboard (`<run>.gif`) and each four-wheel run in 3D (`<run>_3d.gif`) | `topdown.py --gif`, `view3d.py --gif` |
 | `out/snapshots/<name>/` | Saved copies of `runs/` and `rig/`, to compare later runs against | `run_all.py --snapshot <name>` |
 

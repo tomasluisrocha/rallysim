@@ -16,7 +16,6 @@ Build first (cmake --build build --config Release); this only runs what is built
 import argparse
 import os
 import shutil
-import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -25,23 +24,6 @@ from pathlib import Path
 import simdata
 
 TOOLS = Path(__file__).resolve().parent
-
-
-def find_exe(given):
-    if given:
-        return Path(given)
-    for candidate in ("build/Release/rallysim.exe", "build/rallysim.exe", "build/Release/rallysim", "build/rallysim",
-                      "build/Debug/rallysim.exe", "build/Debug/rallysim"):
-        path = simdata.ROOT / candidate
-        if path.exists():
-            return path
-    sys.exit("rallysim not found under build/; build it first or pass --exe")
-
-
-def run(command):
-    """Run one command from the sim folder; (ok, text) with its output."""
-    done = subprocess.run([str(c) for c in command], cwd=simdata.ROOT, capture_output=True, text=True)
-    return done.returncode == 0, (done.stdout + done.stderr).strip()
 
 
 def main():
@@ -54,8 +36,8 @@ def main():
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1), help="plots made at once")
     args = ap.parse_args()
 
-    exe = find_exe(args.exe)
-    ok, listing = run([exe, "list"])
+    exe = simdata.find_exe(args.exe)
+    ok, listing = simdata.run_command([exe, "list"])
     if not ok:
         sys.exit(f"{exe} list failed (an older build without 'list'? rebuild):\n{listing}")
     names = listing.split()
@@ -69,7 +51,7 @@ def main():
     failed = []
     print(f"running {len(names)} scenario(s) with {exe.relative_to(simdata.ROOT) if exe.is_relative_to(simdata.ROOT) else exe}")
     for name in names:
-        ok, text = run([exe, name])
+        ok, text = simdata.run_command([exe, name])
         print(("  " if ok else "  FAILED ") + text.splitlines()[-1] if text else name)
         if not ok:
             failed.append(name)
@@ -102,7 +84,7 @@ def main():
 
         print(f"making {len(jobs)} picture(s), {args.jobs} at a time")
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            for (label, _), (ok, text) in zip(jobs, pool.map(lambda job: run(job[1]), jobs)):
+            for (label, _), (ok, text) in zip(jobs, pool.map(lambda job: simdata.run_command(job[1]), jobs)):
                 if ok:
                     print(f"  {label}")
                 else:

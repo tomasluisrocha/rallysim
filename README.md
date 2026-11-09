@@ -12,8 +12,9 @@ The project includes:
 
 - kinematic bicycle, dynamic single-track and four-wheel vehicle models;
 - linear, peak-slide and TMeasy-inspired tyre curves;
-- scripted scenarios for circles, lane changes, braking, launch and handbrake
-  turns;
+- scenarios as plain-text files (circles, lane changes, braking, launch,
+  handbrake turns, a jump into a hairpin) that run without rebuilding, with
+  any car parameter changeable from the command line;
 - finite-state checks, golden tests and CTest coverage;
 - CSV telemetry with explicit units and vehicle metadata;
 - top-down and 3D replays, tyre plots and animated GIFs.
@@ -29,15 +30,32 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Install the Python plotting dependencies and generate the showcase:
+## Run a scenario
+
+```text
+rallysim list                                   every scenario
+rallysim fw_hairpin                             telemetry to out/runs/fw_hairpin.csv
+rallysim fw_hairpin --set mu_rear=0.7 --set spring_front=45kN/m
+rallysim params fw_hairpin                      every parameter --set takes
+rallysim my_run.ini                             a scenario file of your own
+```
+
+The four-wheel scenarios are files in [`scenarios/`](scenarios/); the format is
+in [`docs/scenario_files.md`](docs/scenario_files.md).
+
+## Plots and replays
+
+Install the Python plotting dependencies, then run every scenario and make
+every picture:
 
 ```text
 py -m pip install -r tools/requirements.txt
 py tools/run_all.py
+py tools/topdown.py out/runs/fw_hairpin.csv     the interactive dashboard
 ```
 
-Use `py tools/run_all.py --gif` to regenerate the animated dashboards. Output
-is written under `out/`, which is ignored by git.
+`py tools/run_all.py --gif` also makes the animated dashboards and 3D views.
+Output is written under `out/`, which is ignored by git.
 
 ## A few outputs
 
@@ -48,9 +66,10 @@ is written under `out/`, which is ignored by git.
 ## Where to look next
 
 - [`docs/tools.md`](docs/tools.md) - plotting and replay tools.
+- [`docs/scenario_files.md`](docs/scenario_files.md) - writing a run as a scenario file.
 - [`docs/telemetry_schema.md`](docs/telemetry_schema.md) - CSV format.
 - [`docs/decisions.md`](docs/decisions.md) - modelling conventions and rationale.
-- [`apps/main.cpp`](apps/main.cpp) - available scenarios and the CLI.
+- [`scenarios/`](scenarios/) and [`apps/main.cpp`](apps/main.cpp) - the scenarios and the CLI.
 
 This is a research and learning project, not a production-ready driving
 simulator. Parameters are deliberately visible and many models are simplified

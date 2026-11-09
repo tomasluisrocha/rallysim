@@ -5,6 +5,8 @@ curve. If the C++ changes, change them here too; tools/tyre_points.py checks its
 when that file exists.
 """
 import math
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,11 +20,43 @@ PLOTS = OUT / "plots"
 VIEWS = PLOTS / "views"        # topdown --static, one per run
 TYRES = PLOTS / "tyres"        # the rig plot, and each four-wheel run's tyres on their curve
 COMPARE = PLOTS / "compare"    # compare.py
+SWEEP_PLOTS = PLOTS / "sweeps" # sweep.py: one picture per sweep
+SWEEPS = OUT / "sweeps"        # sweep.py: each sweep's runs and its summary table, one folder per sweep
 GIFS = OUT / "gif"             # topdown --gif (<run>.gif) and view3d --gif (<run>_3d.gif)
 SNAPSHOTS = OUT / "snapshots"  # saved copies of runs/ and rig/ to compare against (run_all.py --snapshot NAME)
 SCRATCH = OUT / "scratch"      # one-off experiments; nothing writes here on its own
 
 WHEELS = ("FL", "FR", "RL", "RR")
+
+
+def find_exe(given=None):
+    """The rallysim executable: `given`, or the first build found under build/ (Release first)."""
+    if given:
+        return Path(given)
+    for candidate in ("build/Release/rallysim.exe", "build/rallysim.exe", "build/Release/rallysim", "build/rallysim",
+                      "build/Debug/rallysim.exe", "build/Debug/rallysim"):
+        path = ROOT / candidate
+        if path.exists():
+            return path
+    sys.exit("rallysim not found under build/; build it first or pass --exe")
+
+
+def run_command(command):
+    """Run one command from the sim folder; (ok, text) with its output."""
+    done = subprocess.run([str(c) for c in command], cwd=ROOT, capture_output=True, text=True)
+    return done.returncode == 0, (done.stdout + done.stderr).strip()
+
+
+def read_units(path):
+    """{column: unit} from line 1 of a telemetry file ("name[unit]" after "units:")."""
+    with open(path, encoding="utf-8") as f:
+        first = f.readline()
+    units = {}
+    if "units:" in first:
+        for token in first.split("units:", 1)[1].split():
+            name, _, unit = token.partition("[")
+            units[name] = unit.rstrip("]")
+    return units
 
 
 def read_meta(path):
