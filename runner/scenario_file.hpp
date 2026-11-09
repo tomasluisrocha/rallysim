@@ -9,7 +9,7 @@
 #include <vector>
 #include "core/ini.hpp"
 #include "core/ini_values.hpp"
-#include "scenarios/run_four_wheel.hpp"
+#include "runner/run_four_wheel.hpp"
 #include "vehicle/four_wheel_registry.hpp"
 
 namespace rallysim

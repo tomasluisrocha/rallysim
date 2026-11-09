@@ -1,8 +1,8 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
-#include "scenarios/single_track_circle.hpp"
-#include "scenarios/single_track_lane_change.hpp"
+#include "runner/builtin/single_track_circle.hpp"
+#include "runner/builtin/single_track_lane_change.hpp"
 #include "tests/check.hpp"
 #include "tests/single_track_helpers.hpp"
 

@@ -3,9 +3,9 @@
 #include <cstdio>
 #include <functional>
 #include <string>
-#include "scenarios/scenario_file.hpp"
-#include "scenarios/single_track_circle.hpp"
-#include "scenarios/single_track_lane_change.hpp"
+#include "runner/scenario_file.hpp"
+#include "runner/builtin/single_track_circle.hpp"
+#include "runner/builtin/single_track_lane_change.hpp"
 #include "tests/check.hpp"
 #include "tests/single_track_helpers.hpp"
 

@@ -1,9 +1,9 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
-#include "scenarios/bicycle_circle.hpp"
-#include "scenarios/bicycle_lane_change.hpp"
-#include "scenarios/bicycle_slalom.hpp"
+#include "runner/builtin/bicycle_circle.hpp"
+#include "runner/builtin/bicycle_lane_change.hpp"
+#include "runner/builtin/bicycle_slalom.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;

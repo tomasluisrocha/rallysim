@@ -5,8 +5,8 @@
 #include <string>
 #include "core/finite.hpp"
 #include "core/telemetry.hpp"
-#include "scenarios/scenario_file.hpp"
-#include "scenarios/run_bicycle.hpp"
+#include "runner/scenario_file.hpp"
+#include "runner/run_bicycle.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;

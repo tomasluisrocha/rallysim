@@ -1,8 +1,8 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
-#include "scenarios/driven_body.hpp"
-#include "scenarios/thrown_body.hpp"
+#include "runner/builtin/driven_body.hpp"
+#include "runner/builtin/thrown_body.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;

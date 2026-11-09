@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstddef>
 #include <vector>
-#include "scenarios/run_single_track.hpp"
+#include "runner/run_single_track.hpp"
 
 // Helpers shared by the single-track tests. Only test setup and closed-form oracles live here; the
 // model itself is in vehicle/single_track.hpp.

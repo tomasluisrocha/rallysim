@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 #include "check.hpp"
-#include "scenarios/scenario_file.hpp"
+#include "runner/scenario_file.hpp"
 #include "vehicle/four_wheel_registry.hpp"
 #include "vehicle/four_wheel_telemetry.hpp"
 

@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
-#include "scenarios/tyre_rig.hpp"
+#include "runner/builtin/tyre_rig.hpp"
 #include "tests/check.hpp"
 #include "vehicle/tyre.hpp"
 
@@ -13,7 +13,7 @@ using namespace rallysim;
 // zero slip, force that opposes slip, force bounded by mu Fz, the right symmetry, and a recognisable peak and
 // fall-off. The gate also asks for a smooth curve (no jump in slope after the peak) and zero force at zero load.
 //
-// Every curve of the tyre rig (scenarios/tyre_rig.hpp) is checked, so the curves tested are the ones plotted by
+// Every curve of the tyre rig (runner/builtin/tyre_rig.hpp) is checked, so the curves tested are the ones plotted by
 // tools/tyre_plot.py: linear (no peak, so the peak checks are replaced by "flat at the grip"), brush, peak_slide and
 // tmeasy. The checks read each curve's peak, sliding point and stiffness through pure_slip_curve (tyre.hpp), so the
 // same checks fit every model.

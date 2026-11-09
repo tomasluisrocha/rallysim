@@ -9,16 +9,16 @@
 #include <system_error>
 #include <utility>
 #include <vector>
-#include "scenarios/bicycle_circle.hpp"
-#include "scenarios/bicycle_lane_change.hpp"
-#include "scenarios/bicycle_slalom.hpp"
-#include "scenarios/driven_body.hpp"
-#include "scenarios/single_track_circle.hpp"
-#include "scenarios/single_track_lane_change.hpp"
-#include "scenarios/thrown_body.hpp"
-#include "scenarios/tyre_rig.hpp"
-#include "scenarios/run_four_wheel.hpp"
-#include "scenarios/scenario_file.hpp"
+#include "runner/builtin/bicycle_circle.hpp"
+#include "runner/builtin/bicycle_lane_change.hpp"
+#include "runner/builtin/bicycle_slalom.hpp"
+#include "runner/builtin/driven_body.hpp"
+#include "runner/builtin/single_track_circle.hpp"
+#include "runner/builtin/single_track_lane_change.hpp"
+#include "runner/builtin/thrown_body.hpp"
+#include "runner/builtin/tyre_rig.hpp"
+#include "runner/run_four_wheel.hpp"
+#include "runner/scenario_file.hpp"
 
 using namespace rallysim;
 

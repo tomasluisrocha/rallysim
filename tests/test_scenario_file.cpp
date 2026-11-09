@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include "check.hpp"
-#include "scenarios/scenario_file.hpp"
+#include "runner/scenario_file.hpp"
 
 using namespace rallysim;
 

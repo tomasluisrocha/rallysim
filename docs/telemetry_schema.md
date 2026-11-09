@@ -248,7 +248,7 @@ shrink with dt is a physics bug. `tests/test_energy.cpp` bounds it on every four
 
 ## Tyre rig file
 
-`rallysim tyre_rig` (`scenarios/tyre_rig.hpp`) writes `out/rig/tyre_rig.csv`: the force curves of one tyre, swept over
+`rallysim tyre_rig` (`runner/builtin/tyre_rig.hpp`) writes `out/rig/tyre_rig.csv`: the force curves of one tyre, swept over
 slip and load with no car and no time. It is not a telemetry file and has no schema number.
 
 ```

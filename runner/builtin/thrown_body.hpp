@@ -1,5 +1,5 @@
 #pragma once
-#include "scenarios/run_scripted.hpp"
+#include "runner/run_scripted.hpp"
 
 namespace rallysim
 {

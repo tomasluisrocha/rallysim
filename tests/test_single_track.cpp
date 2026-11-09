@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/single_track_lane_change.hpp"
+#include "runner/builtin/single_track_lane_change.hpp"
 #include "tests/check.hpp"
 #include "tests/single_track_helpers.hpp"
 

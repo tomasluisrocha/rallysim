@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/scenario_file.hpp"
+#include "runner/scenario_file.hpp"
 #include "tests/check.hpp"
 #include "tests/telemetry_helpers.hpp"
 

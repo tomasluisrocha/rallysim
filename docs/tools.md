@@ -43,7 +43,7 @@ py tools/run_all.py --snapshot linear       afterwards, keep a copy in out/snaps
 py tools/run_all.py --no-plots              just the CSVs
 ```
 
-It asks `rallysim list` for the scenario names, so a new scenario added to `apps/main.cpp` is picked up on its own.
+It asks `rallysim list` for the scenario names, so a new scenario file in `scenarios/` (or a built-in one added to `apps/main.cpp`) is picked up on its own.
 A scenario whose state stops being finite (a NaN or infinity, `core/finite.hpp`) is listed as FAILED with
 `rallysim`'s message (the field, step and time); its CSV ends where the run stopped, and the script exits with 1.
 
@@ -193,7 +193,7 @@ After a physics change, a residual that grows with time and does not halve when 
 their values (`vehicle/four_wheel_registry.hpp`), and line 1 of the file records the values the run used. A value
 may carry a unit of the same kind, converted to the parameter's own: `--set spring_front=50kN/m`,
 `--set brake_bias_front=62%`, `--set max_steer=30deg`. `rallysim file.ini` runs a four-wheel scenario written as a
-file (to `out/runs/<file name>.csv`); there `--set` also reaches the other sections: `--set run.dt=0.5ms`.
+file (to `out/runs/<file name>.csv`); there `--set` also reaches the other sections: `--set run.dt=0.5ms`. The format is in [`scenario_files.md`](scenario_files.md).
 
 ## A typical check after a physics change
 
