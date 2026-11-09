@@ -185,17 +185,43 @@ namespace rallysim
                 lerp(a.handbrake, b.handbrake, f)};
     }
 
+    // Where a run starts: the CG's position and velocity (world frame), the body's attitude as yaw-pitch-roll angles
+    // with ISO 8855 signs (as roll_angle and pitch_angle read them back), and its angular velocity (body frame).
+    struct four_wheel_pose
+    {
+        vec3 position;          // m
+        Real heading = 0;       // rad, counter-clockwise from +x
+        Real pitch = 0;         // rad, + nose down
+        Real roll = 0;          // rad, + right side down
+        vec3 velocity;          // m/s
+        vec3 angular_velocity;  // rad/s: roll, pitch and yaw rates (p, q, r)
+    };
+
+    // The state at `pose`, with every wheel rolling at the body's forward speed, so no tyre starts out slipping.
+    // With every angle zero the orientation is exactly the identity, so a level start is bit for bit the same as an
+    // unrotated one.
+    inline four_wheel_state four_wheel_start(const four_wheel_params &p, const four_wheel_pose &pose)
+    {
+        four_wheel_state s;
+        s.body.pos = pose.position;
+        s.body.q = from_axis_angle({0, 0, 1}, pose.heading) * from_axis_angle({0, 1, 0}, pose.pitch) *
+                   from_axis_angle({1, 0, 0}, pose.roll);
+        s.body.vel = pose.velocity;
+        s.body.omega = pose.angular_velocity;
+        const Real forward = to_body(s.body.q, s.body.vel).x;
+        for (wheel_state &w : s.wheels)
+            w = rolling_wheel(p.wheel, forward);
+        return s;
+    }
+
     // A car pointing along +x, moving forward at `speed` with every wheel rolling freely. With springs it starts
     // level with its CG at cg_height, each spring compressed by its share of the weight: at rest, in balance.
     inline four_wheel_state four_wheel_initial(const four_wheel_params &p, Real speed)
     {
-        four_wheel_state s;
-        s.body.vel = {speed, 0, 0};
-        if (p.vertical == vertical_model::springs)
-            s.body.pos.z = p.cg_height;
-        for (wheel_state &w : s.wheels)
-            w = rolling_wheel(p.wheel, speed);
-        return s;
+        four_wheel_pose pose;
+        pose.position = {0, 0, p.vertical == vertical_model::springs ? p.cg_height : 0};
+        pose.velocity = {speed, 0, 0};
+        return four_wheel_start(p, pose);
     }
 
     inline Real applied_steer(const four_wheel_params &p, Real steer)
