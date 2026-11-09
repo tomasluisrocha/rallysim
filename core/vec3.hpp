@@ -93,7 +93,7 @@ namespace rallysim
 		return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 	}
 
-	// True when every component is a real number: no NaN, no infinity (book ch. 26: fail on non-finite state).
+	// True when every component is a real number: no NaN, no infinity (fail on non-finite state).
 	inline bool is_finite(const vec3 &v)
 	{
 		return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);

@@ -6,19 +6,19 @@
 
 namespace rallysim
 {
-    // One wheel (book section 7.1): its spin, the slip of its contact patch, and the tyre force that slip makes.
+    // One wheel: its spin, the slip of its contact patch, and the tyre force that slip makes.
     // The car gives it the velocity of the contact patch, the vertical load and the drive and brake torques;
     // it returns the tyre force to apply to the car.
     struct wheel_params
     {
         Real radius = 0.315; // m, effective rolling radius
         Real inertia = 1.2;  // kg m^2 about the axle: tyre, rim, hub and brake disc
-        int substeps = 4;    // spin updates per step: the wheel changes far faster than the body (book ch. 14)
+        int substeps = 4;    // spin updates per step: the wheel changes far faster than the body
     };
 
     // What changes from step to step. The two slips are relaxed (transient) values: they follow the slip of
     // the contact patch over a short rolling distance instead of jumping to it, which is what keeps the tyre
-    // well behaved at low speed and at standstill (book section 7.1).
+    // well behaved at low speed and at standstill.
     struct wheel_state
     {
         Real omega = 0;        // rad/s, positive rolling forward
@@ -49,7 +49,7 @@ namespace rallysim
     }
 
     // Steady slip ratio (omega R - vx) / max(|vx|, |omega R|, floor): 0 rolling freely, -1 a locked wheel
-    // sliding forward, +1 a wheel spinning at standstill. The book's form, which cannot divide by zero.
+    // sliding forward, +1 a wheel spinning at standstill. A form that cannot divide by zero.
     inline Real steady_slip_ratio(const wheel_params &w, Real omega, Real vx)
     {
         return (omega * w.radius - vx) / std::max(rolling_speed(w, omega, vx), kSlipSpeedFloor);
@@ -101,7 +101,7 @@ namespace rallysim
     // up the patch's spring, so a stopped car settles instead of rocking. The total stays within the grip.
     //
     // Keep damping_x * R^2 * (dt / substeps) / I below about 0.5: the damping also acts on the wheel's spin
-    // (through -Fx R), and above that the explicit spin update overshoots and blows up (book chapter 14).
+    // (through -Fx R), and above that the explicit spin update overshoots and blows up.
     inline tyre_force wheel_force(const wheel_state &s, const wheel_params &w, const tyre_params &t,
                                   const patch_velocity &v, Real fz)
     {
@@ -133,7 +133,7 @@ namespace rallysim
         s.omega = (std::fabs(free) <= brake) ? static_cast<Real>(0) : free - std::copysign(brake, free);
     }
 
-    // One step of the wheel, in `substeps` smaller steps (book chapter 14: the wheel is a light flywheel with a
+    // One step of the wheel, in `substeps` smaller steps (the wheel is a light flywheel with a
     // large force at its rim, so its spin changes much faster than the body's motion). Each sub-step takes the tyre
     // force from the wheel's current slips, updates the spin with it, then relaxes the slips with the new spin, the
     // same velocity-first order as the rigid body. The patch velocity, the load and the torques stay as given for

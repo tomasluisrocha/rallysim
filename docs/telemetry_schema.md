@@ -151,7 +151,7 @@ Schema 3 inserted columns into the four-wheel files rather than appending them: 
 up by name (every tool in `tools/`) read schema 2, 3 and 4 files alike; anything that counts columns does not.
 
 Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
-names above, so a plot script can build a name from an axle or wheel label (book, section 11.1).
+names above, so a plot script can build a name from an axle or wheel label.
 
 The columns from `steer` on belong to the step that starts from that row's state. The slip angles use a
 forward speed of at least `kMinForwardSpeed` (1 m/s), so below that `u` and the slip angles do not
@@ -161,7 +161,7 @@ meaning as in the bicycle files, which makes the two models easy to overlay.
 
 ## Columns (four-wheel car)
 
-The file layout is the same. The body columns come in groups (book, section 11.1): time, the driver's inputs, where
+The file layout is the same. The body columns come in groups: time, the driver's inputs, where
 the car is, how it moves, then values worked out from those. Each wheel then adds a block of columns, and the energy
 books end the row. Columns named as in the single-track files mean the same thing, so the two models can be overlaid;
 the pedals replace `drive_force`.
@@ -226,7 +226,7 @@ changing (`slip_cap_scale` in `vehicle/tyre.hpp`: at full sliding while rolling,
 tmeasy wheel's relaxed slip is about -0.8 while it slides and the slip at its peak once stopped, not -1. As in the
 other files, a row's inputs and forces belong to the step that starts from that row's state.
 
-The energy books (book ch. 26.4; `vehicle/four_wheel_energy.hpp`), all in J. The stored terms are that row's state; the
+The energy books (`vehicle/four_wheel_energy.hpp`), all in J. The stored terms are that row's state; the
 work columns add up every step before it, from the start of the run:
 
 | Column | Meaning |

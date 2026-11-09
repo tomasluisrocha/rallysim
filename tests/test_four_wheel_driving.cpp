@@ -7,7 +7,7 @@
 using namespace rallysim;
 
 // Phase 4, step 4: pedals, drive layouts, brakes and handbrake. The straight-line tests use load sensitivity off,
-// so the closed forms (book section 11.2: braking v^2 / 2 mu g, acceleration at the traction limit) are exact.
+// so the closed forms (braking v^2 / 2 mu g, acceleration at the traction limit) are exact.
 // Those forms are for a tyre that holds mu Fz while it slides, so flat_grip() is on the linear tyre; the phase 5
 // tests at the end run the same experiments on the tyres that lose grip past their peak: peak_slide, and tmeasy, the
 // car's own.

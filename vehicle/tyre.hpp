@@ -5,7 +5,7 @@
 
 namespace rallysim
 {
-    // One tyre (book section 7.2, the tyre model ladder). Rungs 1 to 3: linear in slip, capped by load-sensitive
+    // One tyre (the tyre model ladder). Rungs 1 to 3: linear in slip, capped by load-sensitive
     // friction, with combined slip shared on a friction circle (the linear curve). Phase 5 adds curves with a peak
     // and a fall-off: peak_slide (rung 4, a brush/Fiala-style curve with one shape for both directions) and tmeasy
     // (rung 5, its own curve for each direction, given at two loads). The rest of the car only calls tyre_forces()
@@ -20,7 +20,7 @@ namespace rallysim
         tmeasy      // the same kind of curve, but each direction has its own, given at two loads (TMeasy)
     };
 
-    // TMeasy (book section 17.9; Rill, TMeasy [B3]): the pure-slip curve of one direction at one load, as numbers
+    // TMeasy (Rill's TMeasy model): the pure-slip curve of one direction at one load, as numbers
     // that can be read off a measured curve. The peak force is not here: it is the tyre's grip, mu(Fz) Fz (see
     // tmeasy_at).
     struct tmeasy_point
@@ -63,7 +63,7 @@ namespace rallysim
         Real sliding_ratio = 0.8; // sliding force over peak force (0 to 1); 1 gives no fall-off
 
         // The tmeasy curve, one table per direction (the stiffnesses above are not used by it). The numbers are
-        // placeholders shaped after published curves of a car tyre (book chapter 17; peaks near 9 degrees and 9-10%
+        // placeholders shaped after published curves of a car tyre (peaks near 9 degrees and 9-10%
         // slip, a slow fall to about 75% when locked), not fitted to a real tyre. Along: peak at 9-9.5% slip,
         // sliding from 80%, 75% left. Across: peak at about 9.5-10 degrees, sliding from 35 degrees, 85% left.
         // The stiffnesses grow with load, so the peak slip angle stays nearly the same at every load.
@@ -97,7 +97,7 @@ namespace rallysim
         return fz > 0 ? peak_friction(t, fz) * fz : static_cast<Real>(0);
     }
 
-    // The shape every peaked curve shares (book section 17.9): force over peak force (0 to 1) at a slip s >= 0
+    // The shape every peaked curve shares: force over peak force (0 to 1) at a slip s >= 0
     // scaled so the curve starts with slope 1 (s = 1 is where a straight line of the initial slope would reach the
     // peak force). A cubic rises from 0 with slope 1 to 1 at p, a half-cosine falls to r at q, and it stays at r.
     // Both joins are flat, so the slope never jumps. Needs 1.5 <= p <= 3 (above 3 the cubic overshoots 1; below 1.5
@@ -189,7 +189,7 @@ namespace rallysim
     //   full sliding (in sigma)          |(sSx / sMx cos, sSy / sMy sin)|
     //   sliding ratio                    |(rx cos, ry sin)|
     // and the peak force is the grip in every direction. A pure slip gives back that direction's own curve. The
-    // book's own combined-slip method (section 17.8) divides by the stiffness instead, which forces both
+    // usual combined-slip method (peak_slide's) divides by the stiffness instead, which forces both
     // directions onto one shape; dividing by the peak slip lets each keep its own. (Rill also weights the two
     // directions in the normalisation; this keeps the plain peak-slip form.)
     //
@@ -289,7 +289,7 @@ namespace rallysim
     // are scaled down together, so the force keeps its direction and its size is exactly the grip (friction
     // circle).
     //
-    // peak_slide (book section 17.8): each slip is normalised by its own stiffness (1 is where the linear tyre
+    // peak_slide: each slip is normalised by its own stiffness (1 is where the linear tyre
     // would reach the grip), the size of the combined slip is looked up once on curve_shape, and the force is
     // split along the direction of the slip. So the two directions share one grip, a locked or spinning wheel
     // loses its side force, and at small slip the force is the linear tyre's.
@@ -321,7 +321,7 @@ namespace rallysim
         }
         case tyre_curve::peak_slide:
         {
-            // Normalise each slip by its stiffness: 1 is where the linear tyre would reach the grip (book section 17.8).
+            // Normalise each slip by its stiffness: 1 is where the linear tyre would reach the grip.
             const Real kx = t.longitudinal_stiffness * slip_ratio / grip;
             const Real ky = t.cornering_stiffness * lateral_slip / grip;
             const Real s = std::hypot(kx, ky); // size of the combined slip

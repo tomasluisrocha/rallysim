@@ -5,7 +5,7 @@
 
 using namespace rallysim;
 
-// The tyre on its own (book section 7.2 gate, for the rungs built so far): zero force at zero slip, force
+// The tyre on its own (for the rungs built so far): zero force at zero slip, force
 // that opposes slip, force bounded by mu Fz, and left-right and drive-brake symmetry.
 int main()
 {

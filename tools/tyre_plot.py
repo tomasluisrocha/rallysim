@@ -1,4 +1,4 @@
-"""Plot the single-tyre rig (book section 7.2): force against slip for each tyre curve.
+"""Plot the single-tyre rig: force against slip for each tyre curve.
 
 Usage:
     python tools/tyre_plot.py                      # reads out/rig/tyre_rig.csv, shows the figure

@@ -11,7 +11,7 @@
 
 using namespace rallysim;
 
-// The non-finite guard (book ch. 26: "fail the build on NaN or infinity anywhere in the state"): each state's
+// The non-finite guard (a NaN or infinity anywhere in the state fails the run): each state's
 // checker names the first bad field, the runners stop at the step where a NaN appears, and the telemetry writer
 // refuses a non-finite value instead of writing "-nan(ind)".
 

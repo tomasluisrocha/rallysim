@@ -9,9 +9,9 @@
 
 using namespace rallysim;
 
-// The phase 5 gate (book section 7.2): before a tyre curve goes on the car, its force curves must show zero force at
+// The phase 5 gate: before a tyre curve goes on the car, its force curves must show zero force at
 // zero slip, force that opposes slip, force bounded by mu Fz, the right symmetry, and a recognisable peak and
-// fall-off. Section 17.6 adds a smooth curve (no jump in slope after the peak) and zero force at zero load.
+// fall-off. The gate also asks for a smooth curve (no jump in slope after the peak) and zero force at zero load.
 //
 // Every curve of the tyre rig (scenarios/tyre_rig.hpp) is checked, so the curves tested are the ones plotted by
 // tools/tyre_plot.py: linear (no peak, so the peak checks are replaced by "flat at the grip"), brush, peak_slide and
@@ -284,7 +284,7 @@ int main()
     for (const auto &[name, t] : tyre_rig_curves())
         check_gate(name, t, t.curve != tyre_curve::linear);
 
-    // 12. the brush model of section 17.7: with its peak at 3 and no fall-off, the cubic is exactly
+    // 12. the brush model: with its peak at 3 and no fall-off, the cubic is exactly
     // s - s^2 / 3 + s^3 / 27 up to s = 3, then 1
     {
         tyre_params brush;
@@ -295,11 +295,11 @@ int main()
         for (int i = 0; i <= 600; ++i)
         {
             const Real s = i * 0.01;
-            const Real book = s <= 3 ? s - s * s / 3 + s * s * s / 27 : 1.0;
-            worst = std::max(worst, std::fabs(curve_shape(brush, s) - book));
+            const Real formula = s <= 3 ? s - s * s / 3 + s * s * s / 27 : 1.0;
+            worst = std::max(worst, std::fabs(curve_shape(brush, s) - formula));
         }
-        std::printf("brush: largest difference from the book's formula %.3g\n", worst);
-        check_near("brush: curve_shape with peak_slip 3 and no fall-off is the book's brush formula", worst, 0.0, 1e-12);
+        std::printf("brush: largest difference from the brush formula %.3g\n", worst);
+        check_near("brush: curve_shape with peak_slip 3 and no fall-off is the brush formula", worst, 0.0, 1e-12);
     }
 
     return finish("tyre_gate");

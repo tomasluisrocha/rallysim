@@ -99,7 +99,7 @@ namespace rallysim
                                q.z + h * d.z});
     }
 
-    // True when every component is a real number: no NaN, no infinity (book ch. 26: fail on non-finite state).
+    // True when every component is a real number: no NaN, no infinity (fail on non-finite state).
     inline bool is_finite(const quat &q)
     {
         return std::isfinite(q.w) && std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z);

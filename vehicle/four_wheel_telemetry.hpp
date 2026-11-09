@@ -15,7 +15,7 @@ namespace rallysim
         return labels[i];
     }
 
-    // The per-wheel columns, in this order for each wheel (book section 11.1 names).
+    // The per-wheel columns, in this order for each wheel.
     inline std::vector<std::string> wheel_fields()
     {
         return {"omega", "slipRatio", "slipAngle", "Fz", "Fx", "Fy", "driveTorque", "brakeTorque",
@@ -34,7 +34,7 @@ namespace rallysim
                 "energy.total", "work.drive", "work.brake", "work.damper", "work.tyre", "energy.residual"};
     }
 
-    // The body columns come in groups (book, section 11.1): time, the driver's inputs, where the car is (world
+    // The body columns come in groups: time, the driver's inputs, where the car is (world
     // position, then roll, pitch and yaw), how it moves (body_velocity's u, v, w, p, q, r, in that order), then
     // values worked out from those. Then each wheel's block and the energy books.
     inline std::vector<std::string> four_wheel_columns()

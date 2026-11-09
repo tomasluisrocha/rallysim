@@ -7,7 +7,7 @@
 using namespace rallysim;
 
 // One wheel on its own, then on a straight-line rig: a quarter of the car (300 kg) riding on one wheel.
-// Book section 7.1: slip that cannot divide by zero, I domega/dt = T_drive - T_brake - Fx R, brakes that stop
+// The wheel: slip that cannot divide by zero, I domega/dt = T_drive - T_brake - Fx R, brakes that stop
 // the wheel but never reverse it, and slip that builds over a relaxation length.
 
 struct rig
@@ -51,7 +51,7 @@ int main()
     const tyre_params t;  // Cx 90 kN, C_alpha 30 kN/rad, sigma_x 0.2 m, sigma_y 0.4 m
     const Real dt = 0.001;
 
-    // steady slip ratio: the book's form, finite everywhere
+    // steady slip ratio: a form that is finite everywhere
     {
         check_near("slip: rolling freely", steady_slip_ratio(w, 10.0 / w.radius, 10.0), 0.0, 1e-15);
         check_near("slip: locked wheel sliding forward is -1", steady_slip_ratio(w, 0.0, 10.0), -1.0);
@@ -208,7 +208,7 @@ int main()
     }
 
     // low speed, where the damping acts: a twisted tyre on a free wheel at rest unwinds and settles without the
-    // spin update blowing up (the damping also acts on the spin, book chapter 14), and so does a slow roll
+    // spin update blowing up (the damping also acts on the spin), and so does a slow roll
     {
         rig r = rolling_rig(0.0);
         r.s.slip_ratio = 0.02; // a twisted tyre, about 4 mm, on a free wheel

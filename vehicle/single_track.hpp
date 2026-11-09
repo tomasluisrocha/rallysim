@@ -1,7 +1,9 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include "core/keyframe_script.hpp"
 #include "core/rigid_body.hpp"
+#include "vehicle/load_transfer.hpp"
 #include "vehicle/tyre.hpp"
 
 namespace rallysim
@@ -33,8 +35,7 @@ namespace rallysim
     // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
     inline single_track_input lerp(const single_track_input &a, const single_track_input &b, Real f)
     {
-        const Real g = static_cast<Real>(1) - f;
-        return {g * a.steer + f * b.steer, g * a.drive_force + f * b.drive_force};
+        return {lerp(a.steer, b.steer, f), lerp(a.drive_force, b.drive_force, f)};
     }
 
     // Placeholder for low speed: slip angles divide by the forward speed, so below this value the
@@ -74,28 +75,12 @@ namespace rallysim
                 -std::atan((vel.v - params.lr * vel.r) / u)};
     }
 
-    // Vertical load on each axle. At a_x = 0 it is the static weight, shared so that the CG is closer to
-    // the axle that carries more. Accelerating (a_x > 0) moves load from the front axle to the rear,
-    // braking (a_x < 0) the other way: m a_x h / L, quasi-static. The two always add up to the weight:
-    // the transfer stops when one axle carries nothing (the other wheels lift, a wheelie or a stoppie).
+    // Vertical load on each axle, with the longitudinal transfer for a_x (vehicle/load_transfer.hpp).
     inline axle_pair axle_loads(const single_track_params &params, Real a_x = 0)
     {
-        const Real weight = params.chassis.mass * kGravity;
-        const Real front = weight * params.lr / params.wheelbase();
-        const Real rear = weight * params.lf / params.wheelbase();
-        const Real shift = std::clamp(params.chassis.mass * a_x * params.cg_height / params.wheelbase(), -rear, front);
-        return {front - shift, rear + shift};
-    }
-
-    // Splits one axle's load between its left and right wheel. `transfer` is the load moved from the left
-    // wheel to the right one. It is limited so that neither wheel goes below zero: the inner wheel lifts
-    // and the outer one carries the whole axle.
-    inline void split_axle(Real axle, Real transfer, Real &left, Real &right)
-    {
-        const Real half = std::max(axle, static_cast<Real>(0)) / 2;
-        const Real shift = std::clamp(transfer, -half, half);
-        left = half - shift;
-        right = half + shift;
+        axle_pair a;
+        longitudinal_axle_loads(params.chassis.mass, params.lf, params.lr, params.cg_height, a_x, a.front, a.rear);
+        return a;
     }
 
     // Vertical load on each wheel: the axle loads (with the longitudinal transfer for a_x), then the lateral

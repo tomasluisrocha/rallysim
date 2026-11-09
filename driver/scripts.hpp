@@ -1,6 +1,6 @@
 #pragma once
 #include "core/wrench.hpp"
-#include "driver/keyframe_script.hpp"
+#include "core/keyframe_script.hpp"
 #include "vehicle/bicycle.hpp"
 #include "vehicle/four_wheel.hpp"
 #include "vehicle/single_track.hpp"

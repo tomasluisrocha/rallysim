@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cmath>
 #include <algorithm>
+#include "core/keyframe_script.hpp"
 #include "core/vec3.hpp"
 
 namespace rallysim
@@ -50,8 +51,7 @@ namespace rallysim
     // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
     inline bicycle_input lerp(const bicycle_input &a, const bicycle_input &b, Real f)
     {
-        const Real g = static_cast<Real>(1) - f;
-        return {g * a.steer + f * b.steer, g * a.accel + f * b.accel};
+        return {lerp(a.steer, b.steer, f), lerp(a.accel, b.accel, f)};
     }
 
     // The front wheel angle the model actually uses: the input, limited to +-max_steer.

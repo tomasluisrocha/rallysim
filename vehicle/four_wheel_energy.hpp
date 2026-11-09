@@ -4,7 +4,7 @@
 
 namespace rallysim
 {
-    // The four-wheel car's energy books (book ch. 26.4, energy accounting). The energy stored in the car can only
+    // The four-wheel car's energy books (energy accounting). The energy stored in the car can only
     // change by the work done on it: the drive puts energy in; the brakes, the dampers and the tyres' sliding take it
     // out; gravity and the springs only move it around. So over a run
     //     residual = (E(t) - E(0)) - integral of (drive - brake - damper - tyre) dt
@@ -17,7 +17,7 @@ namespace rallysim
     // relaxed slips (the tyre's twist) store a little energy, so the tyre can briefly give some back, as when it
     // unwinds after a stop.
 
-    // The energy stored in the four-wheel car at one instant (J), term by term (book ch. 26.4: energy accounting).
+    // The energy stored in the four-wheel car at one instant (J), term by term (energy accounting).
     struct stored_energy
     {
         Real translation = 0; // body: 1/2 m |v|^2

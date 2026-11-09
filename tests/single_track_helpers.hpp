@@ -83,7 +83,7 @@ namespace rallysim
         return out;
     }
 
-    // What the book asks of a steering step: overshoot, peak time and settling time of the yaw rate.
+    // What a steering step is judged by: overshoot, peak time and settling time of the yaw rate.
     struct step_response
     {
         Real final = 0;     // value at the end of the record

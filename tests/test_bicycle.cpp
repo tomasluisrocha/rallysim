@@ -141,7 +141,7 @@ int main()
     }
 
     // full lap: the heading comes back to 2 pi and the car to its start. For the rear-axle form
-    // (lr = 0) the lap time is 2 pi R / v with R = L / tan(steer), as in the book. For the CG form
+    // (lr = 0) the lap time is 2 pi R / v with R = L / tan(steer). For the CG form
     // it is 2 pi R_cg / v.
     {
         bicycle_params rear_axle;

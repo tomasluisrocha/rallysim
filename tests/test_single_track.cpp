@@ -13,7 +13,7 @@ static rigid_body_state steady_turn(const single_track_params &p, Real speed, Re
     return run(constant_steer(p, speed, steer, steps));
 }
 
-// Independent planar model: the book's three equations in the body frame, integrated on their own
+// Independent planar model: the three planar equations in the body frame, integrated on their own
 // (explicit Euler, mid-step heading for the position). It shares only the tyre functions, which are
 // tested above, with the rigid-body version.
 struct planar_state

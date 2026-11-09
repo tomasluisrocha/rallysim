@@ -5,7 +5,7 @@
 
 namespace rallysim
 {
-    // Real-time loop for a fixed physics step (book, section 5.2, after Fiedler's "Fix Your Timestep").
+    // Real-time loop for a fixed physics step (after Fiedler's "Fix Your Timestep").
     // Real time is added to an accumulator each frame and spent in whole steps of dt; what is left is the
     // fraction of a step to interpolate the render pose by. The physics itself only ever sees dt.
     //

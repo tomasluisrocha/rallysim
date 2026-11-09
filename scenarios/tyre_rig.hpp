@@ -9,11 +9,11 @@
 
 namespace rallysim
 {
-    // The single-tyre rig (book section 7.2): every curve swept over slip ratio, slip angle and load, with no car
+    // The single-tyre rig: every curve swept over slip ratio, slip angle and load, with no car
     // and no time, so the force curves can be plotted and checked before a tyre goes on the car.
     //
     // Curves: linear (the default tyre), brush (peak_slide with its peak at 3 and no fall-off, which is the brush
-    // model of section 17.7), peak_slide with its default shape, and tmeasy with its default tables. Sweeps:
+    // model), peak_slide with its default shape, and tmeasy with its default tables. Sweeps:
     //   x         slip ratio -1 to 1, no slip angle, at each load
     //   y         slip angle -30 to 30 degrees, no slip ratio, at each load
     //   combined  slip ratio -1 to 1 at slip angles of 2, 4, 6 and 8 degrees, at the nominal load

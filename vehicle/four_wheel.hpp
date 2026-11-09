@@ -3,15 +3,17 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include "core/keyframe_script.hpp"
 #include "core/rigid_body.hpp"
 #include "vehicle/corner.hpp"
 #include "vehicle/drive_brake.hpp"
+#include "vehicle/load_transfer.hpp"
 #include "vehicle/tyre.hpp"
 #include "vehicle/wheel.hpp"
 
 namespace rallysim
 {
-    // Four-wheel car (book section 7.1, phase 4): four contact patches, each with its own wheel spin and tyre,
+    // Four-wheel car (phase 4): four contact patches, each with its own wheel spin and tyre,
     // driven by pedals through vehicle/drive_brake.hpp. Two ways to get the vertical loads:
     //   springs (step 6, the default): gravity acts, each corner of the body sits on a spring and damper
     //     (vehicle/corner.hpp) and the tyre forces act on the ground, below the CG, so the body heaves, rolls and
@@ -137,7 +139,7 @@ namespace rallysim
         std::array<wheel_state, kWheels> wheels{};
     };
 
-    // What the driver does: the steering wheel and three pedals (book section 11.1). The clutch comes with the
+    // What the driver does: the steering wheel and three pedals. The clutch comes with the
     // gearbox in phase 7.
     struct four_wheel_input
     {
@@ -179,9 +181,8 @@ namespace rallysim
     // Blend of two inputs for keyframe scripts: a at f = 0, b at f = 1.
     inline four_wheel_input lerp(const four_wheel_input &a, const four_wheel_input &b, Real f)
     {
-        const Real g = static_cast<Real>(1) - f;
-        return {g * a.steer + f * b.steer, g * a.throttle + f * b.throttle,
-                g * a.brake + f * b.brake, g * a.handbrake + f * b.handbrake};
+        return {lerp(a.steer, b.steer, f), lerp(a.throttle, b.throttle, f), lerp(a.brake, b.brake, f),
+                lerp(a.handbrake, b.handbrake, f)};
     }
 
     // A car pointing along +x, moving forward at `speed` with every wheel rolling freely. With springs it starts
@@ -207,7 +208,7 @@ namespace rallysim
         return is_front(i) ? steer : static_cast<Real>(0);
     }
 
-    // Where a wheel touches the ground and how it moves there (book section 7.1, steps 1 and 2).
+    // Where a wheel touches the ground and how it moves there (steps 1 and 2).
     struct contact_geometry
     {
         vec3 point;               // the contact patch from the CG, body frame (m): where the tyre force acts
@@ -260,14 +261,10 @@ namespace rallysim
         return contact_of(p, body, i, steer).velocity;
     }
 
-    // Static axle loads moved by a longitudinal acceleration a_x: m a_x h / L from front to rear, never below zero.
+    // Static axle loads moved by a longitudinal acceleration a_x (vehicle/load_transfer.hpp).
     inline void axle_loads(const four_wheel_params &p, Real a_x, Real &front, Real &rear)
     {
-        const Real weight = p.chassis.mass * kGravity, L = p.wheelbase();
-        const Real front_static = weight * p.lr / L, rear_static = weight * p.lf / L;
-        const Real shift = std::clamp(p.chassis.mass * a_x * p.cg_height / L, -rear_static, front_static);
-        front = front_static - shift;
-        rear = rear_static + shift;
+        longitudinal_axle_loads(p.chassis.mass, p.lf, p.lr, p.cg_height, a_x, front, rear);
     }
 
     // Longitudinal acceleration used for the load transfer, estimated from the wheel torques before the tyre
@@ -312,16 +309,9 @@ namespace rallysim
         axle_loads(p, a_x, front, rear);
 
         const Real roll_moment = p.chassis.mass * a_y * h;
-        auto split = [](Real axle, Real transfer, Real &left, Real &right)
-        {
-            const Real half = std::max(axle, static_cast<Real>(0)) / 2;
-            const Real moved = std::clamp(transfer, -half, half);
-            left = half - moved;
-            right = half + moved;
-        };
         std::array<Real, kWheels> fz{};
-        split(front, p.front_transfer_share * roll_moment / p.track_front, fz[FL], fz[FR]);
-        split(rear, (1 - p.front_transfer_share) * roll_moment / p.track_rear, fz[RL], fz[RR]);
+        split_axle(front, p.front_transfer_share * roll_moment / p.track_front, fz[FL], fz[FR]);
+        split_axle(rear, (1 - p.front_transfer_share) * roll_moment / p.track_rear, fz[RL], fz[RR]);
         return fz;
     }
 
@@ -338,7 +328,7 @@ namespace rallysim
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
     };
 
-    // Order (book chapter 3): controls, contact geometry, normal loads, contact patch velocities, tyre forces
+    // Order: controls, contact geometry, normal loads, contact patch velocities, tyre forces
     // from the wheels' current slips. Nothing is changed; step() then applies it.
     inline four_wheel_forces evaluate(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in)
     {
@@ -365,7 +355,7 @@ namespace rallysim
         return f;
     }
 
-    // Force and torque on the body from the four wheels, in the fixed wheel order (book section 7.1, step 5):
+    // Force and torque on the body from the four wheels, in the fixed wheel order (step 5):
     // each tyre force along the ground, (Fx forward + Fy left), applied at its contact patch. With springs each
     // corner's load also pushes up at its patch, and gravity acts; in the planar model gravity is cancelled.
     inline wrench four_wheel_wrench(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_forces &f)

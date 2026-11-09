@@ -17,7 +17,7 @@ using namespace rallysim;
 // phase 5). Each scenario is first checked against something that does not share its code (a closed form, or the
 // single-track model), so a wrong result cannot be frozen in as golden; then its final state is compared with the
 // recorded values (re-recorded in phase 5, when the car moved to the tmeasy tyre). Last, the timestep: halving
-// dt must change the results less each time (book section 11.2).
+// dt must change the results less each time.
 
 // Golden values must match to this tolerance. It is far below any real change in the model,
 // and loose enough that a different compiler's last-bit rounding does not fail the test.
@@ -233,7 +233,7 @@ static void test_handbrake()
     check_near("handbrake: at the held speed", v.u, 15.0, 0.1);
 }
 
-// Timestep convergence (book section 11.2): halving dt changes the result less each time. The same scenario at
+// Timestep convergence: halving dt changes the result less each time. The same scenario at
 // 2, 1 and 0.5 ms; semi-implicit Euler is first order, so each halving should roughly halve the change.
 static void test_convergence()
 {

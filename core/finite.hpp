@@ -5,8 +5,8 @@
 
 namespace rallysim
 {
-    // Stops a run the moment its state stops being a set of real numbers (book ch. 26: "fail on NaN or infinity
-    // anywhere in the state"). A NaN never crashes anything by itself: it spreads through the state in a step or
+    // Stops a run the moment its state stops being a set of real numbers (any NaN or
+    // infinity anywhere in the state). A NaN never crashes anything by itself: it spreads through the state in a step or
     // two and the run goes on producing garbage, so it is caught where it first appears, with the field, the step
     // and the time.
     //

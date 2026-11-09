@@ -8,7 +8,7 @@
 
 using namespace rallysim;
 
-// Energy accounting for the four-wheel car (book ch. 26.4): the energy stored in the car changes only by the work
+// Energy accounting for the four-wheel car: the energy stored in the car changes only by the work
 // done on it, so (E(t) - E(0)) - (drive - brake - damper - tyre work) stays near zero (vehicle/four_wheel_energy.hpp).
 //
 // The residual is not exactly zero: the books add each step's rates at the start of the step, while step()

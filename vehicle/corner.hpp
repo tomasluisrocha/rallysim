@@ -5,7 +5,7 @@
 namespace rallysim
 {
     // One corner's suspension (phase 4, step 6): a vertical spring and damper between the body and the ground
-    // under its wheel. The book's placeholder until phase 6, which adds the wheel's own mass, the tyre's own
+    // under its wheel. A placeholder until phase 6, which adds the wheel's own mass, the tyre's own
     // spring, bump stops, anti-roll bars and the suspension geometry; only this file changes then.
     struct corner_params
     {

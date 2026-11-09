@@ -4,7 +4,7 @@
 
 using namespace rallysim;
 
-// The real-time loop of section 5.2: whole steps from the accumulated frame time, the spiral-of-death
+// The real-time loop (core/fixed_step.hpp): whole steps from the accumulated frame time, the spiral-of-death
 // clamp, and the render interpolation between the last two states.
 int main()
 {

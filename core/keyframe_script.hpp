@@ -8,7 +8,8 @@
 
 namespace rallysim
 {
-    // A value (driver commands, or a force and torque) that applies at time t (s).
+    // A value (driver commands, a force and torque, or one number of a scenario-file timeline) that applies at time
+    // t (s).
     template <class T>
     struct keyframe
     {
@@ -16,9 +17,16 @@ namespace rallysim
         T value;
     };
 
+    // Blend of two numbers: a at f = 0, b at f = 1. The input types' lerps blend each of their numbers with it.
+    inline Real lerp(Real a, Real b, Real f)
+    {
+        const Real g = static_cast<Real>(1) - f;
+        return g * a + f * b;
+    }
+
     // A list of keyframes with strictly increasing times, sampled with linear interpolation.
     // T needs a function lerp(const T &a, const T &b, Real f) next to its definition, giving a at f = 0
-    // and b at f = 1; each input type defines its own (bicycle_input, single_track_input, wrench).
+    // and b at f = 1; Real uses the one above, each input type defines its own (bicycle_input, wrench, ...).
     template <class T>
     struct keyframe_script
     {

@@ -8,7 +8,7 @@
 
 namespace rallysim
 {
-    // Layer 1 of the scenario files (docs/implementation.md): the lines of an .ini file, with no meaning attached.
+    // Layer 1 of the scenario files: the lines of an .ini file, with no meaning attached.
 
     // Key value pair from each line
     // e.g. mass = 1.25 t
@@ -53,13 +53,22 @@ namespace rallysim
         }
     };
 
+    // s without the whitespace at either end ('\r' too, so Windows line ends go). Layer 2 trims with it as well.
+    inline std::string trimmed(const std::string &s)
+    {
+        const auto first = s.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos)
+            return "";
+        return s.substr(first, s.find_last_not_of(" \t\r\n") - first + 1);
+    }
+
     // A section or key name: lower case letters, digits and '_', not empty.
     inline bool is_ini_name(const std::string &s)
     {
         return !s.empty() && s.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") == std::string::npos;
     }
 
-    // Reads the lines of `in` (see docs/implementation.md, section 1). Throws ini_error with every problem (up to 20)
+    // Reads the lines of `in`. Throws ini_error with every problem (up to 20)
     // if any line is malformed; otherwise every entry is in its section, in file order.
     inline ini_file parse_ini(std::istream &in, const std::string &source)
     {
@@ -87,20 +96,6 @@ namespace rallysim
                 too_many = true;
         };
 
-        // Remove whitespace from both ends of a string.
-        auto trim = [](std::string &s)
-        {
-            const auto first = s.find_first_not_of(" \t\r\n");
-
-            if (first == std::string::npos)
-            {
-                s.clear();
-                return;
-            }
-
-            const auto last = s.find_last_not_of(" \t\r\n");
-            s = s.substr(first, last - first + 1);
-        };
 
         std::string line;
 
@@ -117,7 +112,7 @@ namespace rallysim
             if (comment != std::string::npos)
                 line.erase(comment);
 
-            trim(line);
+            line = trimmed(line);
 
             // Ignore blank lines and comment-only lines.
             if (line.empty())
@@ -162,7 +157,7 @@ namespace rallysim
                 }
 
                 std::string name = line.substr(1, line.size() - 2);
-                trim(name);
+                name = trimmed(name);
 
                 if (!is_ini_name(name))
                 {
@@ -209,8 +204,8 @@ namespace rallysim
             std::string key = line.substr(0, equal);
             std::string value = line.substr(equal + 1);
 
-            trim(key);
-            trim(value);
+            key = trimmed(key);
+            value = trimmed(value);
 
             if (key.empty())
             {
