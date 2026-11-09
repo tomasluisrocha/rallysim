@@ -31,6 +31,7 @@ py tools/topdown.py out/runs/fw_handbrake.csv
 | `compare.py` | Two runs overlaid channel by channel, with their difference |
 | `plot_run.py` | Any columns of a run against any other |
 | `simdata.py` | Not a standalone tool: shared paths, file readers and tyre curves used by the other tools |
+| `input_bars.py` | Not a standalone tool: the driver's inputs as bar charts, for `topdown.py` and `view3d.py` |
 
 ### run_all.py
 
@@ -62,6 +63,12 @@ py tools/topdown.py out/runs/fw_handbrake.csv --gif run.gif --start 2 --end 5
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
 It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and draws the car from line 1 of the file.
 
+The dashboard shows the car on its path with each tyre's force, coloured by the grip in use, and at the CG the sum of
+the tyre forces (orange) and their yaw moment (purple arc, longer for a larger moment). Around it: the whole run, the
+g-g diagram (the car's acceleration in g, from the tyre forces over the mass), the load on each wheel, the driver's
+inputs (the pedals upright, the steer across, left of zero when steering left), and sideslip, yaw rate and speed
+over time. The static view (`--static`) draws only the tyre forces.
+
 ![Top-down replay](img/tool-topdown.gif)
 
 ### view3d.py
@@ -76,11 +83,13 @@ py tools/view3d.py out/runs/fw_circle.csv --chase --perspective        behind th
 The vertical side of a run, which `topdown.py` cannot show: the body at its real pose (roll, pitch and ride height,
 exaggerated x4 by default, `--exaggerate 1` for true scale; the HUD gives the true angles), wheels that steer and spin
 (a locked wheel's spoke stops), struts coloured by how loaded each corner is. At each contact patch: the vertical load
-(blue, standing just outboard of the wheel), the tyre force on the ground (red), and the grip circle mu(Fz) Fz (grey),
-so the red arrow against its circle is the grip in use; at the CG, the velocity (green) and the sum of the tyre
-forces (orange). Every force uses one scale, printed in the HUD. The camera is isometric (a parallel projection, so
-arrows keep their true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel
-runs only. GIFs take about 4 s per second of run.
+(blue, standing just outboard of the wheel), the tyre force on the ground (black), and the grip mu(Fz) Fz as a disc
+coloured by the share in use, so the black arrow reaching the disc's edge is the tyre at its limit; at the CG, the
+velocity (green), the sum of the tyre forces (orange) and their yaw moment (purple arc, longer for a larger moment).
+Every force uses one scale, printed in the HUD, and is drawn over the body and wheels so none hides behind the car.
+The HUD also shows the driver's inputs as bars. The camera is isometric (a parallel projection, so arrows keep their
+true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel runs only. GIFs
+take about 7 s per second of run.
 
 ![3D replay](img/tool-view3d.gif)
 

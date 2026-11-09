@@ -9,12 +9,17 @@ Reads the telemetry only (like topdown.py); it never touches the physics.
              locked wheel's spoke stops), coloured by how much grip the tyre uses; a strut from the body to each
              wheel, coloured by how loaded its corner is.
   at each contact patch (one force scale for every arrow, shown on screen):
-             blue, straight up   the vertical load Fz: load transfer is the change in these
-             red, on the ground  the tyre force (Fx, Fy), turned with the wheel
-             grey circle         the grip mu(Fz) Fz: the red arrow's length against it is the grip in use
+             blue, straight up    the vertical load Fz: load transfer is the change in these
+             black, on the ground the tyre force (Fx, Fy), turned with the wheel
+             disc                 the grip mu(Fz) Fz, coloured by the share in use: the black arrow reaching its
+                                  edge is the tyre at its limit
   at the CG  green              velocity (0.15 s of travel)
              orange             the sum of the four tyre forces, what pushes the car around (same force scale)
+             purple arc         their yaw moment, what turns it: the longer the arc, the larger the moment
   ground     a grid that moves with the car, and the path behind it
+  HUD        the run's numbers, each wheel's load and grip in use, and the driver's inputs as bars (input_bars.py)
+
+Forces are drawn over the body and wheels wherever the camera is, so none hides behind the car.
 
 Usage:
   py tools/view3d.py out/runs/fw_handbrake.csv                       play, pause, scrub, turn the view
@@ -38,6 +43,7 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 
+import input_bars
 import simdata
 
 OVERHANG = 0.8           # m: body beyond each axle (as topdown.py)
@@ -48,12 +54,15 @@ VELOCITY_TIME = 0.15     # s: the velocity arrow is this much travel
 FORCE_ARROW = 1.2        # m: the largest vertical load in the run is drawn this long; every force uses that scale
 TRAIL_TIME = 4.0         # s of path drawn behind the car
 LOAD_OFFSET = 0.28       # m: the load arrow stands this far outboard of its wheel
+YAW_ARC_RADIUS = 0.9     # m: the yaw moment's arc around the CG
+YAW_ARC_SWEEP = 270      # deg: the arc of the largest yaw moment in the run
 ZOOM = 1.6               # how far the 3D box is zoomed in
 SLIDING_SLIP = 0.3       # |slip ratio| beyond which the HUD calls a wheel sliding (or spinning)
 LOCK_SPEED = 0.5         # m/s: a stopped wheel on a car moving faster than this is locked
 ISO_ELEV = math.degrees(math.atan(1 / math.sqrt(2)))  # 35.26 deg: with an orthographic projection, a true isometric view
 ISO_AZIM = -45.0
-COLOURS = {"load": "#2f6fd6", "tyre": "#d62f2f", "grip": "#888888", "velocity": "#1f9d55", "net": "#e8871e"}
+COLOURS = {"load": "#2f6fd6", "tyre": "#1a1a1a", "grip": "#888888", "velocity": "#1f9d55", "net": "#e8871e",
+           "moment": "#8e44ad"}
 
 
 # ----------------------------------------------------------------------------------------------------------
@@ -79,7 +88,11 @@ class Run:
         self.x, self.y, self.yaw = col("pos.x"), col("pos.y"), np.unwrap(col("yaw"))
         self.speed, self.u, self.v = col("speed"), col("u"), col("v")
         self.steer = col("steer")
-        self.inputs = {k: col(k) for k in ("steer", "throttle", "brake", "handbrake")}
+        max_steer = math.degrees(meta.get("max_steer", 0.6))
+        self.steer_input = input_bars.Channel("steer", np.degrees(self.steer), -max_steer, max_steer, "{:+.1f}°",
+                                       input_bars.COLOURS["steer"])
+        self.pedals = [input_bars.Channel(k, col(k), 0, 1, "{:.0%}", input_bars.COLOURS[k])
+                       for k in ("throttle", "brake", "handbrake")]
         self.a_lat = col("a_lat")
 
         # body pose, exaggerated about where it started
@@ -114,6 +127,15 @@ class Run:
             }
         largest_load = max(float(np.max(w["fz"])) for w in self.wheels.values())
         self.force_scale = FORCE_ARROW / largest_load if largest_load > 0 else 1e-3  # m per N
+
+        # the tyre forces' yaw moment about the CG (N m, positive turning left): each force turned by its wheel's
+        # steer into the body frame, acting at its contact patch
+        self.yaw_moment = np.zeros_like(self.t)
+        for w, (wx, wy) in self.wheel_xy.items():
+            delta = self.steer if w[0] == "F" else 0.0
+            fx, fy = self.wheels[w]["fx"], self.wheels[w]["fy"]
+            self.yaw_moment += wx * (fx * np.sin(delta) + fy * np.cos(delta)) - wy * (fx * np.cos(delta) - fy * np.sin(delta))
+        self.moment_max = float(np.max(np.abs(self.yaw_moment)))
 
     def index(self, time):
         return int(np.clip(np.searchsorted(self.t, time), 0, len(self.t) - 1))
@@ -175,10 +197,13 @@ class Scene:
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
         self.plt, self.run, self.window, self.chase, self.isometric = plt, run, window, chase, isometric
         self.Poly3DCollection = Poly3DCollection
-        self.fig = plt.figure(figsize=(12, 8))
-        self.ax = self.fig.add_axes([0.0, 0.08, 0.78, 0.92], projection="3d")
-        self.hud = self.fig.add_axes([0.78, 0.08, 0.22, 0.92])
+        self.fig = plt.figure(figsize=(12.5, 8.6))
+        self.ax = self.fig.add_axes([0.0, 0.06, 0.76, 0.94], projection="3d")
+        self.hud = self.fig.add_axes([0.775, 0.31, 0.225, 0.68])
         self.hud.axis("off")
+        # the inputs under the HUD's text: the pedals upright, the steer across
+        self.inputs = input_bars.InputBars(self.fig.add_axes([0.825, 0.145, 0.15, 0.19]),
+                                           self.fig.add_axes([0.825, 0.05, 0.15, 0.03]), run.steer_input, run.pedals)
         self.elev, self.azim = 22.0, -60.0
         self.i = 0
 
@@ -188,19 +213,22 @@ class Scene:
         if not self.chase:
             self.elev, self.azim = ax.elev, ax.azim  # keep the view the user turned to
         ax.cla()
+        # draw in the zorder given rather than by depth, so the forces (7 to 9) stay over the body (4) and the
+        # wheels (6) from any camera
+        ax.computed_zorder = False
         cg = np.array([run.x[i], run.y[i], run.z[i]])
         rot = rotation(run.yaw[i], run.pitch[i], run.roll[i])
         k = run.force_scale
 
         self.ground(cg)
         start = max(0, run.index(run.t[i] - TRAIL_TIME))
-        ax.plot(run.x[start:i + 1], run.y[start:i + 1], np.zeros(i + 1 - start), color="#999999", lw=1)
+        ax.plot(run.x[start:i + 1], run.y[start:i + 1], np.zeros(i + 1 - start), color="#999999", lw=1, zorder=2)
 
         # body
         body = self.Poly3DCollection(body_faces(run, i, rot, cg), facecolor=(0.55, 0.62, 0.75, 0.18),
-                                     edgecolor=(0.25, 0.3, 0.4, 0.8), linewidths=0.8)
+                                     edgecolor=(0.25, 0.3, 0.4, 0.8), linewidths=0.8, zorder=4)
         ax.add_collection3d(body)
-        ax.scatter(*cg, color="black", s=12)
+        ax.scatter(*cg, color="black", s=12, zorder=10)
 
         net = np.zeros(3)
         for label, (wx, wy) in run.wheel_xy.items():
@@ -215,45 +243,71 @@ class Scene:
             fz, fx, fy, grip = w["fz"][i], w["fx"][i], w["fy"][i], w["grip"][i]
             use = math.hypot(fx, fy) / grip if grip > 0 else 0.0
 
-            ax.plot(*zip(top, centre), color=load_colour(fz, w["static"]), lw=3)           # strut
+            ax.plot(*zip(top, centre), color=load_colour(fz, w["static"]), lw=3, zorder=5)  # strut
             self.wheel(centre, fwd, run.radius, w["spin"][i], grip_colour(use) if fz > 0 else "#bbbbbb")
             if fz > 0:
+                # the grip as a disc on the ground, coloured by the share in use: the black arrow reaching its edge
+                # is the tyre at its limit
+                theta = np.linspace(0, 2 * np.pi, 49)
+                disc = np.column_stack([patch[0] + grip * k * np.cos(theta), patch[1] + grip * k * np.sin(theta),
+                                        np.full_like(theta, 0.004)])
+                ax.add_collection3d(self.Poly3DCollection(
+                    [disc], facecolor=(*matplotlib.colors.to_rgb(grip_colour(use)), 0.25),
+                    edgecolor=(0.3, 0.3, 0.3, 0.7), linewidths=0.8, zorder=3))
                 # the load arrow stands just outboard of the wheel, so it does not hide in the strut
                 outboard = left * (LOAD_OFFSET if wy > 0 else -LOAD_OFFSET)
-                ax.quiver(*(patch + outboard), 0, 0, fz * k, color=COLOURS["load"], lw=2, arrow_length_ratio=0.12)
+                ax.quiver(*(patch + outboard), 0, 0, fz * k, color=COLOURS["load"], lw=3, arrow_length_ratio=0.12,
+                          zorder=7)
                 force = (fx * fwd + fy * left) * k
-                ax.quiver(*(patch + [0, 0, 0.01]), *force, color=COLOURS["tyre"], lw=2.2, arrow_length_ratio=0.15)
-                theta = np.linspace(0, 2 * np.pi, 49)
-                ax.plot(patch[0] + grip * k * np.cos(theta), patch[1] + grip * k * np.sin(theta),
-                        np.full_like(theta, 0.005), color=COLOURS["grip"], lw=0.8)
+                ax.quiver(*(patch + [0, 0, 0.01]), *force, color=COLOURS["tyre"], lw=3.2, arrow_length_ratio=0.15,
+                          zorder=8)
                 net += fx * fwd + fy * left
 
         velocity = np.array([run.u[i] * math.cos(run.yaw[i]) - run.v[i] * math.sin(run.yaw[i]),
                              run.u[i] * math.sin(run.yaw[i]) + run.v[i] * math.cos(run.yaw[i]), 0.0])
-        ax.quiver(*cg, *(velocity * VELOCITY_TIME), color=COLOURS["velocity"], lw=2, arrow_length_ratio=0.1)
-        ax.quiver(*cg, *(net * k), color=COLOURS["net"], lw=2.5, arrow_length_ratio=0.12)
+        ax.quiver(*cg, *(velocity * VELOCITY_TIME), color=COLOURS["velocity"], lw=2.5, arrow_length_ratio=0.1,
+                  zorder=9)
+        ax.quiver(*cg, *(net * k), color=COLOURS["net"], lw=3.5, arrow_length_ratio=0.12, zorder=9)
+        self.moment_arc(cg, i)
 
         self.frame(cg)
         self.write_hud(i)
+        self.inputs.update(i)
+
+    def moment_arc(self, cg, i):
+        """The tyres' yaw moment as an arc around the CG, centred on the heading and running the way the moment
+        turns the car; its length is the moment's share of the largest in the run."""
+        run = self.run
+        share = abs(run.yaw_moment[i]) / run.moment_max if run.moment_max > 0 else 0.0
+        if share <= 0.02:
+            return
+        turn = 1.0 if run.yaw_moment[i] > 0 else -1.0
+        sweep = math.radians(YAW_ARC_SWEEP) * share
+        angles = run.yaw[i] + turn * np.linspace(-sweep / 2, sweep / 2, 40)
+        xs, ys = cg[0] + YAW_ARC_RADIUS * np.cos(angles), cg[1] + YAW_ARC_RADIUS * np.sin(angles)
+        self.ax.plot(xs, ys, np.full_like(xs, cg[2]), color=COLOURS["moment"], lw=3, zorder=9)
+        along = turn * np.array([-math.sin(angles[-1]), math.cos(angles[-1]), 0.0])  # the arc's way at its end
+        self.ax.quiver(xs[-1], ys[-1], cg[2], *(0.35 * along), color=COLOURS["moment"], lw=3,
+                       arrow_length_ratio=0.8, zorder=9)
 
     def ground(self, cg):
         half, step = self.window / 2, 2.0
         lo_x, hi_x = math.floor((cg[0] - half) / step) * step, math.ceil((cg[0] + half) / step) * step
         lo_y, hi_y = math.floor((cg[1] - half) / step) * step, math.ceil((cg[1] + half) / step) * step
         for gx in np.arange(lo_x, hi_x + step / 2, step):
-            self.ax.plot([gx, gx], [lo_y, hi_y], [0, 0], color="#dddddd", lw=0.6)
+            self.ax.plot([gx, gx], [lo_y, hi_y], [0, 0], color="#dddddd", lw=0.6, zorder=1)
         for gy in np.arange(lo_y, hi_y + step / 2, step):
-            self.ax.plot([lo_x, hi_x], [gy, gy], [0, 0], color="#dddddd", lw=0.6)
+            self.ax.plot([lo_x, hi_x], [gy, gy], [0, 0], color="#dddddd", lw=0.6, zorder=1)
 
     def wheel(self, centre, fwd, radius, spin, colour):
         up = np.array([0.0, 0.0, 1.0])
         a = np.linspace(0, 2 * np.pi, 33)
         ring = centre + radius * (np.outer(np.cos(a), fwd) + np.outer(np.sin(a), up))
-        self.ax.plot(ring[:, 0], ring[:, 1], ring[:, 2], color=colour, lw=3)
+        self.ax.plot(ring[:, 0], ring[:, 1], ring[:, 2], color=colour, lw=3, zorder=6)
         # rolling forward turns the top of the wheel forward: the spoke's angle in (fwd, up) falls as it spins
         angle = math.pi / 2 - spin
         tip = centre + radius * (math.cos(angle) * fwd + math.sin(angle) * up)
-        self.ax.plot(*zip(centre, tip), color="black", lw=1.5)
+        self.ax.plot(*zip(centre, tip), color="black", lw=1.5, zorder=6)
 
     def frame(self, cg):
         ax, half = self.ax, self.window / 2
@@ -280,11 +334,8 @@ class Scene:
             (f"speed {run.speed[i]:.1f} m/s ({run.speed[i] * 3.6:.0f} km/h)", "black", 10, "normal"),
             (f"roll {math.degrees(run.roll_true[i]):+.2f} deg  (+ right side down)", "black", 10, "normal"),
             (f"pitch {math.degrees(run.pitch_true[i]):+.2f} deg  (+ nose down)", "black", 10, "normal"),
+            (f"yaw moment {run.yaw_moment[i] / 1000:+.2f} kN m  (+ left)", "black", 10, "normal"),
             (f"body motion drawn x{run.exaggerate:g}", "#666666", 9, "italic"),
-            ("", "black", 6, "normal"),
-            (f"steer {math.degrees(run.inputs['steer'][i]):+.1f} deg", "black", 10, "normal"),
-            (f"throttle {run.inputs['throttle'][i]:.2f}   brake {run.inputs['brake'][i]:.2f}", "black", 10, "normal"),
-            (f"handbrake {run.inputs['handbrake'][i]:.2f}", "black", 10, "normal"),
             ("", "black", 6, "normal"),
         ]
         for label in simdata.WHEELS:
@@ -298,19 +349,21 @@ class Scene:
             ("", "black", 6, "normal"),
             (f"forces: 1 m = {newton_per_m / 1000:.1f} kN", "black", 10, "bold"),
             ("blue  vertical load Fz", COLOURS["load"], 10, "normal"),
-            ("red   tyre force (Fx, Fy)", COLOURS["tyre"], 10, "normal"),
-            ("grey  grip circle mu(Fz) Fz", COLOURS["grip"], 10, "normal"),
+            ("black tyre force (Fx, Fy)", COLOURS["tyre"], 10, "normal"),
+            ("disc  grip mu(Fz) Fz, colour: % used", COLOURS["grip"], 10, "normal"),
             ("orange  sum of the tyre forces", COLOURS["net"], 10, "normal"),
+            ("purple  their yaw moment (arc length)", COLOURS["moment"], 10, "normal"),
             (f"green  velocity ({VELOCITY_TIME:g} s of travel)", COLOURS["velocity"], 10, "normal"),
             ("struts: blue lighter, red heavier", "#666666", 9, "italic"),
             ("than at the start", "#666666", 9, "italic"),
         ]
-        y = 0.97
+        inches = h.get_position().height * self.fig.get_size_inches()[1]  # line steps are set in inches
+        y = 0.99
         for text, colour, size, style in lines:
             h.text(0.02, y, text, color=colour, fontsize=size, fontweight="bold" if style == "bold" else "normal",
                    fontstyle="italic" if style == "italic" else "normal", transform=h.transAxes, va="top",
                    family="monospace" if text[:2] in ("FL", "FR", "RL", "RR") else None)
-            y -= 0.034 if size >= 10 else 0.026
+            y -= (0.215 if size >= 10 else 0.17) / inches
 
     def wheel_state(self, label, i):
         """'locked', 'spinning', 'sliding', 'in the air' or '' (rolling), for the HUD."""

@@ -9,6 +9,10 @@ Reads the telemetry only; it never touches the physics. It recognises each kind 
 
 The car's geometry comes from line 1 of the file (lf, lr, tracks, tyre grip); older files get the default car.
 
+The dashboard: the car on its path with every tyre force, their sum (orange) and their yaw moment (purple arc) at
+the CG; the whole run; the g-g diagram of the car's acceleration; the load on each wheel; the driver's inputs as
+bars (the pedals upright, the steer across); sideslip, yaw rate and speed over time.
+
 Usage:
   py tools/topdown.py out/runs/fw_handbrake.csv                dashboard: play, pause, scrub
   py tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png one dashboard frame
@@ -26,15 +30,24 @@ import matplotlib
 import numpy as np
 import pandas as pd
 
+import input_bars
+
 # Drawing sizes (m) for parts the telemetry does not describe.
 OVERHANG = 0.8           # body beyond each axle
 BODY_WIDTH_MARGIN = 0.25  # body wider than the track
 TYRE_WIDTH = 0.22
 TRAVEL_ARROW = 3.5       # m: length of the direction-of-travel arrow (the speed is in the title)
 STILL_SPEED = 0.3        # m/s: below this the sideslip angle means nothing and is not shown
-FORCE_ARROW_MAX = 2.5    # m: the largest tyre force in the run is drawn this long
+FORCE_ARROW_MAX = 2.5    # m: the largest tyre force in the run is drawn at most this long, and
+NET_ARROW_MAX = 3.5      # m: the largest sum of them at most this long (one scale for every force arrow)
+YAW_ARC_RADIUS = 0.8     # m: the yaw moment's arc around the CG
+YAW_ARC_SWEEP = 270      # deg: the arc of the largest yaw moment in the run
+GG_TRAIL = 2.0           # s of the g-g diagram's trail
+GRAVITY = 9.81           # m/s^2, for accelerations in g
 LOCK_SPEED = 0.5         # m/s: a wheel that is stopped while the car moves faster than this is locked
 SPIN_SLIP = 0.15         # slip ratio beyond which a wheel counts as spinning (or sliding when negative)
+COLOURS = {"velocity": "tab:green", "net": "#e67e22", "moment": "#8e44ad"}
+STATE_EDGES = {"LOCK": "black", "SPIN": "magenta", "SLIDE": "deepskyblue", "AIR": "0.6"}
 
 # The default car, for files written before the geometry was put on line 1.
 DEFAULT_META = {"lf": 1.3, "lr": 1.2, "track_front": 1.5, "track_rear": 1.5, "max_steer": 0.6,
@@ -61,15 +74,6 @@ class Wheel:
 
 
 @dataclass
-class Channel:
-    name: str
-    values: np.ndarray
-    low: float                    # the range the bar is drawn over
-    high: float
-    fmt: str = "{:+.2f}"
-
-
-@dataclass
 class Run:
     path: str
     kind: str
@@ -88,8 +92,13 @@ class Run:
     body_front: float             # body front from the CG (m)
     tyre_length: float
     wheels: list = field(default_factory=list)
-    inputs: list = field(default_factory=list)
+    steer_input: input_bars.Channel = None              # the horizontal input bar
+    inputs: list = field(default_factory=list)   # input_bars.Channel: the vertical input bars
     body_force: tuple = None      # (fx, fy) world, for rigid bodies
+    net_force: tuple = None       # (along, across) body frame: the sum of the tyre forces (N)
+    yaw_moment: np.ndarray = None  # their moment about the CG (N m), positive turning left
+    accel: tuple = None           # (along, across) body frame (m/s^2), for the g-g diagram
+    accel_source: str = ""
 
 
 def read_meta(path):
@@ -108,12 +117,23 @@ def read_meta(path):
     return meta
 
 
-def lateral_acceleration(t, vx, vy, yaw):
-    """Change of the CG velocity over time, along the body's left axis (positive left)."""
+def body_acceleration(t, vx, vy, yaw):
+    """Change of the CG velocity over time in the body's axes: (forward, left), m/s^2."""
     if len(t) < 2:
-        return np.zeros_like(t)
+        return np.zeros_like(t), np.zeros_like(t)
     ax, ay = np.gradient(vx, t), np.gradient(vy, t)
-    return -ax * np.sin(yaw) + ay * np.cos(yaw)
+    return ax * np.cos(yaw) + ay * np.sin(yaw), -ax * np.sin(yaw) + ay * np.cos(yaw)
+
+
+def tyre_totals(wheels):
+    """The sum of the tyre forces in the body frame, (along, across) in N, and their moment about the CG in N m
+    (positive turning left): each wheel's force turned by its steer, acting at its contact patch."""
+    along = across = moment = 0.0
+    for w in wheels:
+        c, s = np.cos(w.steer), np.sin(w.steer)
+        bx, by = w.fx * c - w.fy * s, w.fx * s + w.fy * c
+        along, across, moment = along + bx, across + by, moment + w.x * by - w.y * bx
+    return (along, across), moment
 
 
 def sideslip(beta, speed):
@@ -146,13 +166,14 @@ def load(path):
     tf, tr = meta["track_front"], meta["track_rear"]
     run = Run(path=path, kind="", t=t, x=df["pos.x"].to_numpy(), y=df["pos.y"].to_numpy(), yaw=yaw,
               vx=vx, vy=vy, speed=speed, beta=sideslip(beta, speed), yaw_rate=df["yaw_rate"].to_numpy(),
-              a_lat=lateral_acceleration(t, vx, vy, yaw),
+              a_lat=body_acceleration(t, vx, vy, yaw)[1],
               body_length=lf + lr + 2 * OVERHANG, body_width=max(tf, tr) + BODY_WIDTH_MARGIN,
               body_front=lf + OVERHANG, tyre_length=2 * meta["wheel_radius"])
     steer = df["steer"].to_numpy()
     zero = np.zeros_like(steer)
-    steer_channel = Channel("steer (deg)", np.degrees(steer), -math.degrees(meta["max_steer"]),
-                            math.degrees(meta["max_steer"]), "{:+.1f}")
+    max_steer = math.degrees(meta["max_steer"])
+    run.steer_input = input_bars.Channel("steer", np.degrees(steer), -max_steer, max_steer, "{:+.1f}°",
+                                         input_bars.COLOURS["steer"])
 
     if "wheel.FL.Fx" in cols:
         run.kind = "four-wheel car"
@@ -166,8 +187,8 @@ def load(path):
                                     df[f"wheel.{label}.Fx"].to_numpy(), df[f"wheel.{label}.Fy"].to_numpy(),
                                     fz, grip, df[f"wheel.{label}.omega"].to_numpy(),
                                     df[f"wheel.{label}.slipRatio"].to_numpy()))
-        run.inputs = [steer_channel] + [Channel(p, df[p].to_numpy(), 0, 1, "{:.2f}")
-                                        for p in ("throttle", "brake", "handbrake")]
+        run.inputs = [input_bars.Channel(p, df[p].to_numpy(), 0, 1, "{:.0%}", input_bars.COLOURS[p])
+                      for p in ("throttle", "brake", "handbrake")]
     elif "axle.front.Fy" in cols:
         run.kind = "single-track"
         front_fz = (df["wheel.FL.Fz"] + df["wheel.FR.Fz"]).to_numpy() if "wheel.FL.Fz" in cols else None
@@ -178,15 +199,24 @@ def load(path):
                   df["axle.front.grip"].to_numpy() if "axle.front.grip" in cols else None),
             Wheel("rear", -lr, 0.0, zero, rear_fx, df["axle.rear.Fy"].to_numpy(), rear_fz,
                   df["axle.rear.grip"].to_numpy() if "axle.rear.grip" in cols else None)]
-        drive = df["drive_force"].to_numpy()
-        run.inputs = [steer_channel, Channel("drive force (N)", drive, -symmetric(drive, 1.0), symmetric(drive, 1.0), "{:+.0f}")]
+        drive, top = df["drive_force"].to_numpy(), symmetric(df["drive_force"].to_numpy(), 1.0)
+        run.inputs = [input_bars.Channel("drive force", drive, -top, top, "{:+.0f} N",
+                                         input_bars.COLOURS["throttle"], input_bars.COLOURS["brake"])]
     else:
         run.kind = "kinematic bicycle"
         run.wheels = [Wheel("front", lf, 0.0, steer), Wheel("rear", -lr, 0.0, zero)]
-        run.inputs = [steer_channel]
         if "accel" in cols:
-            accel = df["accel"].to_numpy()
-            run.inputs.append(Channel("accel (m/s^2)", accel, -symmetric(accel, 0.1), symmetric(accel, 0.1)))
+            accel, top = df["accel"].to_numpy(), symmetric(df["accel"].to_numpy(), 0.1)
+            run.inputs = [input_bars.Channel("accel", accel, -top, top, "{:+.2f} m/s²",
+                                             input_bars.COLOURS["throttle"], input_bars.COLOURS["brake"])]
+
+    if run.wheels[0].fx is not None:
+        run.net_force, run.yaw_moment = tyre_totals(run.wheels)
+    if run.net_force is not None and meta.get("mass", 0) > 0:
+        run.accel = (run.net_force[0] / meta["mass"], run.net_force[1] / meta["mass"])
+        run.accel_source = "tyre forces / mass"
+    else:
+        run.accel, run.accel_source = body_acceleration(t, vx, vy, yaw), "change of velocity"
     return run
 
 
@@ -199,27 +229,33 @@ def load_rigid_body(path, df, t):
     speed = np.hypot(vx, vy)
     fx = df["force.x"].to_numpy() if "force.x" in df.columns else np.zeros_like(t)
     fy = df["force.y"].to_numpy() if "force.y" in df.columns else np.zeros_like(t)
+    accel = body_acceleration(t, vx, vy, yaw)
     run = Run(path=path, kind="rigid body", t=t, x=df["pos.x"].to_numpy(), y=df["pos.y"].to_numpy(), yaw=yaw,
               vx=vx, vy=vy, speed=speed, beta=sideslip(np.arctan2(left, forward), speed),
-              yaw_rate=df["omega.z"].to_numpy(), a_lat=lateral_acceleration(t, vx, vy, yaw),
-              body_length=4.0, body_width=1.8, body_front=2.0, tyre_length=0.0, body_force=(fx, fy))
-    run.inputs = [Channel("force x (N)", fx, -symmetric(fx, 1.0), symmetric(fx, 1.0), "{:+.0f}"),
-                  Channel("force y (N)", fy, -symmetric(fy, 1.0), symmetric(fy, 1.0), "{:+.0f}")]
+              yaw_rate=df["omega.z"].to_numpy(), a_lat=accel[1],
+              body_length=4.0, body_width=1.8, body_front=2.0, tyre_length=0.0, body_force=(fx, fy),
+              accel=accel, accel_source="change of velocity")
+    run.inputs = [input_bars.Channel("force x", fx, -symmetric(fx, 1.0), symmetric(fx, 1.0), "{:+.0f} N"),
+                  input_bars.Channel("force y", fy, -symmetric(fy, 1.0), symmetric(fy, 1.0), "{:+.0f} N")]
     if "torque.z" in df.columns:
         tz = df["torque.z"].to_numpy()
-        run.inputs.append(Channel("torque z (N m)", tz, -symmetric(tz, 1.0), symmetric(tz, 1.0), "{:+.0f}"))
+        run.inputs.append(input_bars.Channel("torque z", tz, -symmetric(tz, 1.0), symmetric(tz, 1.0),
+                                             "{:+.0f} N m"))
     return run
 
 
-def force_scale(run):
-    """Metres of arrow per newton, so the largest force in the run is FORCE_ARROW_MAX long."""
-    largest = 0.0
-    for wh in run.wheels:
-        if wh.fx is not None:
-            largest = max(largest, float(np.nanmax(np.hypot(wh.fx, wh.fy))))
-    if run.body_force is not None:
-        largest = max(largest, float(np.nanmax(np.hypot(*run.body_force))))
-    return FORCE_ARROW_MAX / largest if largest > 0 else 0.0
+def force_scale(run, totals=True):
+    """Metres of arrow per newton, one scale for every force arrow: the largest tyre (or applied) force in the run
+    is at most FORCE_ARROW_MAX long and, with `totals` drawn, the largest sum of the tyre forces at most
+    NET_ARROW_MAX."""
+    forces = [(w.fx, w.fy) for w in run.wheels if w.fx is not None]
+    forces += [run.body_force] if run.body_force is not None else []
+    largest = max((float(np.nanmax(np.hypot(*f))) for f in forces), default=0.0)
+    scales = [FORCE_ARROW_MAX / largest] if largest > 0 else []
+    net = float(np.nanmax(np.hypot(*run.net_force))) if totals and run.net_force is not None else 0.0
+    if net > 0:
+        scales.append(NET_ARROW_MAX / net)
+    return min(scales) if scales else 0.0
 
 
 def has_grip(run):
@@ -235,7 +271,9 @@ def grip_use(wheel, i):
 
 
 def wheel_state(run, wheel, i):
-    """'LOCK', 'SPIN', 'SLIDE' or '' for a wheel at row i."""
+    """'AIR', 'LOCK', 'SPIN', 'SLIDE' or '' for a wheel at row i."""
+    if wheel.fz is not None and wheel.fz[i] <= 0:
+        return "AIR"
     if wheel.omega is not None and wheel.omega[i] == 0 and abs(run.speed[i]) > LOCK_SPEED:
         return "LOCK"
     # slip means nothing when nothing rolls: at a standstill (omega R - vx) / max(|vx|, |omega R|) is 0/0 and reads +-1
@@ -269,9 +307,10 @@ def rectangle(cx, cy, length, width, angle):
 
 
 class CarArtist:
-    """The car at one row: body, wheels coloured by grip in use, tyre force arrows, velocity arrow."""
+    """The car at one row: body, wheels coloured by grip in use, tyre force arrows, velocity arrow, and (with
+    `totals`) the sum of the tyre forces at the CG and their yaw moment as an arc around it."""
 
-    def __init__(self, ax, run, scale, cmap, alpha=1.0, labels=False):
+    def __init__(self, ax, run, scale, cmap, alpha=1.0, labels=False, totals=True):
         from matplotlib import patheffects
         from matplotlib.patches import FancyArrowPatch, Polygon
         self.ax, self.run, self.scale, self.cmap = ax, run, scale, cmap
@@ -295,18 +334,31 @@ class CarArtist:
             self.labels.append(ax.text(0, 0, "", fontsize=7, fontweight="bold", color="black", ha="center",
                                        va="center", zorder=9, visible=labels))
         self.velocity = FancyArrowPatch((0, 0), (0, 0), arrowstyle="-|>", mutation_scale=14, lw=2.0,
-                                        color="tab:green", alpha=alpha, zorder=7)
+                                        color=COLOURS["velocity"], alpha=alpha, zorder=7)
         ax.add_patch(self.velocity)
         self.body_force = None
         if run.body_force is not None:
             self.body_force = FancyArrowPatch((0, 0), (0, 0), arrowstyle="-|>", mutation_scale=14, lw=2.4,
                                               color="tab:red", alpha=alpha, zorder=8)
             ax.add_patch(self.body_force)
+        self.net = None
+        if totals and run.net_force is not None:
+            self.net = FancyArrowPatch((0, 0), (0, 0), arrowstyle="-|>", mutation_scale=18, lw=3.2,
+                                       color=COLOURS["net"], alpha=alpha, zorder=9)
+            self.net.set_path_effects(outline)
+            ax.add_patch(self.net)
+        self.arc = self.arc_head = None
+        if totals and run.yaw_moment is not None:
+            self.moment_max = float(np.nanmax(np.abs(run.yaw_moment)))
+            self.arc, = ax.plot([], [], color=COLOURS["moment"], lw=3.0, alpha=alpha, zorder=9,
+                                solid_capstyle="round")
+            self.arc_head = Polygon(np.zeros((3, 2)), closed=True, color=COLOURS["moment"], alpha=alpha, zorder=9)
+            ax.add_patch(self.arc_head)
         self.show_labels = labels
 
     def artists(self):
         a = [self.body, self.nose, self.velocity] + self.tyres + self.forces + self.labels
-        return a + ([self.body_force] if self.body_force is not None else [])
+        return a + [x for x in (self.body_force, self.net, self.arc, self.arc_head) if x is not None]
 
     @staticmethod
     def _arrow(arrow, x0, y0, dx, dy):
@@ -337,7 +389,7 @@ class CarArtist:
             tyre.set_facecolor(self.cmap(use) if use is not None else "0.3")
             state = wheel_state(r, wheel, i)
             tyre.set_hatch("////" if state == "LOCK" else "")
-            tyre.set_edgecolor({"LOCK": "black", "SPIN": "magenta", "SLIDE": "darkorange"}.get(state, "black"))
+            tyre.set_edgecolor(STATE_EDGES.get(state, "black"))
             tyre.set_linewidth(2.2 if state else 1.0)
             if wheel.fx is not None and self.scale > 0:
                 fx, fy = rotate(wheel.fx[i], wheel.fy[i], angle)
@@ -357,6 +409,29 @@ class CarArtist:
         if self.body_force is not None:
             fx, fy = r.body_force
             self._arrow(self.body_force, cx, cy, fx[i] * self.scale, fy[i] * self.scale)
+        if self.net is not None:
+            fx, fy = rotate(r.net_force[0][i], r.net_force[1][i], yaw)
+            self._arrow(self.net, cx, cy, fx * self.scale, fy * self.scale)
+        if self.arc is not None:
+            self._moment(cx, cy, yaw, r.yaw_moment[i])
+
+    def _moment(self, cx, cy, yaw, mz):
+        """An arc around the CG, centred on the heading and running the way the moment turns the car; its length
+        is the moment's share of the largest in the run."""
+        share = abs(mz) / self.moment_max if self.moment_max > 0 else 0.0
+        self.arc.set_visible(share > 0.02)
+        self.arc_head.set_visible(share > 0.02)
+        if share <= 0.02:
+            return
+        sweep = math.radians(YAW_ARC_SWEEP) * share
+        turn = 1.0 if mz > 0 else -1.0
+        angles = yaw + turn * np.linspace(-sweep / 2, sweep / 2, 40)
+        xs, ys = cx + YAW_ARC_RADIUS * np.cos(angles), cy + YAW_ARC_RADIUS * np.sin(angles)
+        self.arc.set_data(xs, ys)
+        end = np.array([xs[-1], ys[-1]])
+        along = turn * np.array([-math.sin(angles[-1]), math.cos(angles[-1])])  # the way the arc runs at its end
+        out = np.array([math.cos(angles[-1]), math.sin(angles[-1])])
+        self.arc_head.set_xy(np.array([end + 0.3 * along, end + 0.14 * out, end - 0.14 * out]))
 
 
 def grip_cmap():
@@ -364,12 +439,14 @@ def grip_cmap():
     return plt.get_cmap("RdYlGn_r")
 
 
-def legend_text(run, scale):
+def legend_text(run, scale, totals=True):
     parts = ["green arrow: direction of travel (its angle to the body is the sideslip)"]
     if scale > 0:
         parts.append(f"force arrows: 1 m = {1 / scale:,.0f} N")
+    if totals and run.net_force is not None:
+        parts.append("orange: sum of the tyre forces; purple arc: their yaw moment")
     if any(w.omega is not None for w in run.wheels):
-        parts.append("hatched: locked, magenta: spinning, orange: sliding")
+        parts.append("tyre edge: hatched locked, magenta spinning, blue sliding")
     return "\n".join(parts)
 
 
@@ -387,20 +464,26 @@ class Dashboard:
         self.playing = False
         self.speed = 1.0
 
-        self.fig = plt.figure(figsize=(15, 8.6))
-        gs = GridSpec(3, 3, figure=self.fig, width_ratios=[1, 1, 0.9], height_ratios=[1, 1, 0.75],
-                      left=0.05, right=0.96, top=0.92, bottom=0.13, wspace=0.45, hspace=0.38)
+        self.fig = plt.figure(figsize=(15, 9))
+        gs = GridSpec(3, 4, figure=self.fig, width_ratios=[1, 1, 0.5, 0.5], height_ratios=[1, 1, 1],
+                      left=0.05, right=0.97, top=0.92, bottom=0.12, wspace=0.4, hspace=0.42)
         self.ax_main = self.fig.add_subplot(gs[0:2, 0:2])
         self.ax_map = self.fig.add_subplot(gs[0, 2])
-        self.ax_wheels = self.fig.add_subplot(gs[1, 2])
+        self.ax_gg = self.fig.add_subplot(gs[0, 3])
+        self.ax_wheels = self.fig.add_subplot(gs[1, 2:4])
         self.ax_time = self.fig.add_subplot(gs[2, 0:2])
-        self.ax_inputs = self.fig.add_subplot(gs[2, 2])
+        # the pedals as vertical bars on the left, the steer as a horizontal bar on the right
+        inputs = gs[2, 2:4].subgridspec(3, 2, width_ratios=[1, 1.1], height_ratios=[1, 0.7, 1], wspace=0.35,
+                                        hspace=0.0)
+        self.ax_pedals = self.fig.add_subplot(inputs[:, 0])
+        self.ax_steer = self.fig.add_subplot(inputs[1, 1])
 
         self._setup_main()
         self._setup_map()
+        self._setup_gg()
         self._setup_wheels()
         self._setup_time()
-        self._setup_inputs()
+        self.input_bars = input_bars.InputBars(self.ax_pedals, self.ax_steer, run.steer_input, run.inputs)
         self.title = self.fig.suptitle("", fontsize=11, x=0.05, ha="left")
 
     # --- panels -------------------------------------------------------------------------------------------
@@ -421,9 +504,10 @@ class Dashboard:
                 bbox=dict(facecolor="white", alpha=0.8, edgecolor="0.8"), zorder=20)
         if has_grip(r):
             sm = matplotlib.cm.ScalarMappable(cmap=self.cmap, norm=matplotlib.colors.Normalize(0, 100))
-            cax = ax.inset_axes([0.70, 0.04, 0.27, 0.025])
+            cax = ax.inset_axes([0.70, 0.05, 0.27, 0.025])
             bar = self.fig.colorbar(sm, cax=cax, orientation="horizontal")
             bar.set_label("tyre grip in use (%)", fontsize=8)
+            cax.xaxis.set_label_position("top")  # inside the panel, clear of its x axis
             bar.ax.tick_params(labelsize=7)
         if not self.follow:
             pad = r.body_length + 2
@@ -446,17 +530,39 @@ class Dashboard:
         ax.tick_params(labelsize=7)
         ax.grid(True, alpha=0.3)
 
+    def _setup_gg(self):
+        """The car's acceleration in its own axes, in g: forward up and left on the left, as seen from above with
+        the car pointing up. A dot on the dashed 1 g circle is the most a mu = 1 car can do on flat ground."""
+        r, ax = self.run, self.ax_gg
+        self.gg = (r.accel[1] / GRAVITY, r.accel[0] / GRAVITY)  # (across, along)
+        theta = np.linspace(0, 2 * np.pi, 97)
+        for g, style in ((0.5, ":"), (1.0, "--")):
+            ax.plot(g * np.cos(theta), g * np.sin(theta), color="0.6", lw=0.7, ls=style, zorder=0)
+        ax.axhline(0, color="0.82", lw=0.6, zorder=0)
+        ax.axvline(0, color="0.82", lw=0.6, zorder=0)
+        ax.plot(*self.gg, color="0.85", lw=0.8, zorder=1)
+        self.gg_trail, = ax.plot([], [], color="tab:blue", lw=1.4, zorder=2)
+        self.gg_dot, = ax.plot([], [], "o", color="tab:red", ms=6, zorder=3)
+        reach = 1.1 * max(1.0, float(np.nanmax(np.hypot(*self.gg))))
+        ax.set_xlim(reach, -reach)  # left (positive) on the left
+        ax.set_ylim(-reach, reach)
+        ax.set_aspect("equal")
+        ax.set_title("g-g: acceleration (g)", fontsize=9)
+        ax.set_xlabel(f"left +   (from the {r.accel_source})", fontsize=7)
+        ax.set_ylabel("forward +", fontsize=7)
+        ax.tick_params(labelsize=7)
+
     def _setup_wheels(self):
         r, ax = self.run, self.ax_wheels
         self.bars, self.bar_text = [], []
-        loaded = [w for w in r.wheels if w.fz is not None]
-        if not loaded:
+        self.loaded = [w for w in r.wheels if w.fz is not None]
+        if not self.loaded:
             ax.set_axis_off()
             ax.text(0.5, 0.5, f"{r.kind}:\nno tyre loads in this file", ha="center", va="center",
                     transform=ax.transAxes, fontsize=9, color="0.4")
             return
-        top = max(float(np.nanmax(w.fz)) for w in loaded) / 1000 * 1.25
-        labels = [w.label for w in loaded]
+        top = max(float(np.nanmax(w.fz)) for w in self.loaded) / 1000 * 1.25
+        labels = [w.label for w in self.loaded]
         self.bars = list(ax.bar(labels, [0] * len(labels), color="0.6", edgecolor="black"))
         self.bar_text = [ax.text(k, 0, "", ha="center", va="bottom", fontsize=8) for k in range(len(labels))]
         ax.set_ylim(0, top)
@@ -464,7 +570,6 @@ class Dashboard:
         ax.set_title("load per wheel, colour = grip in use", fontsize=9)
         ax.tick_params(labelsize=8)
         ax.grid(True, axis="y", alpha=0.3)
-        self.loaded = loaded
 
     def _setup_time(self):
         r, ax = self.run, self.ax_time
@@ -482,19 +587,6 @@ class Dashboard:
         ax.legend(lines, [l.get_label() for l in lines], fontsize=7, loc="upper left", ncol=3)
         self.cursor = ax.axvline(r.t[0], color="tab:red", lw=1)
 
-    def _setup_inputs(self):
-        r, ax = self.run, self.ax_inputs
-        names = [c.name for c in r.inputs]
-        self.input_bars = list(ax.barh(names, [0] * len(names), left=0, color="tab:blue", height=0.6))
-        self.input_text = [ax.text(1.02, k, "", va="center", fontsize=8) for k in range(len(names))]
-        ax.set_xlim(-1, 1)
-        ax.axvline(0, color="black", lw=0.8)
-        ax.invert_yaxis()
-        ax.set_title("driver inputs (bar: share of its range)", fontsize=9)
-        ax.tick_params(labelsize=8)
-        ax.set_xticks([-1, 0, 1])
-        ax.grid(True, axis="x", alpha=0.3)
-
     # --- one frame ----------------------------------------------------------------------------------------
 
     def draw(self, i):
@@ -511,8 +603,11 @@ class Dashboard:
             self.map_window.set_height(2 * v)
         self.map_dot.set_data([r.x[i]], [r.y[i]])
         self.cursor.set_xdata([r.t[i], r.t[i]])
+        j = row_at(r, r.t[i] - GG_TRAIL)
+        self.gg_trail.set_data(self.gg[0][j:i + 1], self.gg[1][j:i + 1])
+        self.gg_dot.set_data([self.gg[0][i]], [self.gg[1][i]])
 
-        for k, w in enumerate(getattr(self, "loaded", [])):
+        for k, w in enumerate(self.loaded):
             fz = w.fz[i] / 1000
             self.bars[k].set_height(fz)
             use = grip_use(w, i)
@@ -521,15 +616,7 @@ class Dashboard:
             text = f"{fz:.2f} kN" + (f"\n{100 * use:.0f}%" if use is not None else "") + (f"\n{state}" if state else "")
             self.bar_text[k].set_position((k, fz))
             self.bar_text[k].set_text(text)
-
-        for bar, text, c in zip(self.input_bars, self.input_text, r.inputs):
-            v = c.values[i]
-            if c.low < 0:
-                share = v / max(abs(c.low), abs(c.high))
-            else:
-                share = (v - c.low) / (c.high - c.low) if c.high > c.low else 0
-            bar.set_width(float(np.clip(share, -1, 1)))
-            text.set_text(c.fmt.format(v))
+        self.input_bars.update(i)
 
         beta_text = "—" if np.isnan(r.beta[i]) else f"{math.degrees(r.beta[i]):+.1f}°"
         self.title.set_text(f"{r.path}   [{r.kind}]   t = {r.t[i]:.2f} s   speed {r.speed[i]:.1f} m/s   "
@@ -613,13 +700,13 @@ def draw_static(plt, run, every):
     ax.add_collection(path)
     fig.colorbar(path, ax=ax, orientation="horizontal", fraction=0.04, pad=0.09, aspect=50).set_label("path colour: speed (m/s)")
 
-    scale = force_scale(run)
+    scale = force_scale(run, totals=False)
     cmap = grip_cmap()
     duration = run.t[-1] - run.t[0]
     every = every if every else max(round(duration / 10, 1), 0.1)
     times = np.arange(run.t[0], run.t[-1] + 1e-9, every)
     for k, time in enumerate(times):
-        car = CarArtist(ax, run, scale, cmap, alpha=0.9)
+        car = CarArtist(ax, run, scale, cmap, alpha=0.9, totals=False)
         car.update(row_at(run, time))
         i = row_at(run, time)
         ax.annotate(f"{run.t[i]:.1f} s", (run.x[i], run.y[i]), xytext=(0, -14), textcoords="offset points",
@@ -632,7 +719,7 @@ def draw_static(plt, run, every):
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
     ax.set_title(f"{run.path}  [{run.kind}]: the car every {every:g} s", fontsize=11)
-    ax.text(0.01, 0.01, legend_text(run, scale), transform=ax.transAxes, fontsize=8, va="bottom",
+    ax.text(0.01, 0.01, legend_text(run, scale, totals=False), transform=ax.transAxes, fontsize=8, va="bottom",
             bbox=dict(facecolor="white", alpha=0.8, edgecolor="0.8"), zorder=20)
     if has_grip(run):
         sm = matplotlib.cm.ScalarMappable(cmap=cmap, norm=matplotlib.colors.Normalize(0, 100))
