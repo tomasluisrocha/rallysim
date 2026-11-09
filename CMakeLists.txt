@@ -60,6 +60,8 @@ rallysim_test(tyre_gate)
 rallysim_test(finite)
 rallysim_test(energy)
 rallysim_test(registry)
+rallysim_test(ini)
+target_compile_definitions(test_ini PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}") # to read scenarios/*.ini
 
 # The command line: --set reaches a four-wheel car; a bad name, a missing value or a model without settings fails.
 add_test(NAME cli_set COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_set.csv
