@@ -190,7 +190,9 @@ After a physics change, a residual that grows with time and does not halve when 
 `rallysim <scenario> [path]` writes to `out/runs/<scenario>.csv` (the rig to `out/rig/`) unless given a path;
 `rallysim list` prints the scenario names. A four-wheel scenario's car can be changed without rebuilding:
 `rallysim fw_hairpin --set spring_front=60000 --set mu_rear=0.8`; `rallysim params [scenario]` lists the names with
-their values (`vehicle/four_wheel_registry.hpp`), and line 1 of the file records the values the run used.
+their values (`vehicle/four_wheel_registry.hpp`), and line 1 of the file records the values the run used. A value
+may carry a unit of the same kind, converted to the parameter's own: `--set spring_front=50kN/m`,
+`--set brake_bias_front=62%`, `--set max_steer=30deg`.
 
 ## A typical check after a physics change
 

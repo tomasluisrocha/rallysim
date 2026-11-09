@@ -1,9 +1,8 @@
 #pragma once
-#include <cmath>
-#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "core/ini_values.hpp"
 #include "vehicle/four_wheel.hpp"
 
 namespace rallysim
@@ -74,26 +73,22 @@ namespace rallysim
         return nullptr;
     }
 
-    // Sets the parameter `name` to `value`, given as text (from the command line or a file). Throws
-    // std::invalid_argument for an unknown name, or a value that is not one whole finite number ("6e4abc" is refused,
-    // not read as 60000).
+    // Sets the parameter `name` to `value`, given as text (from the command line or a file), read as a scenario-file
+    // number: optionally with a unit of the same kind, converted to the parameter's own ("50 kN/m", "62 %").
+    // Throws std::invalid_argument for an unknown name, or a value that is not one finite number with such a unit
+    // ("6e4abc" is refused, not read as 60000).
     inline void apply(four_wheel_params &p, const std::string &name, const std::string &value)
     {
         const param_entry *e = find_param(name);
         if (!e)
             throw std::invalid_argument("unknown parameter: " + name);
-        Real v = 0;
-        std::size_t used = 0;
         try
         {
-            v = std::stod(value, &used);
+            e->field(p) = parse_number(value, e->unit);
         }
-        catch (const std::exception &)
+        catch (const std::invalid_argument &err)
         {
-            used = 0;
+            throw std::invalid_argument("parameter " + name + ": " + err.what());
         }
-        if (used == 0 || used != value.size() || !std::isfinite(v))
-            throw std::invalid_argument("parameter " + name + ": not a finite number: '" + value + "'");
-        e->field(p) = v;
     }
 }

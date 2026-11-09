@@ -61,6 +61,7 @@ rallysim_test(finite)
 rallysim_test(energy)
 rallysim_test(registry)
 rallysim_test(ini)
+rallysim_test(ini_values)
 target_compile_definitions(test_ini PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}") # to read scenarios/*.ini
 
 # The command line: --set reaches a four-wheel car; a bad name, a missing value or a model without settings fails.
