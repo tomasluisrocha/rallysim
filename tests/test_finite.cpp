@@ -5,7 +5,7 @@
 #include <string>
 #include "core/finite.hpp"
 #include "core/telemetry.hpp"
-#include "scenarios/four_wheel_circle.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "scenarios/run_bicycle.hpp"
 #include "tests/check.hpp"
 
@@ -89,7 +89,7 @@ int main()
     // first step after t = 0 (the script blends towards a NaN key), so the state is NaN after step 1 and the
     // runner stops there, not seconds later
     {
-        four_wheel_run r = four_wheel_circle();
+        four_wheel_run r = four_wheel_scenario("fw_circle");
         r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{nan_value, 0, 0, 0}}};
         const std::string e = error_of([&] { run(r); });
         std::printf("NaN steer: \"%s\"\n", e.c_str());

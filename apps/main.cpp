@@ -13,9 +13,6 @@
 #include "scenarios/bicycle_lane_change.hpp"
 #include "scenarios/bicycle_slalom.hpp"
 #include "scenarios/driven_body.hpp"
-#include "scenarios/four_wheel_circle.hpp"
-#include "scenarios/four_wheel_driving.hpp"
-#include "scenarios/four_wheel_lane_change.hpp"
 #include "scenarios/single_track_circle.hpp"
 #include "scenarios/single_track_lane_change.hpp"
 #include "scenarios/thrown_body.hpp"
@@ -63,14 +60,13 @@ static bool write_four_wheel(const four_wheel_run &scenario, const std::string &
 
 // Every scenario the app can write, with the folder under out/ its file goes to when no path is given: runs (one
 // telemetry file per scenario) go to out/runs, the tyre rig (force curves, not a run) to out/rig. See docs/tools.md.
-// A four-wheel scenario gives its run unwritten (four_wheel), so --set and `params` can reach its car; the others
-// write themselves (write) and take no settings.
+// These are the earlier models and the tyre rig; the four-wheel scenarios are files, scenarios/<name>.ini
+// (scenario_files()).
 struct scenario
 {
     const char *name;
     const char *folder;
-    std::function<bool(const std::string &path)> write; // empty for a four-wheel scenario
-    four_wheel_run (*four_wheel)() = nullptr;            // empty for the others
+    std::function<bool(const std::string &path)> write;
 };
 
 static const std::vector<scenario> &scenarios()
@@ -83,12 +79,6 @@ static const std::vector<scenario> &scenarios()
         {"slalom", "runs", [](const std::string &p) { return write_bicycle(bicycle_slalom(), p); }},
         {"st_circle", "runs", [](const std::string &p) { return write_single_track(single_track_circle(), p); }},
         {"st_lane", "runs", [](const std::string &p) { return write_single_track(single_track_lane_change(), p); }},
-        {"fw_circle", "runs", nullptr, four_wheel_circle},
-        {"fw_lane", "runs", nullptr, four_wheel_lane_change},
-        {"fw_brake", "runs", nullptr, four_wheel_brake},
-        {"fw_launch", "runs", nullptr, four_wheel_launch},
-        {"fw_handbrake", "runs", nullptr, four_wheel_handbrake},
-        {"fw_hairpin", "runs", nullptr, four_wheel_hairpin},
         {"tyre_rig", "rig", [](const std::string &p) { return write_tyre_rig(p); }},
     };
     return list;
@@ -101,11 +91,33 @@ static const scenario *find_scenario(const std::string &name)
     return found == scenarios().end() ? nullptr : &*found;
 }
 
+// The names of the scenario files in scenarios/ (fw_brake for scenarios/fw_brake.ini), sorted.
+static std::vector<std::string> scenario_files()
+{
+    std::vector<std::string> names;
+    std::error_code ec;
+    for (const auto &entry : std::filesystem::directory_iterator(RALLYSIM_SCENARIO_DIR, ec))
+        if (entry.path().extension() == ".ini")
+            names.push_back(entry.path().stem().string());
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+// The scenario file a name means: a path ending in .ini as given, or a bare name with a file in scenarios/; empty
+// when it is neither (a built-in scenario, or nothing).
+static std::string scenario_file_for(const std::string &name)
+{
+    if (name.size() > 4 && name.compare(name.size() - 4, 4, ".ini") == 0)
+        return name;
+    std::error_code ec;
+    return std::filesystem::exists(scenario_path(name), ec) ? scenario_path(name) : std::string();
+}
+
 static void usage()
 {
     std::fprintf(stderr,
                  "usage: rallysim <scenario | file.ini> [output.csv] [--set name=value]...\n"
-                 "       rallysim list                         the built-in scenario names, one per line\n"
+                 "       rallysim list                         every scenario name, built-in and scenarios/*.ini\n"
                  "       rallysim params [scenario | file.ini] what --set takes, with the car's values\n"
                  "  output defaults to out/runs/<scenario or file name>.csv (out/rig/ for tyre_rig)\n"
                  "  --set changes a four-wheel car: --set spring_front=50kN/m; in a file, also any key of\n"
@@ -113,6 +125,8 @@ static void usage()
                  "  scenarios:");
     for (const scenario &s : scenarios())
         std::fprintf(stderr, " %s", s.name);
+    for (const std::string &n : scenario_files())
+        std::fprintf(stderr, " %s", n.c_str());
     std::fprintf(stderr, "\n");
 }
 
@@ -124,29 +138,19 @@ static void print_params(four_wheel_params p)
         std::printf("%-22s %14g  %s\n", e.name, e.field(p), e.unit);
 }
 
-static bool is_scenario_file(const std::string &name)
-{
-    return name.size() > 4 && name.compare(name.size() - 4, 4, ".ini") == 0;
-}
-
-// The four-wheel run of a scenario file or a built-in scenario, with the settings applied. Prints why and returns
+// The four-wheel run of a scenario file (see scenario_file_for), with the settings applied. Prints why and returns
 // false if it cannot be built (a bad file, a bad setting, an unknown name).
 static bool four_wheel_of(const std::string &name, const settings &set, four_wheel_run &out)
 {
     try
     {
-        if (is_scenario_file(name))
+        const std::string file = scenario_file_for(name);
+        if (file.empty())
         {
-            out = load_scenario_file(name, set);
-            return true;
-        }
-        const scenario *s = find_scenario(name);
-        if (!s || !s->four_wheel)
-        {
-            std::fprintf(stderr, "rallysim: '%s' is not a four-wheel scenario or an .ini file\n", name.c_str());
+            std::fprintf(stderr, "rallysim: '%s' is not a scenario file or a name in scenarios/\n", name.c_str());
             return false;
         }
-        out = with_settings(s->four_wheel(), set);
+        out = load_scenario_file(file, set);
         return true;
     }
     catch (const ini_error &e)
@@ -167,6 +171,8 @@ int main(int argc, char **argv)
     {
         for (const scenario &s : scenarios())
             std::printf("%s\n", s.name);
+        for (const std::string &n : scenario_files())
+            std::printf("%s\n", n.c_str());
         return 0;
     }
     if (name == "params")
@@ -183,8 +189,8 @@ int main(int argc, char **argv)
         print_params(r.params);
         return 0;
     }
-    const bool from_file = is_scenario_file(name);
-    const scenario *found = from_file ? nullptr : find_scenario(name);
+    const scenario *found = find_scenario(name); // a built-in scenario first, then a file
+    const bool from_file = !found && !scenario_file_for(name).empty();
     if (!from_file && !found)
     {
         usage();
@@ -226,7 +232,7 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    const bool four_wheel = from_file || found->four_wheel;
+    const bool four_wheel = from_file; // every four-wheel scenario is a file
     if (!set.empty() && !four_wheel)
     {
         std::fprintf(stderr, "rallysim: --set only works on the four-wheel scenarios, not %s\n", name.c_str());

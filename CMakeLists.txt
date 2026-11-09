@@ -20,6 +20,8 @@ endif()
 # Header-only core library.
 add_library(rallysim_core INTERFACE)
 target_include_directories(rallysim_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+# The scenario files (scenarios/*.ini), for rallysim <name> and four_wheel_scenario() in the tests.
+target_compile_definitions(rallysim_core INTERFACE RALLYSIM_SCENARIO_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scenarios")
 
 add_executable(rallysim apps/main.cpp)
 target_link_libraries(rallysim PRIVATE rallysim_core)

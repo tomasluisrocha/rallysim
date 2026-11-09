@@ -33,6 +33,13 @@ namespace rallysim
         std::vector<keyframe<T>> keys;
     };
 
+    // A script that is `value` at all times: one key at t = 0 (sample() holds it ever after).
+    template <class T>
+    keyframe_script<T> constant_script(const T &value)
+    {
+        return {{{0, value}}};
+    }
+
     template <class T>
     bool is_valid(const keyframe_script<T> &script)
     {

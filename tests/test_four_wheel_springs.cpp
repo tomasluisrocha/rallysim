@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/four_wheel_lane_change.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;
@@ -16,7 +16,7 @@ static four_wheel_run steady_turn(const four_wheel_params &p, Real speed, Real s
     four_wheel_run r;
     r.params = p;
     r.initial = four_wheel_initial(p, speed);
-    r.hold_speed = speed;
+    r.hold_speed = constant_script<Real>(speed);
     r.script.keys = {{0.0, four_wheel_input{steer, 0.0, 0.0, 0.0}}};
     r.steps = steps;
     return r;
@@ -190,7 +190,7 @@ int main()
         four_wheel_run r;
         r.params = q;
         r.initial = four_wheel_initial(q, 18.0);
-        r.hold_speed = 18.0;
+        r.hold_speed = constant_script<Real>(18.0);
         r.steps = 6000;
         r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{}},
                          {1.5, four_wheel_input{0.09, 0.0, 0.0, 0.0}}, {6.0, four_wheel_input{0.09, 0.0, 0.0, 0.0}}};
@@ -219,7 +219,7 @@ int main()
 
     // a right run mirrors a left run, roll included; the same run gives the same bits
     {
-        four_wheel_run left = four_wheel_lane_change();
+        four_wheel_run left = four_wheel_scenario("fw_lane");
         four_wheel_run right = left;
         for (auto &key : right.script.keys)
             key.value.steer = -key.value.steer;

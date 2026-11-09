@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/four_wheel_driving.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;
@@ -181,7 +181,7 @@ int main()
     // the launch: the wheels spin up, but only until the engine's power runs out. Without the power limit they
     // sped up for ever (a fixed torque at any wheel speed); now the spin peaks and then falls as the car gains speed.
     {
-        const four_wheel_run r = four_wheel_launch();
+        const four_wheel_run r = four_wheel_scenario("fw_launch");
         four_wheel_state s = r.initial;
         Real early = 0, late = 0; // largest wheel surface speed ahead of the car, before and after 2.5 s
         for (long i = 0; i < r.steps; ++i)
@@ -243,7 +243,7 @@ int main()
     // and the car rotates faster. Checked until just after the release (the scripted driver does not countersteer,
     // so the car goes on to spin; the handbrake scenario uses a gentler pull and recovers).
     {
-        four_wheel_run with = four_wheel_handbrake();
+        four_wheel_run with = four_wheel_scenario("fw_handbrake");
         with.script.keys = {{0.0, four_wheel_input{}},
                             {1.0, four_wheel_input{}},
                             {1.3, four_wheel_input{0.05, 0.0, 0.0, 0.0}},
@@ -283,7 +283,7 @@ int main()
 
     // the handbrake scenario: the rear steps out a little and the car recovers, still going forward
     {
-        const four_wheel_run r = four_wheel_handbrake();
+        const four_wheel_run r = four_wheel_scenario("fw_handbrake");
         four_wheel_state s = r.initial;
         Real peak_beta = 0;
         for (long i = 0; i < r.steps; ++i)
@@ -382,7 +382,7 @@ int main()
     // (0.73 turned 83 degrees, 0.75 spun), so a driver that reacts is what the scenario is about.
     for (tyre_curve curve : {tyre_curve::tmeasy, tyre_curve::peak_slide})
     {
-        four_wheel_run r = four_wheel_hairpin();
+        four_wheel_run r = four_wheel_scenario("fw_hairpin");
         r.params.set_tyre_curve(curve);
         r.initial = four_wheel_initial(r.params, 8.0);
         four_wheel_state s = r.initial;
@@ -414,7 +414,7 @@ int main()
     {
         four_wheel_run r;
         r.initial = four_wheel_initial(r.params, 20.0);
-        r.hold_speed = 15.0;
+        r.hold_speed = constant_script<Real>(15.0);
         r.script.keys = {{0.0, four_wheel_input{}}};
         r.steps = 5000;
         check_true("speed hold: brakes at first", driver_input(r, r.initial, 0.0).brake > 0 && driver_input(r, r.initial, 0.0).throttle == 0);

@@ -1,10 +1,10 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <sstream>
 #include <string>
 #include <vector>
 #include "check.hpp"
-#include "scenarios/four_wheel_driving.hpp"
 #include "scenarios/scenario_file.hpp"
 
 using namespace rallysim;
@@ -58,7 +58,7 @@ namespace
 
 int main()
 {
-    // ---- a file gives the same run as the built-in scenario -------------------------------------------------
+    // ---- a file gives the same run as the same scenario built in code ----------------------------------------
     {
         four_wheel_run file = load("[scenario]\n"
                                          "name = fw_brake\n"
@@ -68,7 +68,9 @@ int main()
                                          "duration = 5 s\n"
                                          "[start]\n"
                                          "speed = 90 km/h\n");
-        four_wheel_run built = four_wheel_brake();
+        four_wheel_run built; // fw_brake built in code: the default car at 25 m/s for 5 s
+        built.initial = four_wheel_initial(built.params, 25.0);
+        built.steps = 5000;
         check_true("same: dt and steps", file.dt == built.dt && file.steps == built.steps);
         bool params_same = true;
         for (const param_entry &e : four_wheel_registry())
@@ -172,7 +174,6 @@ int main()
     // ---- each error, on its line -------------------------------------------------------------------------------
     check_one_error("error: unknown section", kMinimal + "[track]\n", "t.ini:3:", "unknown section [track]");
     check_one_error("error: unknown key", kMinimal + "[start]\nsped = 2\n", "t.ini:4:", "sped: unknown key in [start]");
-    check_one_error("error: [driver] not yet", kMinimal + "[driver]\nsteer = 0\n", "t.ini:3:", "[driver] is not supported yet");
     check_one_error("error: speed and velocity", kMinimal + "[start]\nspeed = 1\nvelocity = (1, 0, 0)\n", "t.ini:4:",
                     "give speed or velocity, not both");
     check_one_error("error: tyre_curve and one axle", kMinimal + "[car]\ntyre_curve = linear\ntyre_curve_rear = tmeasy\n",
@@ -207,21 +208,93 @@ int main()
         check_one_error("error: a malformed line", "[run]\nduration 5\n", "t.ini:2:", "expected [section] or key = value");
     }
 
-    // ---- the showcase file: every line reads; only [driver] is refused, until it is supported -----------------
+    // ---- [driver] ---------------------------------------------------------------------------------------------
     {
-        const std::vector<std::string> e = [] {
-            try
-            {
-                load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {});
-            }
-            catch (const ini_error &x)
-            {
-                return x.messages;
-            }
-            return std::vector<std::string>{};
-        }();
-        check_true("showcase: refused only for [driver]",
-                   e.size() == 1 && e[0].find("[driver] is not supported yet") != std::string::npos);
+        // the four timelines merged: the script gives each input exactly as its own timeline does, at any time
+        const four_wheel_run r = load(kMinimal + "[driver]\n"
+                                                 "steer = 0 @ 0, 0 @ 2.6 s, 18 deg @ 3.0 s\n"
+                                                 "throttle = 0.2\n"
+                                                 "brake = 0 @ 1 s, 1 @ 1.05 s\n"
+                                                 "handbrake = 0 @ 3.2 s, 100 % @ 3.25 s, 100 % @ 3.55 s, 0 @ 3.6 s\n");
+        const keyframe_script<Real> steer = parse_timeline("0 @ 0, 0 @ 2.6 s, 18 deg @ 3.0 s", "rad");
+        const keyframe_script<Real> brake = parse_timeline("0 @ 1 s, 1 @ 1.05 s", "-");
+        const keyframe_script<Real> handbrake = parse_timeline("0 @ 3.2 s, 1 @ 3.25 s, 1 @ 3.55 s, 0 @ 3.6 s", "-");
+        Real worst = 0;
+        for (int k = 0; k <= 5000; ++k)
+        {
+            const Real t = k * 0.001;
+            const four_wheel_input in = sample(r.script, t);
+            worst = std::max({worst, std::fabs(in.steer - sample(steer, t)), std::fabs(in.throttle - 0.2),
+                              std::fabs(in.brake - sample(brake, t)), std::fabs(in.handbrake - sample(handbrake, t))});
+        }
+        check_near("driver: the merged script is every timeline, at every ms", worst, 0, 1e-15);
+    }
+    {
+        // keys at the union of the point times: 0, 1, 1.05, 2.6, 3.0, 3.2, 3.25, 3.55, 3.6
+        const four_wheel_run r = load(kMinimal + "[driver]\nsteer = 0 @ 0, 0 @ 2.6 s, 18 deg @ 3.0 s\n"
+                                                 "brake = 0 @ 1 s, 1 @ 1.05 s\n"
+                                                 "handbrake = 0 @ 3.2 s, 1 @ 3.25 s, 1 @ 3.55 s, 0 @ 3.6 s\n");
+        check_true("driver: keys at the union of the times", r.script.keys.size() == 9);
+    }
+    {
+        const four_wheel_run r = load(kMinimal + "[driver]\nhold_speed = 50 km/h @ 0, 30 km/h @ 2.5 s\n"
+                                                 "hold_heading = 210 deg\nhold_heading_from = 3.6 s\n"
+                                                 "heading_gain = 2\nmax_yaw_rate = 70 deg/s\nyaw_rate_gain = 0.3\n");
+        check_near("driver: hold_speed is a timeline", sample(r.hold_speed, 1.25), 40 / 3.6, 1e-12);
+        check_near("driver: hold_heading", r.hold_heading, 210 * (kPi / 180), 0);
+        check_near("driver: hold_heading_from", r.hold_heading_from, 3.6, 0);
+        check_near("driver: heading_gain", r.heading_hold.heading_gain, 2, 0);
+        check_near("driver: max_yaw_rate", r.heading_hold.max_yaw_rate, 70 * (kPi / 180), 0);
+        check_near("driver: yaw_rate_gain", r.heading_hold.yaw_rate_gain, 0.3, 0);
+        check_true("driver: no hold_speed means off", load(kMinimal).hold_speed.keys.empty());
+    }
+    {
+        // the hairpin written with points only where an input changes drives as scenarios/fw_hairpin.ini, which
+        // repeats every point to match the old built-in script key for key (so the last bits may differ: that script
+        // has a key at 8 s that the file does not need)
+        four_wheel_run file = load("[run]\nduration = 8 s\n"
+                                   "[start]\nspeed = 8\n"
+                                   "[car]\ndrive_split_front = 0.3\n"
+                                   "[driver]\n"
+                                   "steer = 0 @ 1 s, 0.4 @ 1.2 s\n"
+                                   "handbrake = 0 @ 1.3 s, 1 @ 1.35 s, 1 @ 1.6 s, 0 @ 1.65 s\n"
+                                   "hold_speed = 8\n"
+                                   "hold_heading = 3.141592653589793\n"
+                                   "hold_heading_from = 1.6 s\n");
+        const four_wheel_run built = four_wheel_scenario("fw_hairpin");
+        check_true("hairpin: a car with no new fit keeps the default tyre tables",
+                   same_tables(file.params.front_tyre, built.params.front_tyre));
+        const four_wheel_state a = run(file), b = run(built);
+        check_near("hairpin: same end (x)", a.body.pos.x, b.body.pos.x, 1e-9);
+        check_near("hairpin: same end (y)", a.body.pos.y, b.body.pos.y, 1e-9);
+        check_near("hairpin: same heading", yaw_angle(a.body.q), yaw_angle(b.body.q), 1e-9);
+    }
+
+    check_one_error("driver: a pedal above 1", kMinimal + "[driver]\nthrottle = 0 @ 0, 1.2 @ 1 s\n", "t.ini:4:",
+                    "throttle: 1.2 at 1 s is outside 0 to 1");
+    check_one_error("driver: a pedal below 0", kMinimal + "[driver]\nbrake = -0.1\n", "t.ini:4:", "outside 0 to 1");
+    check_one_error("driver: hold_speed with throttle", kMinimal + "[driver]\nthrottle = 0.5\nhold_speed = 10\n",
+                    "t.ini:5:", "hold_speed: the speed controller works the throttle and brake");
+    check_one_error("driver: hold_speed below 0", kMinimal + "[driver]\nhold_speed = -1\n", "t.ini:4:", "below 0");
+    check_one_error("driver: hold_heading alone", kMinimal + "[driver]\nhold_heading = 1\n", "t.ini:4:",
+                    "needs hold_heading_from");
+    check_one_error("driver: hold_heading_from alone", kMinimal + "[driver]\nhold_heading_from = 1\n", "t.ini:4:",
+                    "needs hold_heading");
+    check_one_error("driver: hold_heading_from before 0", kMinimal + "[driver]\nhold_heading = 1\nhold_heading_from = -1\n",
+                    "t.ini:5:", "must be 0 or later");
+    check_one_error("driver: a gain not above 0", kMinimal + "[driver]\nmax_yaw_rate = 0\n", "t.ini:4:", "must be above 0");
+    check_one_error("driver: a bad timeline", kMinimal + "[driver]\nsteer = 0 @ 1, 1 @ 0.5\n", "t.ini:4:",
+                    "steer: point 2: time 0.5 s is not after 1 s");
+    check_one_error("driver: unknown key", kMinimal + "[driver]\nclutch = 1\n", "t.ini:4:", "clutch: unknown key in [driver]");
+
+    // ---- the showcase file loads and runs to the end --------------------------------------------------------
+    {
+        const four_wheel_run r = load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {});
+        check_true("showcase: 20000 steps of 0.5 ms", r.steps == 20000 && r.dt == 0.0005);
+        check_true("showcase: starts in the air", r.initial.body.pos.z > r.params.cg_height + 0.2);
+        check_true("showcase: a speed timeline", r.hold_speed.keys.size() == 5);
+        const four_wheel_state end = run(r); // stops with an exception if the state stops being finite
+        check_true("showcase: finishes on the ground", std::fabs(end.body.pos.z - r.params.cg_height) < 0.1);
     }
 
     return finish("scenario_file");

@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 #include "check.hpp"
-#include "scenarios/four_wheel_driving.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "vehicle/four_wheel_registry.hpp"
 #include "vehicle/four_wheel_telemetry.hpp"
 
@@ -188,7 +188,7 @@ int main()
 
     // ---- with_settings: the scenario's start state follows the new car -------------------------------------
     {
-        const four_wheel_run plain = four_wheel_brake();
+        const four_wheel_run plain = four_wheel_scenario("fw_brake");
         const four_wheel_run same = with_settings(plain, {});
         check_true("with_settings: no settings, no change", same.initial.body.pos.z == plain.initial.body.pos.z &&
                                                                same.initial.wheels[FL].omega == plain.initial.wheels[FL].omega);

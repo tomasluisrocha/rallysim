@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
-#include "scenarios/four_wheel_lane_change.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "scenarios/single_track_lane_change.hpp"
 #include "tests/check.hpp"
 #include "tests/single_track_helpers.hpp"
@@ -39,7 +39,7 @@ static four_wheel_run four_wheel_constant_steer(const four_wheel_params &p, Real
     four_wheel_run r;
     r.params = p;
     r.initial = four_wheel_initial(p, speed);
-    r.hold_speed = speed;
+    r.hold_speed = constant_script<Real>(speed);
     r.script.keys = {{0.0, four_wheel_input{steer, 0.0}}};
     r.steps = steps;
     return r;
@@ -138,7 +138,7 @@ int main()
     // The lane change, compared over the whole run: the four-wheel car follows the single-track's path and
     // yaw rate closely (it lags a little, because its tyres build force over a relaxation length)
     {
-        four_wheel_run a = four_wheel_lane_change();
+        four_wheel_run a = four_wheel_scenario("fw_lane");
         single_track_run b = single_track_lane_change();
         b.params = q;
         four_wheel_state sa = a.initial;

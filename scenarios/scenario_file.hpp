@@ -22,7 +22,10 @@ namespace rallysim
     //   [run]       model (four_wheel), duration (s, required), dt (s, default 0.001)
     //   [start]     position (m), heading, pitch, roll (rad), speed (m/s) or velocity (m/s), angular_velocity (rad/s)
     //   [car]       every registry name (rallysim params), tyre_curve or tyre_curve_front / _rear, vertical
-    // [driver] is not read yet: a file with one is refused, so its inputs are never silently ignored.
+    //   [driver]    steer (rad), throttle, brake, handbrake (0 to 1) as timelines; hold_speed (m/s, a timeline) for
+    //               the speed controller, in place of throttle and brake; hold_heading (rad) from hold_heading_from
+    //               (s) for the heading-hold driver, with its gains heading_gain (1/s), max_yaw_rate (rad/s) and
+    //               yaw_rate_gain (s). The drivers themselves: driver_input in run_four_wheel.hpp.
 
     // The keys a section takes, besides the registry's in [car]; empty for an unknown section.
     inline std::vector<std::string> scenario_section_keys(const std::string &section)
@@ -35,6 +38,9 @@ namespace rallysim
             return {"position", "heading", "pitch", "roll", "speed", "velocity", "angular_velocity"};
         if (section == "car")
             return {"tyre_curve", "tyre_curve_front", "tyre_curve_rear", "vertical"};
+        if (section == "driver")
+            return {"steer", "throttle", "brake", "handbrake", "hold_speed", "hold_heading", "hold_heading_from",
+                    "heading_gain", "max_yaw_rate", "yaw_rate_gain"};
         return {};
     }
 
@@ -85,11 +91,6 @@ namespace rallysim
         // every section and key must be known
         for (const ini_section &s : file.sections)
         {
-            if (s.name == "driver")
-            {
-                report(s.line, "[driver] is not supported yet");
-                continue;
-            }
             const std::vector<std::string> keys = scenario_section_keys(s.name);
             if (keys.empty())
             {
@@ -155,13 +156,27 @@ namespace rallysim
             }
         };
 
-        four_wheel_run run;
-        run.script.keys = {{0, four_wheel_input{}}}; // no inputs: [driver] sets them (sample() needs a key)
+        auto timeline = [&](const ini_entry &e, const std::string &si, keyframe_script<Real> &out)
+        {
+            try
+            {
+                out = parse_timeline(e.value, si);
+                return true;
+            }
+            catch (const std::invalid_argument &x)
+            {
+                fail(e, x.what());
+                return false;
+            }
+        };
 
-        // [car]: every number first, then the words, then the tyres fitted once to the finished car (only if a number
-        // was set: refitting a fitted tyre moves its tables by a rounding step, and an untouched car must stay bit
-        // for bit the built-in one)
-        bool car_changed = false;
+        four_wheel_run run;
+
+        // [car]: every number first, then the words, then the tyres fitted once to the finished car. Only if a number
+        // the fit depends on was set (the weight on each wheel, or a stiffness): refitting a fitted tyre moves its
+        // tables by a rounding step, and a car whose fit did not change must stay bit for bit the built-in one.
+        const std::vector<std::string> fit_keys{"mass", "lf", "lr", "cx_front", "cx_rear", "calpha_front", "calpha_rear"};
+        bool refit = false;
         for (const ini_section &s : file.sections)
             if (s.name == "car")
                 for (const ini_entry &e : s.entries)
@@ -171,7 +186,7 @@ namespace rallysim
                         if (number(e, param->unit, v))
                         {
                             param->field(run.params) = v;
-                            car_changed = true;
+                            refit = refit || std::find(fit_keys.begin(), fit_keys.end(), e.key) != fit_keys.end();
                         }
                     }
         const std::vector<std::string> curves{"linear", "peak_slide", "tmeasy"};
@@ -189,7 +204,7 @@ namespace rallysim
             run.params.rear_tyre.curve = tyre_curve_named(name);
         if (const ini_entry *e = entry_of("car", "vertical"); e && word(*e, {"springs", "planar"}, name))
             run.params.vertical = name == "planar" ? vertical_model::planar : vertical_model::springs;
-        if (car_changed)
+        if (refit)
             rebuild_tyres(run.params);
 
         // [run]
@@ -246,6 +261,63 @@ namespace rallysim
             vec(*e, "rad/s", pose.angular_velocity);
         run.initial = four_wheel_start(run.params, pose);
 
+        // [driver]: the four inputs merged into one script. Each input is linear between its own points, so sampling
+        // all four at every point time of any of them gives a script that is the same at every time. An input not
+        // given is 0 throughout; with none given the script is one key of zeros (sample() needs a key).
+        keyframe_script<Real> inputs[4] = {constant_script<Real>(0), constant_script<Real>(0), constant_script<Real>(0),
+                                           constant_script<Real>(0)};
+        const char *const input_names[4] = {"steer", "throttle", "brake", "handbrake"};
+        std::vector<Real> times{0};
+        for (int k = 0; k < 4; ++k)
+            if (const ini_entry *e = entry_of("driver", input_names[k]);
+                e && timeline(*e, k == 0 ? "rad" : "-", inputs[k]))
+            {
+                for (const keyframe<Real> &key : inputs[k].keys)
+                {
+                    times.push_back(key.t);
+                    if (k > 0 && !(key.value >= 0 && key.value <= 1))
+                        fail(*e, number_text(key.value) + " at " + number_text(key.t) + " s is outside 0 to 1");
+                }
+            }
+        std::sort(times.begin(), times.end());
+        times.erase(std::unique(times.begin(), times.end()), times.end());
+        for (const Real t : times)
+            run.script.keys.push_back({t, four_wheel_input{sample(inputs[0], t), sample(inputs[1], t),
+                                                           sample(inputs[2], t), sample(inputs[3], t)}});
+
+        if (const ini_entry *e = entry_of("driver", "hold_speed"))
+        {
+            if (entry_of("driver", "throttle") || entry_of("driver", "brake"))
+                fail(*e, "the speed controller works the throttle and brake: give hold_speed or them, not both");
+            else if (timeline(*e, "m/s", run.hold_speed))
+                for (const keyframe<Real> &key : run.hold_speed.keys)
+                    if (key.value < 0)
+                        fail(*e, number_text(key.value) + " m/s at " + number_text(key.t) + " s is below 0");
+        }
+
+        const ini_entry *heading = entry_of("driver", "hold_heading");
+        const ini_entry *heading_from = entry_of("driver", "hold_heading_from");
+        if (heading && !heading_from)
+            fail(*heading, "needs hold_heading_from, the time the heading-hold driver takes over");
+        else if (heading_from && !heading)
+            fail(*heading_from, "needs hold_heading, the heading to hold");
+        else if (heading && heading_from)
+        {
+            number(*heading, "rad", run.hold_heading);
+            if (number(*heading_from, "s", run.hold_heading_from) && run.hold_heading_from < 0)
+                fail(*heading_from, "must be 0 or later");
+        }
+        struct gain
+        {
+            const char *key, *unit;
+            Real &value;
+        };
+        for (const gain &g : {gain{"heading_gain", "1/s", run.heading_hold.heading_gain},
+                              gain{"max_yaw_rate", "rad/s", run.heading_hold.max_yaw_rate},
+                              gain{"yaw_rate_gain", "s", run.heading_hold.yaw_rate_gain}})
+            if (const ini_entry *e = entry_of("driver", g.key); e && number(*e, g.unit, g.value) && !(g.value > 0))
+                fail(*e, "must be above 0");
+
         if (!errors.empty())
         {
             std::stable_sort(errors.begin(), errors.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
@@ -264,5 +336,18 @@ namespace rallysim
         if (!in)
             throw std::runtime_error("cannot open " + path);
         return load_scenario(in, path, overrides);
+    }
+
+    // The scenario files that come with the project: scenarios/<name>.ini, found through the folder CMake passes in
+    // (RALLYSIM_SCENARIO_DIR), so rallysim and the tests find them from any working folder.
+    inline std::string scenario_path(const std::string &name)
+    {
+        return std::string(RALLYSIM_SCENARIO_DIR) + "/" + name + ".ini";
+    }
+
+    // One of those files as a run: four_wheel_scenario("fw_brake"). Throws as load_scenario_file.
+    inline four_wheel_run four_wheel_scenario(const std::string &name, const settings &overrides = {})
+    {
+        return load_scenario_file(scenario_path(name), overrides);
     }
 }

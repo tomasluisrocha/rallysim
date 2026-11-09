@@ -1,9 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/four_wheel_circle.hpp"
-#include "scenarios/four_wheel_driving.hpp"
-#include "scenarios/four_wheel_lane_change.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;
@@ -78,16 +76,16 @@ namespace
 int main()
 {
     // every four-wheel scenario, as run (1 ms, springs, the car's tmeasy tyre)
-    check_run("fw_circle", four_wheel_circle(), 0.005);
-    check_run("fw_lane", four_wheel_lane_change(), 0.005);
-    check_run("fw_brake", four_wheel_brake(), 0.005);
-    check_run("fw_launch", four_wheel_launch(), 0.005);
-    check_run("fw_handbrake", four_wheel_handbrake(), 0.005);
-    check_run("fw_hairpin", four_wheel_hairpin(), 0.005);
+    check_run("fw_circle", four_wheel_scenario("fw_circle"), 0.005);
+    check_run("fw_lane", four_wheel_scenario("fw_lane"), 0.005);
+    check_run("fw_brake", four_wheel_scenario("fw_brake"), 0.005);
+    check_run("fw_launch", four_wheel_scenario("fw_launch"), 0.005);
+    check_run("fw_handbrake", four_wheel_scenario("fw_handbrake"), 0.005);
+    check_run("fw_hairpin", four_wheel_scenario("fw_hairpin"), 0.005);
 
     // the planar model (gravity cancelled, no springs): only motion and wheel spin are stored
     {
-        four_wheel_run r = four_wheel_circle();
+        four_wheel_run r = four_wheel_scenario("fw_circle");
         r.params.vertical = vertical_model::planar;
         r.initial = four_wheel_initial(r.params, 6.0);
         check_run("fw_circle, planar", r, 0.005);
@@ -108,8 +106,8 @@ int main()
 
     // convergence: halving dt halves the residual (first order, like the step itself). A wrong sign or a missing
     // force would leave a part that does not shrink.
-    for (const auto &[name, scenario] : {std::pair<const char *, four_wheel_run>{"fw_lane", four_wheel_lane_change()},
-                                         std::pair<const char *, four_wheel_run>{"fw_brake", four_wheel_brake()}})
+    for (const auto &[name, scenario] : {std::pair<const char *, four_wheel_run>{"fw_lane", four_wheel_scenario("fw_lane")},
+                                         std::pair<const char *, four_wheel_run>{"fw_brake", four_wheel_scenario("fw_brake")}})
     {
         const booked coarse = run_booked(scenario, 0.002), fine = run_booked(scenario, 0.001),
                      finer = run_booked(scenario, 0.0005);

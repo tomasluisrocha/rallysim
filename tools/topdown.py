@@ -25,12 +25,14 @@ import argparse
 import math
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import matplotlib
 import numpy as np
 import pandas as pd
 
 import input_bars
+import simdata
 
 # Drawing sizes (m) for parts the telemetry does not describe.
 OVERHANG = 0.8           # body beyond each axle
@@ -736,7 +738,8 @@ def main():
     ap.add_argument("--every", type=float, default=0, metavar="S", help="seconds between cars in the static view")
     ap.add_argument("--at", type=float, metavar="T", help="show (or save) the dashboard at time T")
     ap.add_argument("--save", metavar="PNG", help="write the static view, or the dashboard at --at, to a file")
-    ap.add_argument("--gif", metavar="GIF", help="write the dashboard as an animated GIF")
+    ap.add_argument("--gif", nargs="?", const="", metavar="GIF",
+                    help="write the dashboard as an animated GIF (no path: out/gif/<run>.gif)")
     ap.add_argument("--start", type=float, metavar="T", help="GIF start time (default: the start of the run)")
     ap.add_argument("--end", type=float, metavar="T", help="GIF end time (default: the end of the run)")
     ap.add_argument("--fps", type=float, default=20, help="GIF frames per second (default 20)")
@@ -745,6 +748,8 @@ def main():
     ap.add_argument("--no-follow", action="store_true", help="show the whole path in the main view instead")
     args = ap.parse_args()
 
+    if args.gif == "":
+        args.gif = str(simdata.GIFS / f"{Path(args.file).stem}.gif")
     if args.save or args.gif:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -765,6 +770,7 @@ def main():
         start = args.start if args.start is not None else run.t[0]
         end = args.end if args.end is not None else run.t[-1]
         times = np.arange(start, end + 1e-9, args.speed / args.fps)
+        Path(args.gif).parent.mkdir(parents=True, exist_ok=True)
         animation = FuncAnimation(board.fig, lambda k: board.draw(row_at(run, times[k])), frames=len(times))
         animation.save(args.gif, writer=PillowWriter(fps=args.fps), dpi=70)
         print(f"wrote {args.gif} ({len(times)} frames)")

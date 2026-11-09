@@ -438,7 +438,8 @@ def main():
     ap.add_argument("file", help="a four-wheel telemetry CSV, e.g. out/runs/fw_handbrake.csv")
     ap.add_argument("--at", type=float, metavar="T", help="show (or save) the scene at time T")
     ap.add_argument("--save", metavar="PNG", help="write the scene at --at (default: the start) to a file")
-    ap.add_argument("--gif", metavar="GIF", help="write the run as an animated GIF")
+    ap.add_argument("--gif", nargs="?", const="", metavar="GIF",
+                    help="write the run as an animated GIF (no path: out/gif/<run>_3d.gif)")
     ap.add_argument("--start", type=float, metavar="T", help="GIF start time (default: the start of the run)")
     ap.add_argument("--end", type=float, metavar="T", help="GIF end time (default: the end of the run)")
     ap.add_argument("--fps", type=float, default=15, help="GIF frames per second (default 15)")
@@ -452,6 +453,8 @@ def main():
     ap.add_argument("--azim", type=float, help="camera azimuth (deg) when not chasing (default -45 isometric, -60)")
     args = ap.parse_args()
 
+    if args.gif == "":
+        args.gif = str(simdata.GIFS / f"{Path(args.file).stem}_3d.gif")
     if args.save or args.gif:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt

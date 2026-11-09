@@ -37,7 +37,7 @@ py tools/topdown.py out/runs/fw_handbrake.csv
 
 ```
 py tools/run_all.py                         every scenario + the rig, then the plots (no GIFs)
-py tools/run_all.py --gif                   also the dashboard GIFs (slower: about 45 s each, several at once)
+py tools/run_all.py --gif                   also the GIFs: each dashboard, and each four-wheel run in 3D (slow)
 py tools/run_all.py --only fw_brake fw_launch
 py tools/run_all.py --snapshot linear       afterwards, keep a copy in out/snapshots/linear
 py tools/run_all.py --no-plots              just the CSVs
@@ -57,7 +57,7 @@ The generated GIFs and plots are the quickest way to browse a complete run:
 py tools/topdown.py out/runs/fw_handbrake.csv                          dashboard: play, pause, scrub
 py tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save frame.png one dashboard frame
 py tools/topdown.py out/runs/fw_handbrake.csv --static --save path.png  the whole path with the car along it
-py tools/topdown.py out/runs/fw_handbrake.csv --gif run.gif --start 2 --end 5
+py tools/topdown.py out/runs/fw_handbrake.csv --gif --start 2 --end 5      to out/gif/fw_handbrake.gif
 ```
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
@@ -76,7 +76,7 @@ over time. The static view (`--static`) draws only the tyre forces.
 ```
 py tools/view3d.py out/runs/fw_handbrake.csv                           play, pause, scrub, drag to turn the view
 py tools/view3d.py out/runs/fw_brake.csv --at 1.6 --save brake3d.png    one frame
-py tools/view3d.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake_3d.gif --start 2.3 --end 4.3
+py tools/view3d.py out/runs/fw_handbrake.csv --gif --start 2.3 --end 4.3   to out/gif/fw_handbrake_3d.gif
 py tools/view3d.py out/runs/fw_circle.csv --chase --perspective        behind the car, perspective
 ```
 
@@ -184,7 +184,7 @@ After a physics change, a residual that grows with time and does not halve when 
 | `out/plots/views/` | A top-down picture of each run | `topdown.py --static` |
 | `out/plots/tyres/` | `tyre_rig.png`, and each four-wheel run's tyres on their curve | `tyre_plot.py`, `tyre_points.py` |
 | `out/plots/compare/` | Two runs overlaid, with their difference | `compare.py --save` |
-| `out/gif/` | The dashboard of each run as an animation | `topdown.py --gif` |
+| `out/gif/` | Each run's dashboard (`<run>.gif`) and each four-wheel run in 3D (`<run>_3d.gif`) | `topdown.py --gif`, `view3d.py --gif` |
 | `out/snapshots/<name>/` | Saved copies of `runs/` and `rig/`, to compare later runs against | `run_all.py --snapshot <name>` |
 
 `rallysim <scenario> [path]` writes to `out/runs/<scenario>.csv` (the rig to `out/rig/`) unless given a path;

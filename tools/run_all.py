@@ -2,14 +2,15 @@
 
 Usage:
   py tools/run_all.py                         every scenario + the tyre rig, then the plots (no GIFs)
-  py tools/run_all.py --gif                   also the dashboard GIFs (slow: a minute or two)
+  py tools/run_all.py --gif                   also the GIFs: every dashboard, and every four-wheel run in 3D (slow)
   py tools/run_all.py --only fw_brake fw_launch
   py tools/run_all.py --snapshot linear       afterwards, copy out/runs and out/rig to out/snapshots/linear
   py tools/run_all.py --no-plots              just the CSVs
 
 Steps: rallysim <scenario> for every name `rallysim list` gives (CSVs to out/runs, the rig to out/rig), then in
 parallel: the rig plot (out/plots/tyres/tyre_rig.png), a static top-down view of each run (out/plots/views), each
-four-wheel run's tyres on their curve (out/plots/tyres), and with --gif the dashboards (out/gif).
+four-wheel run's tyres on their curve (out/plots/tyres), and with --gif the dashboards (out/gif/<run>.gif) and
+the four-wheel runs in 3D (out/gif/<run>_3d.gif).
 Build first (cmake --build build --config Release); this only runs what is built.
 """
 import argparse
@@ -46,7 +47,7 @@ def run(command):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="+", metavar="NAME", help="just these scenarios")
-    ap.add_argument("--gif", action="store_true", help="also write the dashboard GIFs")
+    ap.add_argument("--gif", action="store_true", help="also write the GIFs: the dashboards and the 3D views")
     ap.add_argument("--no-plots", action="store_true", help="only write the CSVs")
     ap.add_argument("--snapshot", metavar="NAME", help="then copy out/runs and out/rig to out/snapshots/NAME")
     ap.add_argument("--exe", help="the rallysim executable (default: found under build/)")
@@ -88,10 +89,13 @@ def main():
             with csv.open(encoding="utf-8") as f:
                 f.readline()
                 header = f.readline()
-            if "wheel.FL.slipRatio" in header:
+            four_wheel = "wheel.FL.slipRatio" in header
+            if four_wheel:
                 jobs.append((f"{name} tyres", [py, TOOLS / "tyre_points.py", csv, "--save", simdata.TYRES / f"{name}.png"]))
             if args.gif:
                 jobs.append((f"{name} gif", [py, TOOLS / "topdown.py", csv, "--gif", simdata.GIFS / f"{name}.gif"]))
+                if four_wheel:  # view3d reads only four-wheel runs
+                    jobs.append((f"{name} 3d gif", [py, TOOLS / "view3d.py", csv, "--gif", simdata.GIFS / f"{name}_3d.gif"]))
         for folder in (simdata.VIEWS, simdata.TYRES, simdata.GIFS if args.gif else None):
             if folder:
                 folder.mkdir(parents=True, exist_ok=True)

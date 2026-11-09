@@ -18,7 +18,7 @@ PLOTS = OUT / "plots"
 VIEWS = PLOTS / "views"        # topdown --static, one per run
 TYRES = PLOTS / "tyres"        # the rig plot, and each four-wheel run's tyres on their curve
 COMPARE = PLOTS / "compare"    # compare.py
-GIFS = OUT / "gif"             # topdown --gif, one per run
+GIFS = OUT / "gif"             # topdown --gif (<run>.gif) and view3d --gif (<run>_3d.gif)
 SNAPSHOTS = OUT / "snapshots"  # saved copies of runs/ and rig/ to compare against (run_all.py --snapshot NAME)
 SCRATCH = OUT / "scratch"      # one-off experiments; nothing writes here on its own
 

@@ -19,7 +19,9 @@ namespace rallysim
         four_wheel_params params;
         four_wheel_state initial;
         four_wheel_script script;
-        Real hold_speed = 0; // m/s; if above zero, the speed controller replaces the script's throttle and brake
+        // The speed controller's target over time (m/s): when given, it replaces the script's throttle and brake.
+        // Empty: off (the script's pedals throughout). A constant target is constant_script(v).
+        keyframe_script<Real> hold_speed;
         // From this time (s) the heading-hold driver (driver/heading_hold.hpp) steers towards hold_heading (rad,
         // world) instead of the script; below zero, never (the default: the script steers throughout)
         Real hold_heading_from = -1;
@@ -49,7 +51,8 @@ namespace rallysim
     }
 
     // The commands for time t: the script, with the throttle and brake replaced by the speed controller
-    // (driver/speed_hold.hpp) when hold_speed is set, and the steer by the heading-hold driver
+    // (driver/speed_hold.hpp), aiming at hold_speed's target for time t, when it is given, and the steer by the
+    // heading-hold driver
     // (driver/heading_hold.hpp) from hold_heading_from on. The handbrake always comes from the script.
     // While the handbrake is up the speed controller lifts off the throttle, as a driver does (clutch in):
     // otherwise the drive torque on the rear wheels would fight the handbrake.
@@ -59,16 +62,17 @@ namespace rallysim
         if (r.hold_heading_from >= 0 && t >= r.hold_heading_from)
             in.steer = heading_hold_steer(velocity_in_body(s.body), yaw_angle(s.body.q), r.hold_heading, r.params.lf,
                                           r.params.max_steer, r.heading_hold);
-        if (r.hold_speed > 0 && in.handbrake > 0)
+        const bool holding_speed = !r.hold_speed.keys.empty();
+        if (holding_speed && in.handbrake > 0)
         {
             in.throttle = 0;
             in.brake = 0;
         }
-        else if (r.hold_speed > 0)
+        else if (holding_speed)
         {
             const drive_brake_params &d = r.params.drive_brake;
             const Real R = r.params.wheel.radius;
-            const pedals p = speed_hold_pedals(r.params.chassis.mass, r.hold_speed, velocity_in_body(s.body).u,
+            const pedals p = speed_hold_pedals(r.params.chassis.mass, sample(r.hold_speed, t), velocity_in_body(s.body).u,
                                                d.max_drive_torque / R, d.max_brake_torque / R);
             in.throttle = p.throttle;
             in.brake = p.brake;

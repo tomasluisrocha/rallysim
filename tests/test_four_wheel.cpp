@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "scenarios/four_wheel_lane_change.hpp"
+#include "scenarios/scenario_file.hpp"
 #include "tests/check.hpp"
 #include "tests/telemetry_helpers.hpp"
 
@@ -174,7 +174,7 @@ int main()
         check_true("turn: steering left gives a positive yaw rate and moves the car left",
                    s.body.omega.z > 0 && s.body.pos.y > 0 && yaw_angle(s.body.q) > 0);
 
-        four_wheel_run left = four_wheel_lane_change();
+        four_wheel_run left = four_wheel_scenario("fw_lane");
         left.params = p;
         left.initial = four_wheel_initial(p, 15.0);
         four_wheel_run right = left;
