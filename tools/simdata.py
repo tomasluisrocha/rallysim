@@ -137,9 +137,10 @@ def curve_name(tyre):
 
 
 def grip(tyre, fz):
-    """mu(Fz) Fz with load sensitivity, zero when unloaded (tyre_grip): the peak of every curve."""
+    """mu(Fz) Fz with load sensitivity, zero when unloaded (tyre_grip): the peak of every curve.
+    mu is floored at mu0 (1 + k) / 2, so the grip never falls as the load rises."""
     fz = np.asarray(fz, dtype=float)
-    mu = tyre["mu"] * np.maximum(1 - tyre["k"] * (fz - tyre["fz0"]) / tyre["fz0"], 0)
+    mu = tyre["mu"] * np.maximum(1 - tyre["k"] * (fz - tyre["fz0"]) / tyre["fz0"], (1 + tyre["k"]) / 2)
     return np.where(fz > 0, mu * fz, 0.0)
 
 

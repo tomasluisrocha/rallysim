@@ -99,7 +99,7 @@ namespace rallysim
     }
 
     // Peak friction coefficient of one tyre at vertical load fz (N). Load sensitivity: it falls linearly as
-    // the load rises, mu0 (1 - k (fz - fz0) / fz0), and never goes below zero. Because grip is mu(fz) fz,
+    // the load rises, mu0 (1 - k (fz - fz0) / fz0), and never goes below mu0 (1 + k) / 2. Because grip is mu(fz) fz,
     // moving load from one wheel of an axle to the other lowers the axle's total grip.
     inline Real peak_friction(const single_track_params &params, Real fz)
     {

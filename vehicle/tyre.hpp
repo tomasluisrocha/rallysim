@@ -77,12 +77,14 @@ namespace rallysim
         Real fx = 0, fy = 0;
     };
 
-    // Peak friction coefficient at vertical load fz (N): mu0 (1 - k (fz - fz0) / fz0), never below zero.
+    // Peak friction coefficient at vertical load fz (N): mu0 (1 - k (fz - fz0) / fz0), never below
+    // mu0 (1 + k) / 2. That is its value where the grip mu(fz) fz peaks, fz = fz0 (1 + k) / (2 k), so the grip
+    // never falls as the load rises: it is continuous there and linear in the load after.
     // Shared with the single-track model, so both use the same arithmetic.
     inline Real load_sensitive_friction(Real mu0, Real sensitivity, Real nominal_load, Real fz)
     {
         const Real drop = sensitivity * (fz - nominal_load) / nominal_load;
-        return mu0 * std::max(static_cast<Real>(1) - drop, static_cast<Real>(0));
+        return mu0 * std::max(static_cast<Real>(1) - drop, (static_cast<Real>(1) + sensitivity) / 2);
     }
 
     inline Real peak_friction(const tyre_params &t, Real fz)

@@ -140,7 +140,7 @@ int main()
         check_near("sensitivity: mu at the nominal load is mu0", peak_friction(p, fz0), mu0, 1e-12);
         check_near("sensitivity: mu at twice the nominal load", peak_friction(p, 2 * fz0), mu0 * (1 - k), 1e-12);
         check_near("sensitivity: mu at no load", peak_friction(p, 0.0), mu0 * (1 + k), 1e-12);
-        check_near("sensitivity: mu never goes below zero", peak_friction(p, 100 * fz0), 0.0, 1e-12);
+        check_near("sensitivity: mu never goes below mu0 (1 + k) / 2", peak_friction(p, 100 * fz0), mu0 * (1 + k) / 2, 1e-12);
 
         // grip of one wheel is mu(fz) fz = mu0 (fz (1 + k) - k fz^2 / fz0); moving d from one wheel to the
         // other of an axle loses 2 mu0 k d^2 / fz0 of grip

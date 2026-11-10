@@ -94,6 +94,20 @@ int main()
         check_true("more load, more grip, but less than proportionally",
                    tyre_grip(t, 6000.0) > tyre_grip(t, 3000.0) && tyre_grip(t, 6000.0) < 2 * tyre_grip(t, 3000.0));
 
+        // the grip never falls as the load rises: mu is floored at mu0 (1 + k) / 2 = 0.55, its value at the
+        // load where mu(fz) fz peaks, fz0 (1 + k) / (2 k) = 16.5 kN
+        bool rising = true;
+        for (int i = 0; i < 500; ++i)
+            rising = rising && tyre_grip(t, 100.0 * (i + 1)) >= tyre_grip(t, 100.0 * i);
+        check_true("grip never falls from 0 to 50 kN", rising);
+
+        const Real knee = 16500.0, at_knee = 0.55 * knee; // 9075 N
+        check_near("grip at the knee = 0.55 * 16500", tyre_grip(t, knee), at_knee, 1e-9);
+        check_near("grip continuous just below the knee", tyre_grip(t, knee - 1e-10), at_knee, 1e-9);
+        check_near("grip continuous just above the knee", tyre_grip(t, knee + 1e-10), at_knee, 1e-9);
+        check_near("mu at 40 kN is the floor", peak_friction(t, 40000.0), 0.55, 1e-12);
+        check_near("grip at 40 kN = 0.55 * 40000", tyre_grip(t, 40000.0), 22000.0, 1e-9);
+
         tyre_params slippery = t;
         slippery.friction_coefficient = 0.5;
         check_near("half the friction coefficient, half the grip", tyre_grip(slippery, 3000.0), 1500.0, 1e-9);
