@@ -26,6 +26,20 @@ target_compile_definitions(rallysim_core INTERFACE RALLYSIM_SCENARIO_DIR="${CMAK
 add_executable(rallysim apps/main.cpp)
 target_link_libraries(rallysim PRIVATE rallysim_core)
 
+# Compiles every header alone, included twice, to catch missing includes and broken include guards.
+file(GLOB_RECURSE RALLYSIM_HEADERS CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+     core/*.hpp vehicle/*.hpp driver/*.hpp runner/*.hpp)
+set(RALLYSIM_HEADER_CHECKS)
+set(header_index 0)
+foreach(header ${RALLYSIM_HEADERS})
+  set(check_cpp ${CMAKE_BINARY_DIR}/header_check/${header_index}.cpp)
+  file(GENERATE OUTPUT ${check_cpp} CONTENT "#include \"${header}\"\n#include \"${header}\"\n")
+  list(APPEND RALLYSIM_HEADER_CHECKS ${check_cpp})
+  math(EXPR header_index "${header_index} + 1")
+endforeach()
+add_library(header_check OBJECT ${RALLYSIM_HEADER_CHECKS})
+target_link_libraries(header_check PRIVATE rallysim_core)
+
 # Tests: one executable per tests/test_<name>.cpp, registered with CTest as <name>.
 enable_testing()
 
