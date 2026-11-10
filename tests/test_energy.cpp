@@ -82,6 +82,7 @@ int main()
     check_run("fw_launch", four_wheel_scenario("fw_launch"), 0.005);
     check_run("fw_handbrake", four_wheel_scenario("fw_handbrake"), 0.005);
     check_run("fw_hairpin", four_wheel_scenario("fw_hairpin"), 0.005);
+    check_run("fw_showcase", four_wheel_scenario("fw_showcase"), 0.005); // a jump and a landing, at 0.5 ms
 
     // the planar model (gravity cancelled, no springs): only motion and wheel spin are stored
     {
