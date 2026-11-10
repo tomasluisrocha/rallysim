@@ -103,6 +103,29 @@ motion. Both modes are retained: the planar mode is easier to compare directly
 with the single-track model, while the spring mode is more representative of
 the vehicle's vertical behaviour.
 
+### Wheel masses and the suspension upgrade path
+
+Decided 2026-11-10 for the mode that adds wheel mass and a tyre spring
+(`unsprung`):
+
+- **Chosen: a simple mass split.** The whole mass moves the car along the
+  ground; vertically the body has the sprung mass and each wheel its own, on a
+  vertical strut. Static loads, steady pitch and roll, load transfer, wheel
+  hop and landing loads are exact. Left out: the wheels' horizontal inertia
+  about the body's CG, about 0.4% of pitch inertia and 2% of roll inertia.
+- **Rejected: a coupled mass matrix** (the four wheels as point masses solved
+  together with the body, 10x10 each step). It removes only that 2%, replaces
+  the body step, has no closed forms to test against, and would be discarded
+  by the upgrade below.
+- **Possible upgrade, not scheduled: a multibody suspension mode.** Wheel
+  carriers and links as rigid bodies held by constraints, with a constraint
+  solver. This is what gives anti-dive, anti-squat, roll centres, jacking and
+  camber and toe change from the geometry itself, the 10 to 30% effects that
+  formulas and tables only approximate. It is a new mode beside the others,
+  not a replacement: the tyre, wheel spin, driveline, surfaces, telemetry and
+  energy books carry over. Consider it only after the drivetrain and surface
+  phases pass their gates, when there is a trusted car to compare it with.
+
 ## Architecture and dependency direction
 
 - `core/` contains maths, rigid-body integration, fixed-step timing,

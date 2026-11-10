@@ -20,11 +20,15 @@ namespace rallysim
     //     pitches and the load transfer comes out of the springs;
     //   planar (steps 3 to 5): gravity is cancelled and the tyre forces act at CG height, so the body stays flat
     //     on the ground plane, as the single-track; the loads come from the quasi-static load transfer.
-    // The planar model stays so the four-wheel car can still be compared one to one with the single-track.
+    //   unsprung (phase 6): as springs, but each wheel has its own mass on a tyre spring below the strut, so the
+    //     tyre load is the tyre spring's and the wheel can hop and hang (see "the corner with a wheel" below).
+    // The planar model stays so the four-wheel car can still be compared one to one with the single-track, and
+    // the springs model so the unsprung one can be compared with it.
     enum class vertical_model
     {
         planar,
-        springs
+        springs,
+        unsprung
     };
 
     // Wheel order, the same everywhere: front-left, front-right, rear-left, rear-right.
@@ -122,6 +126,17 @@ namespace rallysim
             return 0.5 * chassis.mass * kGravity * (is_front(i) ? lr : lf) / wheelbase();
         }
         Real static_deflection(std::size_t i) const { return static_load(i) / corner(i).spring_rate; }
+
+        // The corner with a wheel (unsprung model). `chassis.mass` is the whole car, wheels included, and lf, lr
+        // and cg_height locate the whole car's CG; the body alone has the sprung mass. At rest the car is level
+        // with its CG at cg_height, as with springs: each tyre carries static_load(i), its wheel centre sits at
+        // wheel_rest_height(i), and the strut carries that load less the wheel's own weight.
+        Real sprung_mass() const { return chassis.mass - 2 * front_corner.unsprung_mass - 2 * rear_corner.unsprung_mass; }
+        Real wheel_rest_height(std::size_t i) const { return wheel.radius - static_load(i) / corner(i).tyre_rate; }
+        Real strut_static_deflection(std::size_t i) const
+        {
+            return (static_load(i) - corner(i).unsprung_mass * kGravity) / corner(i).spring_rate;
+        }
     };
 
     // Refits both tyres' stiffness tables to the car as it is now (fit_stiffness at each axle's load at rest). The
@@ -133,10 +148,18 @@ namespace rallysim
         fit_stiffness(p.rear_tyre, p.static_load(RL));
     }
 
+    // A wheel's vertical motion (unsprung model; zero and unused in the others).
+    struct corner_state
+    {
+        Real z = 0;  // m, the wheel centre's height above the ground
+        Real vz = 0; // m/s, + up
+    };
+
     struct four_wheel_state
     {
         rigid_body_state body;
         std::array<wheel_state, kWheels> wheels{};
+        std::array<corner_state, kWheels> corners{};
     };
 
     // What the driver does: the steering wheel and three pedals. The clutch comes with the
@@ -150,16 +173,16 @@ namespace rallysim
     };
 
     // The first field of the four-wheel state that is not a finite number, or nullptr if all are: the body, then
-    // each wheel's spin and relaxed slips, in the fixed wheel order.
+    // each wheel's spin, relaxed slips, height and vertical speed, in the fixed wheel order.
     inline const char *non_finite_field(const four_wheel_state &s)
     {
         if (const char *bad = non_finite_field(s.body))
             return bad;
-        static const char *const names[kWheels][3] = {
-            {"wheel FL omega", "wheel FL slip_ratio", "wheel FL lateral_slip"},
-            {"wheel FR omega", "wheel FR slip_ratio", "wheel FR lateral_slip"},
-            {"wheel RL omega", "wheel RL slip_ratio", "wheel RL lateral_slip"},
-            {"wheel RR omega", "wheel RR slip_ratio", "wheel RR lateral_slip"}};
+        static const char *const names[kWheels][5] = {
+            {"wheel FL omega", "wheel FL slip_ratio", "wheel FL lateral_slip", "wheel FL z", "wheel FL vz"},
+            {"wheel FR omega", "wheel FR slip_ratio", "wheel FR lateral_slip", "wheel FR z", "wheel FR vz"},
+            {"wheel RL omega", "wheel RL slip_ratio", "wheel RL lateral_slip", "wheel RL z", "wheel RL vz"},
+            {"wheel RR omega", "wheel RR slip_ratio", "wheel RR lateral_slip", "wheel RR z", "wheel RR vz"}};
         for (std::size_t i = 0; i < kWheels; ++i)
         {
             const wheel_state &w = s.wheels[i];
@@ -169,16 +192,20 @@ namespace rallysim
                 return names[i][1];
             if (!std::isfinite(w.lateral_slip))
                 return names[i][2];
+            if (!std::isfinite(s.corners[i].z))
+                return names[i][3];
+            if (!std::isfinite(s.corners[i].vz))
+                return names[i][4];
         }
         return nullptr;
     }
 
-    // Why the car is somewhere the model cannot represent, or nullptr if it is not. The springs model has no body
-    // contact: a car on its side or roof, or with its CG under the ground, would pass through it. Planar never
-    // refuses (its body stays flat by construction).
+    // Why the car is somewhere the model cannot represent, or nullptr if it is not. The springs and unsprung
+    // models have no body contact: a car on its side or roof, or with its CG under the ground, would pass through
+    // it. Planar never refuses (its body stays flat by construction).
     inline const char *outside_model(const four_wheel_state &s, const four_wheel_params &p)
     {
-        if (p.vertical != vertical_model::springs)
+        if (p.vertical == vertical_model::planar)
             return nullptr;
         if (to_world(s.body.q, vec3{0, 0, 1}).z <= 0)
             return "the car is on its side or roof (no body contact yet)";
@@ -225,15 +252,28 @@ namespace rallysim
         const Real forward = to_body(s.body.q, s.body.vel).x;
         for (wheel_state &w : s.wheels)
             w = rolling_wheel(p.wheel, forward);
+        if (p.vertical == vertical_model::unsprung)
+        {
+            // each wheel at its rest position under its mount and moving with it: for a level car at cg_height
+            // that is exactly rest
+            const vec3 omega = to_world(s.body.q, s.body.omega);
+            for (std::size_t i = 0; i < kWheels; ++i)
+            {
+                const vec3 mount = to_world(s.body.q, p.suspension_point(i));
+                s.corners[i].z = s.body.pos.z + mount.z + p.wheel_rest_height(i);
+                s.corners[i].vz = s.body.vel.z + cross(omega, mount).z;
+            }
+        }
         return s;
     }
 
-    // A car pointing along +x, moving forward at `speed` with every wheel rolling freely. With springs it starts
-    // level with its CG at cg_height, each spring compressed by its share of the weight: at rest, in balance.
+    // A car pointing along +x, moving forward at `speed` with every wheel rolling freely. With springs (or the
+    // unsprung model) it starts level with its CG at cg_height, each spring compressed by its share of the
+    // weight: at rest, in balance.
     inline four_wheel_state four_wheel_initial(const four_wheel_params &p, Real speed)
     {
         four_wheel_pose pose;
-        pose.position = {0, 0, p.vertical == vertical_model::springs ? p.cg_height : 0};
+        pose.position = {0, 0, p.vertical == vertical_model::planar ? 0 : p.cg_height};
         pose.velocity = {speed, 0, 0};
         return four_wheel_start(p, pose);
     }
@@ -389,6 +429,16 @@ namespace rallysim
                 f.corner[i] = corner_force(p.corner(i), c.deflection, c.deflection_rate);
                 f.fz[i] = f.corner[i].fz;
             }
+            else if (p.vertical == vertical_model::unsprung)
+            {
+                // the mount's height above its rest height, and its vertical speed, from the springs geometry
+                const Real mount = p.static_deflection(i) - c.deflection, mount_rate = -c.deflection_rate;
+                const corner_state &wheel = s.corners[i];
+                const Real strut = p.strut_static_deflection(i) - mount + (wheel.z - p.wheel_rest_height(i));
+                f.corner[i] = unsprung_corner_force(p.corner(i), strut, wheel.vz - mount_rate, p.strut_static_deflection(i),
+                                                    p.wheel.radius - wheel.z, -wheel.vz);
+                f.fz[i] = f.corner[i].fz; // the tyre spring's force
+            }
             f.patch[i] = c.velocity;
             f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
         }
@@ -398,6 +448,15 @@ namespace rallysim
     // Force and torque on the body from the four wheels, in the fixed wheel order (step 5):
     // each tyre force along the ground, (Fx forward + Fy left), applied at its contact patch. With springs each
     // corner's load also pushes up at its patch, and gravity acts; in the planar model gravity is cancelled.
+    //
+    // Unsprung: the strut's force pushes up at the patch instead of the tyre load (that one acts on the wheel).
+    // The body also gets each wheel's weight, upwards, at its corner at CG height. lf, lr and cg_height locate the
+    // whole car's CG, not the sprung body's, and that term is what makes the strut forces balance about it: at
+    // rest the two together are the tyre's static load, as with springs, and the car sits level.
+    // Last, the vertical force is rescaled. The rigid-body step divides the force by the whole mass and subtracts
+    // g; the body's vertical mass is the sprung mass, ms a_z = (sum of the strut forces) - ms g. With V the sum
+    // of the strut forces and the wheels' weights, that is a_z = (V - m g) / ms, which the step gives from a
+    // force of (m / ms) (V - m g) + m g. Along the ground the whole mass moves, as before.
     inline wrench four_wheel_wrench(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_forces &f)
     {
         wrench w{};
@@ -407,17 +466,27 @@ namespace rallysim
             vec3 force = f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left;
             if (p.vertical == vertical_model::springs)
                 force.z += f.fz[i];
+            else if (p.vertical == vertical_model::unsprung)
+                force.z += f.corner[i].strut;
             add_force_at(w, s.body.q, force, c.point);
+            if (p.vertical == vertical_model::unsprung)
+                add_force_at(w, s.body.q, vec3{0, 0, p.corner(i).unsprung_mass * kGravity}, p.wheel_position(i));
         }
         if (p.vertical == vertical_model::planar)
             w.force.z += p.chassis.mass * kGravity; // the flat car stays on the ground plane
+        else if (p.vertical == vertical_model::unsprung)
+        {
+            const Real weight = p.chassis.mass * kGravity;
+            w.force.z = p.chassis.mass / p.sprung_mass() * (w.force.z - weight) + weight;
+        }
         return w;
     }
 
     // One step. The loads, patch velocities and torques come from the step's start (evaluate). Each wheel then
     // steps on its own, in sub-steps (step_wheel): its spin changes with its tyre force (-Fx R), drive torque and
     // brake torque (the brake stops a wheel but never reverses it), and its slips relax. The body then moves with
-    // each wheel's average tyre force over the step, so it gets the same impulse the wheels felt.
+    // each wheel's average tyre force over the step, so it gets the same impulse the wheels felt. Unsprung: each
+    // wheel then moves vertically between its tyre and its strut, velocity first, with the same start-of-step forces.
     inline void step(four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in, Real dt)
     {
         four_wheel_forces f = evaluate(s, p, in);
@@ -426,5 +495,12 @@ namespace rallysim
                                    f.torque[i].brake, dt);
         const wrench w = four_wheel_wrench(s, p, f);
         step(s.body, p.chassis, w, dt);
+        if (p.vertical == vertical_model::unsprung)
+            for (std::size_t i = 0; i < kWheels; ++i)
+            {
+                corner_state &wheel = s.corners[i];
+                wheel.vz += ((f.fz[i] - f.corner[i].strut) / p.corner(i).unsprung_mass - kGravity) * dt;
+                wheel.z += wheel.vz * dt;
+            }
     }
 }
