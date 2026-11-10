@@ -1,4 +1,5 @@
 #pragma once
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -64,6 +65,14 @@ namespace rallysim
         return in;
     }
 
+    // Stops the run if the car is somewhere the model cannot represent (outside_model), like require_finite.
+    inline void require_inside_model(const four_wheel_state &s, const four_wheel_params &p, long step, Real dt)
+    {
+        if (const char *why = outside_model(s, p))
+            throw std::runtime_error(std::string("outside the model: ") + why + " at step " + std::to_string(step) +
+                                     " (t = " + std::to_string(step * dt) + " s)");
+    }
+
     // Runs the scenario with a fixed step and returns the final state.
     // If writer is not null, one telemetry row is written per step, plus one for the final state.
     // Stops with an exception naming the field, step and time if the state stops being finite (core/finite.hpp).
@@ -74,6 +83,7 @@ namespace rallysim
     {
         four_wheel_state s = r.initial;
         require_finite(s, 0, r.dt);
+        require_inside_model(s, r.params, 0, r.dt);
         energy_books kept(s, r.params);
         const bool keep_books = writer || books;
         for (long i = 0; i < r.steps; ++i)
@@ -85,6 +95,7 @@ namespace rallysim
                 kept.add(rates_of(s, r.params, evaluate(s, r.params, in)), r.dt); // this step's work, before it
             step(s, r.params, in, r.dt);
             require_finite(s, i + 1, r.dt);
+            require_inside_model(s, r.params, i + 1, r.dt);
         }
         if (writer)
             writer->row(four_wheel_row(r.steps, r.dt, s, r.params, driver_input(r, s, r.steps * r.dt), kept));

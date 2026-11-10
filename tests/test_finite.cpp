@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -5,8 +6,10 @@
 #include <string>
 #include "core/finite.hpp"
 #include "core/telemetry.hpp"
+#include "driver/speed_hold.hpp"
 #include "runner/scenario_file.hpp"
 #include "runner/run_bicycle.hpp"
+#include "runner/run_four_wheel.hpp"
 #include "tests/check.hpp"
 
 using namespace rallysim;
@@ -73,6 +76,11 @@ int main()
         const char *bad = non_finite_field(s);
         check_true("bicycle: the bad field is named", bad && std::string(bad) == "v");
     }
+    {
+        const pedals p = speed_hold_pedals(1000, 10, 10, 1000, 0);
+        check_true("speed hold: zero brake force at target leaves pedals off",
+                   p.throttle == 0 && p.brake == 0 && std::isfinite(p.throttle) && std::isfinite(p.brake));
+    }
 
     // require_finite: silent on a good state, and the message names the field, the step and the time
     {
@@ -104,6 +112,47 @@ int main()
         const std::string e = error_of([&] { run(r); });
         std::printf("infinite acceleration, bicycle: \"%s\"\n", e.c_str());
         check_true("run (bicycle): an infinite input stops the run", contains(e, "non-finite state"));
+    }
+
+    // outside_model: a springs car on its side, roof or below the ground stops the run; planar is never refused
+    {
+        const four_wheel_params p;
+        four_wheel_run r;
+        r.steps = 10;
+        r.initial = four_wheel_initial(p, 0.0);
+        check_true("outside_model: a level car is inside", outside_model(r.initial, r.params) == nullptr);
+
+        four_wheel_pose pose;
+        pose.position = {0, 0, 1};
+        pose.roll = 3.14159265358979323846;
+        r.initial = four_wheel_start(r.params, pose);
+        const std::string roof = error_of([&] { run(r); });
+        std::printf("roof: \"%s\"\n", roof.c_str());
+        check_true("run: a car on its roof is refused", contains(roof, "outside the model") && contains(roof, "side or roof") &&
+                                                            contains(roof, "at step 0 "));
+
+        pose.roll = 0;
+        pose.position = {0, 0, -0.1};
+        r.initial = four_wheel_start(r.params, pose);
+        const std::string low = error_of([&] { run(r); });
+        std::printf("below ground: \"%s\"\n", low.c_str());
+        check_true("run: a CG below the ground is refused", contains(low, "outside the model") && contains(low, "CG"));
+
+        r.params.vertical = vertical_model::planar;
+        check_true("outside_model: a planar car is never refused", outside_model(r.initial, r.params) == nullptr);
+        pose.roll = 3.14159265358979323846;
+        r.initial = four_wheel_start(r.params, pose);
+        check_true("outside_model: a planar car upside down is not refused", outside_model(r.initial, r.params) == nullptr);
+    }
+
+    // every shipped scenario runs to its end inside the model
+    for (const char *name : {"fw_showcase", "fw_brake", "fw_circle", "fw_lane", "fw_launch", "fw_hairpin", "fw_handbrake"})
+    {
+        const std::string e = error_of([&] { run(four_wheel_scenario(name)); });
+        if (!e.empty())
+            std::printf("%s: \"%s\"\n", name, e.c_str());
+        const std::string what = std::string("scenario ") + name + " runs without throwing";
+        check_true(what.c_str(), e.empty());
     }
 
     // the telemetry writer refuses a non-finite value and names the column and the row

@@ -18,7 +18,8 @@ step,time,pos.x,...
 - Numbers are written with 17 significant digits, so a value reads back as exactly the same double.
 - Every number is finite: the writer refuses a NaN or infinity (an exception naming the column and the row) rather
   than write it, and the runners stop a run whose state stops being finite (`core/finite.hpp`). A file that ends
-  early was cut short by that; `rallysim` prints why.
+  early was cut short by that, or because the springs car left what the model can represent (on its side or roof, or
+  its CG at or below the ground: no body contact yet); `rallysim` prints why.
 - Lines end with `\n` only, on every platform.
 
 ## Facts on line 1

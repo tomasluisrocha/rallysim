@@ -173,6 +173,20 @@ namespace rallysim
         return nullptr;
     }
 
+    // Why the car is somewhere the model cannot represent, or nullptr if it is not. The springs model has no body
+    // contact: a car on its side or roof, or with its CG under the ground, would pass through it. Planar never
+    // refuses (its body stays flat by construction).
+    inline const char *outside_model(const four_wheel_state &s, const four_wheel_params &p)
+    {
+        if (p.vertical != vertical_model::springs)
+            return nullptr;
+        if (to_world(s.body.q, vec3{0, 0, 1}).z <= 0)
+            return "the car is on its side or roof (no body contact yet)";
+        if (s.body.pos.z <= 0)
+            return "the CG is at or below the ground";
+        return nullptr;
+    }
+
     inline pedals pedals_of(const four_wheel_input &in)
     {
         return {in.throttle, in.brake, in.handbrake};

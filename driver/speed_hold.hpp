@@ -23,9 +23,9 @@ namespace rallysim
     {
         const Real force = speed_hold_force(mass, target_speed, forward_speed, gain);
         pedals p;
-        if (force > 0)
+        if (force > 0 && full_drive_force > 0)
             p.throttle = std::min(force / full_drive_force, static_cast<Real>(1));
-        else
+        else if (force < 0 && full_brake_force > 0)
             p.brake = std::min(-force / full_brake_force, static_cast<Real>(1));
         return p;
     }
