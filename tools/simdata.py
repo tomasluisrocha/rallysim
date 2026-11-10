@@ -5,6 +5,7 @@ curve. If the C++ changes, change them here too; tools/tyre_points.py checks its
 when that file exists.
 """
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -53,9 +54,8 @@ def read_units(path):
         first = f.readline()
     units = {}
     if "units:" in first:
-        for token in first.split("units:", 1)[1].split():
-            name, _, unit = token.partition("[")
-            units[name] = unit.rstrip("]")
+        text_after_units = first.split("units:", 1)[1]
+        units = {name: unit for name, unit in re.findall(r"(\S+?)\[([^\]]*)\]", text_after_units)}
     return units
 
 
