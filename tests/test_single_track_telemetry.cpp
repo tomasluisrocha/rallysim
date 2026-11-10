@@ -15,8 +15,8 @@ int main()
     const rigid_body_state s = car(1.5, -2.5, 0.75, 10.0, -0.3, 0.4);
     const single_track_input in{0.05, 800.0};
 
-    const std::vector<std::string> names = single_track_columns();
-    const std::vector<std::string> units = single_track_units();
+    const std::vector<std::string> names = column_names(single_track_columns());
+    const std::vector<std::string> units = column_units(single_track_columns());
     const std::vector<Real> row = single_track_row(5, 0.001, s, p, in);
 
     // sizes

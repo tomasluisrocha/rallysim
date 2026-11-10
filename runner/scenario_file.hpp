@@ -21,11 +21,13 @@ namespace rallysim
     //   [scenario]  name, description (text, for people)
     //   [run]       model (four_wheel), duration (s, required), dt (s, default 0.001)
     //   [start]     position (m), heading, pitch, roll (rad), speed (m/s) or velocity (m/s), angular_velocity (rad/s)
-    //   [car]       every registry name (rallysim params), tyre_curve or tyre_curve_front / _rear, vertical
+    //   [car]       every registry name (rallysim params) the car uses, tyre_curve or tyre_curve_front / _rear,
+    //               vertical; a number the chosen model or tyre curve does not use is refused (param_used)
     //   [driver]    steer (rad), throttle, brake, handbrake (0 to 1) as timelines; hold_speed (m/s, a timeline) for
-    //               the speed controller, in place of throttle and brake; hold_heading (rad) from hold_heading_from
-    //               (s) for the heading-hold driver, with its gains heading_gain (1/s), max_yaw_rate (rad/s) and
-    //               yaw_rate_gain (s). The drivers themselves: driver_input in run_four_wheel.hpp.
+    //               the speed controller (gain speed_gain, 1/s), in place of throttle and brake; hold_heading (rad)
+    //               from hold_heading_from (s) for the heading-hold driver, with its gains heading_gain (1/s),
+    //               max_yaw_rate (rad/s) and yaw_rate_gain (s). The drivers themselves: driver_input in
+    //               run_four_wheel.hpp.
 
     // The keys a section takes, besides the registry's in [car]; empty for an unknown section.
     inline std::vector<std::string> scenario_section_keys(const std::string &section)
@@ -39,8 +41,8 @@ namespace rallysim
         if (section == "car")
             return {"tyre_curve", "tyre_curve_front", "tyre_curve_rear", "vertical"};
         if (section == "driver")
-            return {"steer", "throttle", "brake", "handbrake", "hold_speed", "hold_heading", "hold_heading_from",
-                    "heading_gain", "max_yaw_rate", "yaw_rate_gain"};
+            return {"steer", "throttle", "brake", "handbrake", "hold_speed", "speed_gain", "hold_heading",
+                    "hold_heading_from", "heading_gain", "max_yaw_rate", "yaw_rate_gain"};
         return {};
     }
 
@@ -173,9 +175,10 @@ namespace rallysim
         four_wheel_run run;
 
         // [car]: every number first, then the words, then the tyres fitted once to the finished car. Only if a number
-        // the fit depends on was set (the weight on each wheel, or a stiffness): refitting a fitted tyre moves its
-        // tables by a rounding step, and a car whose fit did not change must stay bit for bit the built-in one.
-        const std::vector<std::string> fit_keys{"mass", "lf", "lr", "cx_front", "cx_rear", "calpha_front", "calpha_rear"};
+        // the fit depends on was set (the weight on each wheel, a stiffness or a nominal load): refitting a fitted tyre
+        // moves its tables by a rounding step, and a car whose fit did not change must stay bit for bit the default.
+        const std::vector<std::string> fit_keys{"mass", "lf", "lr", "cx_front", "cx_rear", "calpha_front", "calpha_rear",
+                                                "fz0_front", "fz0_rear"};
         bool refit = false;
         for (const ini_section &s : file.sections)
             if (s.name == "car")
@@ -204,6 +207,13 @@ namespace rallysim
             run.params.rear_tyre.curve = tyre_curve_named(name);
         if (const ini_entry *e = entry_of("car", "vertical"); e && word(*e, {"springs", "planar"}, name))
             run.params.vertical = name == "planar" ? vertical_model::planar : vertical_model::springs;
+        // a number this car does not use (a spring on the planar car, a peak_slide shape on a tmeasy tyre) would change
+        // nothing: refuse it, judged against the words above wherever they are in the file
+        for (const ini_section &s : file.sections)
+            if (s.name == "car")
+                for (const ini_entry &e : s.entries)
+                    if (const param_entry *param = find_param(e.key); param && !param_used(*param, run.params))
+                        fail(e, "only used " + param_use_text(*param) + "; this car does not use it");
         if (refit)
             rebuild_tyres(run.params);
 
@@ -314,7 +324,8 @@ namespace rallysim
         };
         for (const gain &g : {gain{"heading_gain", "1/s", run.heading_hold.heading_gain},
                               gain{"max_yaw_rate", "rad/s", run.heading_hold.max_yaw_rate},
-                              gain{"yaw_rate_gain", "s", run.heading_hold.yaw_rate_gain}})
+                              gain{"yaw_rate_gain", "s", run.heading_hold.yaw_rate_gain},
+                              gain{"speed_gain", "1/s", run.speed_gain}})
             if (const ini_entry *e = entry_of("driver", g.key); e && number(*e, g.unit, g.value) && !(g.value > 0))
                 fail(*e, "must be above 0");
 

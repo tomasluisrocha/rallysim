@@ -161,7 +161,9 @@ def load(path):
         for label, (x, y) in positions.items():
             end = "front" if label[0] == "F" else "rear"
             fz = df[f"wheel.{label}.Fz"].to_numpy()
-            grip = simdata.grip(simdata.tyre_from_meta(meta, end), fz)
+            # logged since schema 5; worked out from the load for older files
+            grip = (df[f"wheel.{label}.grip"].to_numpy() if f"wheel.{label}.grip" in cols
+                    else simdata.grip(simdata.tyre_from_meta(meta, end), fz))
             run.wheels.append(Wheel(label, x, y, steer if end == "front" else zero,
                                     df[f"wheel.{label}.Fx"].to_numpy(), df[f"wheel.{label}.Fy"].to_numpy(),
                                     fz, grip, df[f"wheel.{label}.omega"].to_numpy(),
@@ -190,7 +192,11 @@ def load(path):
                                              input_bars.COLOURS["throttle"], input_bars.COLOURS["brake"])]
 
     if run.wheels[0].fx is not None:
-        run.net_force, run.yaw_moment = tyre_totals(run.wheels)
+        if "yaw_moment" in cols:  # logged since schema 5
+            run.net_force = (df["net.Fx"].to_numpy(), df["net.Fy"].to_numpy())
+            run.yaw_moment = df["yaw_moment"].to_numpy()
+        else:
+            run.net_force, run.yaw_moment = tyre_totals(run.wheels)
     if run.net_force is not None and meta.get("mass", 0) > 0:
         run.accel = (run.net_force[0] / meta["mass"], run.net_force[1] / meta["mass"])
         run.accel_source = "tyre forces / mass"

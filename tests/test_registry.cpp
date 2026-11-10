@@ -85,13 +85,32 @@ int main()
         for (const auto &[key, value] : four_wheel_meta(p))
             if (const param_entry *e = find_param(key))
                 check_near(e->name, e->field(p), value, 0);
-        for (const char *name : {"mass", "lf", "spring_front", "mu_rear", "cx_front", "calpha_rear"})
+        // every parameter is on line 1, once, so a file records the whole car that made it (--set included)
+        const telemetry_meta meta = four_wheel_meta(p);
+        for (const param_entry &e : four_wheel_registry())
         {
-            bool on_line_1 = false;
-            for (const auto &kv : four_wheel_meta(p))
-                on_line_1 = on_line_1 || kv.first == name;
-            check_true("registry: shares its names with telemetry line 1", on_line_1 && find_param(name));
+            int times = 0;
+            for (const auto &kv : meta)
+                times += kv.first == e.name ? 1 : 0;
+            check_true(e.name, times == 1);
         }
+        for (std::size_t i = 0; i < meta.size(); ++i)
+            for (std::size_t j = i + 1; j < meta.size(); ++j)
+                check_true("line 1: no key twice", meta[i].first != meta[j].first);
+    }
+    {
+        // when a parameter is used
+        four_wheel_params p;
+        check_true("used: a spring on the springs car", param_used(*find_param("spring_front"), p));
+        check_true("used: no transfer share on the springs car", !param_used(*find_param("front_transfer_share"), p));
+        check_true("used: no peak_slide shape on a tmeasy tyre", !param_used(*find_param("peak_slip_front"), p));
+        p.vertical = vertical_model::planar;
+        p.front_tyre.curve = tyre_curve::peak_slide;
+        check_true("used: no spring on the planar car", !param_used(*find_param("damper_rear"), p));
+        check_true("used: the transfer share on the planar car", param_used(*find_param("front_transfer_share"), p));
+        check_true("used: the front shape on a front peak_slide", param_used(*find_param("sliding_ratio_front"), p));
+        check_true("used: not the rear shape", !param_used(*find_param("sliding_ratio_rear"), p));
+        check_true("used: grip always", param_used(*find_param("mu_rear"), p));
     }
 
     // ---- apply ----------------------------------------------------------------------------------------------

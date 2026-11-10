@@ -6,22 +6,16 @@
 
 namespace rallysim
 {
-    inline std::vector<std::string> bicycle_columns()
+    inline std::vector<telemetry_column> bicycle_columns()
     {
-        return {"step", "time", "pos.x", "pos.y", "yaw", "speed",
-                "steer", "accel", "beta", "yaw_rate", "a_lat"};
+        return {{"step", "count"}, {"time", "s"}, {"pos.x", "m"}, {"pos.y", "m"}, {"yaw", "rad"}, {"speed", "m/s"},
+                {"steer", "rad"}, {"accel", "m/s^2"}, {"beta", "rad"}, {"yaw_rate", "rad/s"}, {"a_lat", "m/s^2"}};
     }
 
     // The car's geometry for line 1 of the file, so a viewer can draw it to scale.
     inline telemetry_meta bicycle_meta(const bicycle_params &p)
     {
         return {{"model", 1}, {"lf", p.lf}, {"lr", p.lr}, {"max_steer", p.max_steer}};
-    }
-
-    inline std::vector<std::string> bicycle_units()
-    {
-        return {"count", "s", "m", "m", "rad", "m/s",
-                "rad", "m/s^2", "rad", "rad/s", "m/s^2"};
     }
 
     // `input` is the command applied at this step. The logged steer is the limited value the model

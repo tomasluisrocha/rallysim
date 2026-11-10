@@ -1,25 +1,20 @@
 #pragma once
-#include "core/rigid_body.hpp"
 #include <string>
 #include <vector>
+#include "core/rigid_body.hpp"
+#include "core/telemetry.hpp"
 
 namespace rallysim
 {
-    inline std::vector<std::string> rigid_body_columns()
+    inline std::vector<telemetry_column> rigid_body_columns()
     {
-        return {"step", "time",
-                "pos.x", "pos.y", "pos.z",
-                "vel.x", "vel.y", "vel.z",
-                "quat.w", "quat.x", "quat.y", "quat.z",
-                "omega.x", "omega.y", "omega.z",
-                "force.x", "force.y", "force.z",
-                "torque.x", "torque.y", "torque.z"};
-    }
-
-    inline std::vector<std::string> rigid_body_units()
-    {
-        return {"count", "s", "m", "m", "m", "m/s", "m/s", "m/s", "-", "-", "-", "-", "rad/s", "rad/s", "rad/s",
-                "N", "N", "N", "N m", "N m", "N m"};
+        return {{"step", "count"}, {"time", "s"},
+                {"pos.x", "m"}, {"pos.y", "m"}, {"pos.z", "m"},
+                {"vel.x", "m/s"}, {"vel.y", "m/s"}, {"vel.z", "m/s"},
+                {"quat.w", "-"}, {"quat.x", "-"}, {"quat.y", "-"}, {"quat.z", "-"},
+                {"omega.x", "rad/s"}, {"omega.y", "rad/s"}, {"omega.z", "rad/s"},
+                {"force.x", "N"}, {"force.y", "N"}, {"force.z", "N"},
+                {"torque.x", "N m"}, {"torque.y", "N m"}, {"torque.z", "N m"}};
     }
 
     // w is the force (world frame) and torque (body frame) applied at this step.

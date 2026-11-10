@@ -110,7 +110,7 @@ int main()
     {
         const std::string path = "finite_test_output.csv";
         {
-            telemetry_writer w(path, 0.001, {"step", "speed"}, {"count", "m/s"});
+            telemetry_writer w(path, 0.001, {{"step", "count"}, {"speed", "m/s"}});
             check_true("telemetry: finite rows are written", error_of([&] { w.row({0, 1.0}); w.row({1, 2.0}); }).empty());
             const std::string e = error_of([&] { w.row({2, nan_value}); });
             std::printf("telemetry: \"%s\"\n", e.c_str());

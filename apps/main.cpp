@@ -24,7 +24,7 @@ using namespace rallysim;
 
 static bool write_rigid_body(const scripted_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, rigid_body_columns(), rigid_body_units());
+    telemetry_writer writer(path, scenario.dt, rigid_body_columns());
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -33,7 +33,7 @@ static bool write_rigid_body(const scripted_run &scenario, const std::string &pa
 
 static bool write_bicycle(const bicycle_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, bicycle_columns(), bicycle_units(), bicycle_meta(scenario.params));
+    telemetry_writer writer(path, scenario.dt, bicycle_columns(), bicycle_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -42,7 +42,7 @@ static bool write_bicycle(const bicycle_run &scenario, const std::string &path)
 
 static bool write_single_track(const single_track_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, single_track_columns(), single_track_units(), single_track_meta(scenario.params));
+    telemetry_writer writer(path, scenario.dt, single_track_columns(), single_track_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -51,7 +51,7 @@ static bool write_single_track(const single_track_run &scenario, const std::stri
 
 static bool write_four_wheel(const four_wheel_run &scenario, const std::string &path)
 {
-    telemetry_writer writer(path, scenario.dt, four_wheel_columns(), four_wheel_units(), four_wheel_meta(scenario.params));
+    telemetry_writer writer(path, scenario.dt, four_wheel_columns(), four_wheel_meta(scenario.params));
     if (!writer.ok())
         return false;
     run(scenario, &writer);
@@ -130,12 +130,13 @@ static void usage()
     std::fprintf(stderr, "\n");
 }
 
-// Every registry entry with its value in `p`.
+// Every registry entry with its value in `p`, and when it is used if this car does not use it.
 static void print_params(four_wheel_params p)
 {
-    std::printf("%-22s %14s  %s\n", "name", "value", "unit");
+    std::printf("%-22s %14s  %-8s %s\n", "name", "value", "unit", "");
     for (const param_entry &e : four_wheel_registry())
-        std::printf("%-22s %14g  %s\n", e.name, e.field(p), e.unit);
+        std::printf("%-22s %14g  %-8s %s\n", e.name, e.field(p), e.unit,
+                    param_used(e, p) ? "" : ("not used: only " + param_use_text(e)).c_str());
 }
 
 // The four-wheel run of a scenario file (see scenario_file_for), with the settings applied. Prints why and returns

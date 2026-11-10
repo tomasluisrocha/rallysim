@@ -12,7 +12,7 @@ int main()
 {
     const std::string path = "telemetry_test_output.csv";
     {
-        telemetry_writer w(path, 0.001, {"step", "time", "pos.x"}, {"count", "s", "m"});
+        telemetry_writer w(path, 0.001, {{"step", "count"}, {"time", "s"}, {"pos.x", "m"}});
         check_true("writer opens a valid path", w.ok());
         w.row({0, 0.0, 0.1});
         w.row({1, 0.001, 1.0 / 3.0});
@@ -30,7 +30,7 @@ int main()
     const bool has_extra = static_cast<bool>(std::getline(in, extra));
     in.close();
 
-    check_true("line 1 starts with schema 4", l1.rfind("# schema=4 dt=0.001", 0) == 0);
+    check_true("line 1 starts with schema 5", l1.rfind("# schema=5 dt=0.001", 0) == 0);
     check_true("line 1 lists units", l1.find("step[count] time[s] pos.x[m]") != std::string::npos);
     check_true("line 2 is the column names", l2 == "step,time,pos.x");
     check_true("row 0 text", r0 == "0,0,0.10000000000000001");
@@ -63,7 +63,7 @@ int main()
     {
         const std::string meta_path = "telemetry_meta_test_output.csv";
         {
-            telemetry_writer w(meta_path, 0.001, {"step"}, {"count"}, {{"lf", 1.3}, {"track_front", 1.5}});
+            telemetry_writer w(meta_path, 0.001, {{"step", "count"}}, {{"lf", 1.3}, {"track_front", 1.5}});
             w.row({0});
         }
         std::ifstream f(meta_path, std::ios::binary);
@@ -71,12 +71,12 @@ int main()
         std::getline(f, line);
         f.close();
         std::remove(meta_path.c_str());
-        check_true("meta: line 1 still starts with the schema and dt", line.rfind("# schema=4 dt=0.001 ", 0) == 0);
+        check_true("meta: line 1 still starts with the schema and dt", line.rfind("# schema=5 dt=0.001 ", 0) == 0);
         check_true("meta: key=value pairs before the units", line.find(" lf=1.3 track_front=1.5 units: step[count]") != std::string::npos);
     }
 
     {
-        telemetry_writer bad("no_such_folder_xyz/out.csv", 0.001, {"a"}, {"m"});
+        telemetry_writer bad("no_such_folder_xyz/out.csv", 0.001, {{"a", "m"}});
         check_true("unwritable path reports not ok", !bad.ok());
     }
 

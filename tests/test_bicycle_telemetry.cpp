@@ -18,8 +18,8 @@ int main()
     s.v = 10.0;
     const bicycle_input in{0.2, 1.25};
 
-    const std::vector<std::string> names = bicycle_columns();
-    const std::vector<std::string> units = bicycle_units();
+    const std::vector<std::string> names = column_names(bicycle_columns());
+    const std::vector<std::string> units = column_units(bicycle_columns());
     const std::vector<Real> row = bicycle_row(5, 0.001, s, p, in);
 
     // sizes

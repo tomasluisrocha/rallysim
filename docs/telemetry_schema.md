@@ -6,7 +6,7 @@ plus one for the final state. The simulator writes it; the tools in `tools/` onl
 ## File layout
 
 ```
-# schema=4 dt=0.001 units: step[count] time[s] pos.x[m] ...
+# schema=5 dt=0.001 units: step[count] time[s] pos.x[m] ...
 step,time,pos.x,...
 0,0,0,...
 ```
@@ -35,18 +35,10 @@ ignore them, and adding keys needs no schema change.
 | `track_front`, `track_rear` | m | single-track, four-wheel | Distance between the contact patches of an axle |
 | `cg_height` | m | single-track, four-wheel | CG above the ground |
 | `mass` | kg | single-track, four-wheel | Car mass |
-| `wheel_radius` | m | four-wheel | Rolling radius |
-| `mu_front`, `k_front`, `fz0_front` | -, -, N | four-wheel | Front tyre grip: `mu (1 - k (Fz - Fz0) / Fz0) Fz` |
-| `mu_rear`, `k_rear`, `fz0_rear` | -, -, N | four-wheel | Rear tyre grip |
-| `drive_split_front` | - | four-wheel | Share of the drive torque on the front axle |
+| every `rallysim params` name | its unit | four-wheel | Every parameter of the car, under the name `--set` and scenario files use (`vehicle/four_wheel_registry.hpp`): geometry, inertia, tyres, suspension, drive and brakes. So a four-wheel file records the whole car that made it, settings included |
 | `springs` | - | four-wheel | 1 if the car is on springs, 0 for the flat (planar) model |
-| `spring_front`, `damper_front` | N/m, N s/m | four-wheel | Spring and damper rate of each front corner |
-| `spring_rear`, `damper_rear` | N/m, N s/m | four-wheel | Of each rear corner |
-| `cx_front`, `calpha_front` | N, N/rad | four-wheel | Front tyre stiffness: per unit of slip ratio, per rad of slip angle |
-| `curve_front` | - | four-wheel | Front tyre curve: 0 linear, 1 peak_slide, 2 tmeasy (`tyre_curve` in `vehicle/tyre.hpp`) |
-| `peak_slip_front`, `sliding_slip_front`, `sliding_ratio_front` | -, -, - | four-wheel | Shape of the peak_slide curve (normalised slips; sliding force over peak force) |
-| `tmeasy_<axis>_<field><n>_front` | | four-wheel | The front tyre's TMeasy tables: `<axis>` x (along) or y (across); `<field>` `stiffness` (N per unit slip ratio, N/rad), `peak_slip`, `sliding_slip` (slip ratio along, tangent of the slip angle across), `sliding_ratio` (-); `<n>` 1 at the nominal load, 2 at twice it (16 keys) |
-| `cx_rear`, `calpha_rear`, `curve_rear`, `peak_slip_rear`, `sliding_slip_rear`, `sliding_ratio_rear`, `tmeasy_..._rear` | | four-wheel | The same for the rear tyre |
+| `curve_front`, `curve_rear` | - | four-wheel | Each tyre's curve: 0 linear, 1 peak_slide, 2 tmeasy (`tyre_curve` in `vehicle/tyre.hpp`) |
+| `tmeasy_<axis>_<field><n>_<axle>` | | four-wheel | The tyres' TMeasy tables: `<axis>` x (along) or y (across); `<field>` `stiffness` (N per unit slip ratio, N/rad), `peak_slip`, `sliding_slip` (slip ratio along, tangent of the slip angle across), `sliding_ratio` (-); `<n>` 1 at the nominal load, 2 at twice it; `<axle>` front or rear (32 keys) |
 
 Files written before these keys existed have none; `tools/topdown.py` then draws the default car, and
 `tools/tyre_points.py` uses the default tyre.
@@ -143,12 +135,15 @@ whole axle, and when an axle lifts the other one carries the whole car.
 so moving load between the two wheels of an axle lowers the axle's grip. `axle.front.Fy` is limited by
 `axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
 
+Schema 5 inserted `net.Fx`, `net.Fy` and `yaw_moment` after `a_lat`, and `grip` after `Fy` in each wheel's block,
+and line 1 of the four-wheel files lists every parameter.
+
 Schema 4 regrouped the four-wheel body columns (see the four-wheel table) and added `w`, `vel.z`, `roll_rate`,
 `pitch_rate` and `a_long`.
 
 Schema 3 inserted columns into the four-wheel files rather than appending them: `pos.z`, `roll` and `pitch` after
 `a_lat`, and `deflection`, `deflVel`, `springF` and `damperF` at the end of each wheel's block. Readers that look columns
-up by name (every tool in `tools/`) read schema 2, 3 and 4 files alike; anything that counts columns does not.
+up by name (every tool in `tools/`) read schema 2 to 5 files alike; anything that counts columns does not.
 
 Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
 names above, so a plot script can build a name from an axle or wheel label.
@@ -191,11 +186,14 @@ the pedals replace `drive_force`.
 | 21 | `vel.z` | m/s | Vertical speed of the CG, world frame, positive up: the heave rate |
 | 22 | `a_long` | m/s^2 | The force on the body along its heading on the ground, over the mass (the tyres' net push); positive forwards |
 | 23 | `a_lat` | m/s^2 | `speed * yaw_rate`; positive when turning left |
-| 24-35 | `wheel.FL.*` | | Front-left wheel, the twelve fields below |
-| 36-47 | `wheel.FR.*` | | Front-right wheel |
-| 48-59 | `wheel.RL.*` | | Rear-left wheel |
-| 60-71 | `wheel.RR.*` | | Rear-right wheel |
-| 72-82 | `energy.*`, `work.*` | J | The energy books, below |
+| 24 | `net.Fx` | N | The four tyre forces summed, along the body's x axis |
+| 25 | `net.Fy` | N | Along the body's y axis, positive to the left |
+| 26 | `yaw_moment` | N m | Their moment about the CG, about the body's z axis: what turns the car; positive turning left |
+| 27-39 | `wheel.FL.*` | | Front-left wheel, the thirteen fields below |
+| 40-52 | `wheel.FR.*` | | Front-right wheel |
+| 53-65 | `wheel.RL.*` | | Rear-left wheel |
+| 66-78 | `wheel.RR.*` | | Rear-right wheel |
+| 79-89 | `energy.*`, `work.*` | J | The energy books, below |
 
 Columns 13-18 are the six ISO vehicle velocities (`body_velocity`), in the body's axes, so they tilt with the body;
 the position, the angles and `vel.z` are in the world frame. So a rate is its angle's slope only while the car is
@@ -212,6 +210,7 @@ Each wheel block, in this order:
 | `Fz` | N | Vertical load, with the quasi-static load transfer |
 | `Fx` | N | Tyre force along the wheel |
 | `Fy` | N | Tyre force across the wheel, positive to its left |
+| `grip` | N | The most force the tyre can take at this load, `mu (1 - k (Fz - Fz0) / Fz0) Fz`: `hypot(Fx, Fy) / grip` is the grip in use |
 | `driveTorque` | N m | Drive torque the pedals put on this wheel |
 | `brakeTorque` | N m | Brake torque on this wheel (a magnitude; it opposes the spin) |
 | `deflection` | m | How far the corner's spring is compressed; zero or less means the wheel is off the ground |

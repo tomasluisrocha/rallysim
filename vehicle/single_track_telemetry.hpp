@@ -7,13 +7,15 @@
 
 namespace rallysim
 {
-    inline std::vector<std::string> single_track_columns()
+    inline std::vector<telemetry_column> single_track_columns()
     {
-        return {"step", "time", "pos.x", "pos.y", "yaw", "speed",
-                "steer", "drive_force", "u", "v", "yaw_rate", "beta", "a_lat",
-                "axle.front.slipAngle", "axle.rear.slipAngle", "axle.front.Fy", "axle.rear.Fy",
-                "wheel.FL.Fz", "wheel.FR.Fz", "wheel.RL.Fz", "wheel.RR.Fz",
-                "axle.front.grip", "axle.rear.grip", "axle.rear.Fx"};
+        return {{"step", "count"}, {"time", "s"}, {"pos.x", "m"}, {"pos.y", "m"}, {"yaw", "rad"}, {"speed", "m/s"},
+                {"steer", "rad"}, {"drive_force", "N"}, {"u", "m/s"}, {"v", "m/s"}, {"yaw_rate", "rad/s"},
+                {"beta", "rad"}, {"a_lat", "m/s^2"},
+                {"axle.front.slipAngle", "rad"}, {"axle.rear.slipAngle", "rad"},
+                {"axle.front.Fy", "N"}, {"axle.rear.Fy", "N"},
+                {"wheel.FL.Fz", "N"}, {"wheel.FR.Fz", "N"}, {"wheel.RL.Fz", "N"}, {"wheel.RR.Fz", "N"},
+                {"axle.front.grip", "N"}, {"axle.rear.grip", "N"}, {"axle.rear.Fx", "N"}};
     }
 
     // The car's geometry and grip for line 1 of the file, so a viewer can draw it to scale.
@@ -21,15 +23,6 @@ namespace rallysim
     {
         return {{"model", 2}, {"lf", p.lf}, {"lr", p.lr}, {"track_front", p.track_width}, {"track_rear", p.track_width},
                 {"cg_height", p.cg_height}, {"max_steer", p.max_steer}, {"mass", p.chassis.mass}};
-    }
-
-    inline std::vector<std::string> single_track_units()
-    {
-        return {"count", "s", "m", "m", "rad", "m/s",
-                "rad", "N", "m/s", "m/s", "rad/s", "rad", "m/s^2",
-                "rad", "rad", "N", "N",
-                "N", "N", "N", "N",
-                "N", "N", "N"};
     }
 
     // `input` is the command applied at this step. Everything after it is computed by evaluate(), the

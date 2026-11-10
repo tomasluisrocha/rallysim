@@ -17,24 +17,45 @@ namespace rallysim
     //    springF, damperF at the end of each wheel's block.
     // 4: four-wheel body columns regrouped (time, inputs, where the car is, how it moves, then values worked out
     //    from those), with w, vel.z, roll_rate, pitch_rate and a_long added.
-    inline constexpr int kTelemetrySchema = 4;
+    // 5: four-wheel columns inserted: net.Fx, net.Fy and yaw_moment after a_lat, and grip after Fy in each wheel's
+    //    block; line 1 lists every registry parameter.
+    inline constexpr int kTelemetrySchema = 5;
 
-    // Constant facts about the run that are not columns, such as the car's geometry, written as key=value on
-    // line 1 so a viewer can draw the car to scale. Keys have no spaces and no '='.
+    // One column: its dotted name and its unit, written together so the two can never drift apart.
+    struct telemetry_column
+    {
+        std::string name; // e.g. "wheel.FL.Fz"
+        std::string unit; // e.g. "N"
+    };
+
+    inline std::vector<std::string> column_names(const std::vector<telemetry_column> &columns)
+    {
+        std::vector<std::string> names;
+        for (const telemetry_column &c : columns)
+            names.push_back(c.name);
+        return names;
+    }
+
+    inline std::vector<std::string> column_units(const std::vector<telemetry_column> &columns)
+    {
+        std::vector<std::string> units;
+        for (const telemetry_column &c : columns)
+            units.push_back(c.unit);
+        return units;
+    }
+
+    // Constant facts about the run that are not columns, written as key=value on line 1: the car's geometry (so a
+    // viewer can draw it to scale) and every setting that shaped the run. Keys have no spaces and no '='.
     using telemetry_meta = std::vector<std::pair<std::string, Real>>;
 
     // Writes one CSV row per physics step. See docs/telemetry_schema.md for the format.
     class telemetry_writer
     {
     public:
-        telemetry_writer(const std::string &path, Real dt,
-                         const std::vector<std::string> &names,
-                         const std::vector<std::string> &units,
+        telemetry_writer(const std::string &path, Real dt, const std::vector<telemetry_column> &columns,
                          const telemetry_meta &meta = {})
-            : columns_(names.size()), names_(names)
+            : columns_(columns.size()), names_(column_names(columns))
         {
-            assert(names.size() == units.size());
-
             // Binary mode keeps "\n" as a single byte on every platform.
             out_.open(path, std::ios::binary);
             if (!out_.is_open())
@@ -46,12 +67,12 @@ namespace rallysim
             for (const auto &kv : meta)
                 out_ << ' ' << kv.first << '=' << kv.second;
             out_ << " units:";
-            for (std::size_t i = 0; i < names.size(); ++i)
-                out_ << ' ' << names[i] << '[' << units[i] << ']';
+            for (const telemetry_column &c : columns)
+                out_ << ' ' << c.name << '[' << c.unit << ']';
             out_ << '\n';
 
-            for (std::size_t i = 0; i < names.size(); ++i)
-                out_ << (i ? "," : "") << names[i];
+            for (std::size_t i = 0; i < columns.size(); ++i)
+                out_ << (i ? "," : "") << columns[i].name;
             out_ << '\n';
         }
 

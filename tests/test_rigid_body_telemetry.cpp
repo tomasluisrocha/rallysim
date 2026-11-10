@@ -17,8 +17,8 @@ int main()
     s.omega = {7, 8, 9};
     const wrench w{vec3{11, 12, 13}, vec3{14, 15, 16}};
 
-    const std::vector<std::string> names = rigid_body_columns();
-    const std::vector<std::string> units = rigid_body_units();
+    const std::vector<std::string> names = column_names(rigid_body_columns());
+    const std::vector<std::string> units = column_units(rigid_body_columns());
     const std::vector<Real> row = rigid_body_row(5, 0.001, s, w);
 
     // sizes

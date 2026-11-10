@@ -112,9 +112,14 @@ the file's `cg_height`.
 
 ### `[car]`
 
-Every number `rallysim params` lists, in the unit it shows: `mass`, `lf`, `lr`, `cg_height`, `mu_front`,
-`spring_rear`, `drive_split_front` and the rest. Changing the mass, the axle positions or a tyre stiffness refits
-the tyres to the new loads. And:
+Every number `rallysim params` lists, in the unit it shows: `mass`, `lf`, `cg_height`, `mu_front`, `fz0_rear`,
+`relaxation_y_front`, `spring_rear`, `drive_split_front` and the rest. Changing the mass, the axle positions, a tyre
+stiffness or a nominal load refits the tyres to the new loads.
+
+A number the car does not use is an error, because it would change nothing: the springs and dampers only with
+`vertical = springs`, `front_transfer_share` only with `vertical = planar`, and a tyre's `peak_slip`, `sliding_slip`
+and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after the words below are read, wherever
+they are in the file; `rallysim params <scenario>` marks what a car does not use. And:
 
 | Key | Values | Default |
 |---|---|---|
@@ -129,6 +134,7 @@ the tyres to the new loads. And:
 | `steer` | timeline | rad | `0` | front wheel angle, positive left; limited to `max_steer` |
 | `throttle`, `brake`, `handbrake` | timeline | - | `0` | pedals, 0 to 1 (or `%`) |
 | `hold_speed` | timeline | m/s | off | target speed for a speed controller, which then works the throttle and brake (so not together with them), and lifts off while the handbrake is pulled |
+| `speed_gain` | number | 1/s | `10` | how hard the speed controller pushes: drive force per kg per m/s below the target |
 | `hold_heading` | number | rad | off | target heading for a steering driver that countersteers to catch a slide; needs `hold_heading_from` |
 | `hold_heading_from` | number | s | | when that driver takes over the steering |
 | `heading_gain` | number | 1/s | `2.5` | yaw rate asked for per radian of heading still to go |

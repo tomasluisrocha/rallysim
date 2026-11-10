@@ -21,6 +21,7 @@ namespace rallysim
         // The speed controller's target over time (m/s): when given, it replaces the script's throttle and brake.
         // Empty: off (the script's pedals throughout). A constant target is constant_script(v).
         keyframe_script<Real> hold_speed;
+        Real speed_gain = kSpeedHoldGain; // 1/s: drive force asked per m/s below the target, per kg
         // From this time (s) the heading-hold driver (driver/heading_hold.hpp) steers towards hold_heading (rad,
         // world) instead of the script; below zero, never (the default: the script steers throughout)
         Real hold_heading_from = -1;
@@ -56,7 +57,7 @@ namespace rallysim
             const drive_brake_params &d = r.params.drive_brake;
             const Real R = r.params.wheel.radius;
             const pedals p = speed_hold_pedals(r.params.chassis.mass, sample(r.hold_speed, t), velocity_in_body(s.body).u,
-                                               d.max_drive_torque / R, d.max_brake_torque / R);
+                                               d.max_drive_torque / R, d.max_brake_torque / R, r.speed_gain);
             in.throttle = p.throttle;
             in.brake = p.brake;
         }

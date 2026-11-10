@@ -300,6 +300,29 @@ int main()
                     "steer: point 2: time 0.5 s is not after 1 s");
     check_one_error("driver: unknown key", kMinimal + "[driver]\nclutch = 1\n", "t.ini:4:", "clutch: unknown key in [driver]");
 
+    // ---- settings the chosen car does not use are refused, wherever its words are -----------------------------
+    check_one_error("unused: a spring on the planar car", kMinimal + "[car]\nspring_front = 40 kN/m\nvertical = planar\n",
+                    "t.ini:4:", "spring_front: only used with vertical = springs");
+    check_one_error("unused: the transfer share with springs", kMinimal + "[car]\nfront_transfer_share = 0.6\n",
+                    "t.ini:4:", "only used with vertical = planar");
+    check_one_error("unused: a peak_slide shape on a tmeasy tyre", kMinimal + "[car]\npeak_slip_front = 2.5\n",
+                    "t.ini:4:", "only used with the front tyre on peak_slide");
+    check_one_error("unused: and from --set", kMinimal, "--set:", "damper_rear: only used with vertical = springs",
+                    {{"vertical", "planar"}, {"damper_rear", "3000"}});
+    {
+        const four_wheel_run r = load(kMinimal + "[car]\ntyre_curve_rear = peak_slide\nsliding_ratio_rear = 0.7\n"
+                                                 "fz0_front = 3.2 kN\nrelaxation_y_rear = 350 mm\n"
+                                                 "[driver]\nhold_speed = 10\nspeed_gain = 4\n");
+        check_near("used: a shape on its peak_slide axle", r.params.rear_tyre.sliding_ratio, 0.7, 0);
+        check_near("new: nominal load", r.params.front_tyre.nominal_load, 3200, 0);
+        check_near("new: relaxation length", r.params.rear_tyre.relaxation_length_y, 0.35, 1e-15);
+        check_near("new: speed gain", r.speed_gain, 4, 0);
+        // a new nominal load refits the tyre: its stiffness at the load at rest is still the one asked for
+        check_near("new: nominal load refits", tmeasy_at(r.params.front_tyre.tmeasy_y, r.params.static_load(FL),
+                                                         r.params.front_tyre.nominal_load).stiffness,
+                   r.params.front_tyre.cornering_stiffness, 1e-6);
+    }
+
     // ---- the showcase file loads and runs to the end --------------------------------------------------------
     {
         const four_wheel_run r = load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {});

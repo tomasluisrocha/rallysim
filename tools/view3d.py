@@ -122,7 +122,7 @@ class Run:
             self.wheels[w] = {
                 "fx": col(f"wheel.{w}.Fx"), "fy": col(f"wheel.{w}.Fy"), "fz": fz, "omega": omega,
                 "slip_ratio": col(f"wheel.{w}.slipRatio"),
-                "grip": simdata.grip(tyre, fz),
+                "grip": col(f"wheel.{w}.grip") if f"wheel.{w}.grip" in data.columns else simdata.grip(tyre, fz),
                 "spin": np.concatenate([[0.0], np.cumsum(omega[:-1] * np.diff(self.t))]),  # rad turned so far
                 "static": fz[0] if fz[0] > 0 else np.nan,
             }
@@ -131,8 +131,8 @@ class Run:
 
         # the tyre forces' yaw moment about the CG (N m, positive turning left): each force turned by its wheel's
         # steer into the body frame, acting at its contact patch
-        self.yaw_moment = np.zeros_like(self.t)
-        for w, (wx, wy) in self.wheel_xy.items():
+        self.yaw_moment = np.zeros_like(self.t) if "yaw_moment" not in data.columns else col("yaw_moment")
+        for w, (wx, wy) in ([] if "yaw_moment" in data.columns else self.wheel_xy.items()):  # logged since schema 5
             delta = self.steer if w[0] == "F" else 0.0
             fx, fy = self.wheels[w]["fx"], self.wheels[w]["fy"]
             self.yaw_moment += wx * (fx * np.sin(delta) + fy * np.cos(delta)) - wy * (fx * np.cos(delta) - fy * np.sin(delta))

@@ -213,7 +213,7 @@ int main()
 
     // telemetry: one value per column, under the right name
     {
-        const std::vector<std::string> names = four_wheel_columns(), units = four_wheel_units();
+        const std::vector<std::string> names = column_names(four_wheel_columns()), units = column_units(four_wheel_columns());
         four_wheel_state s = moving(p, 0.3, 12.0, 0.4, 0.25);
         s.body.vel.z = 0.3;     // climbing, so w and vel.z are not zero
         s.body.omega.x = 0.05;  // rolling (right side going down)
@@ -221,8 +221,8 @@ int main()
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const energy_books books(s, p); // no work done yet: the residual is zero
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in, books);
-        check_true("telemetry: 23 + 4 x 12 + 11 energy columns, units and values",
-                   names.size() == 82 && units.size() == 82 && row.size() == 82);
+        check_true("telemetry: 26 + 4 x 13 + 11 energy columns, units and values",
+                   names.size() == 89 && units.size() == 89 && row.size() == 89);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);
