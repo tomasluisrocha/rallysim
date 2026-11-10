@@ -119,7 +119,20 @@ stiffness or a nominal load refits the tyres to the new loads.
 A number the car does not use is an error, because it would change nothing: the springs and dampers only with
 `vertical = springs`, `front_transfer_share` only with `vertical = planar`, and a tyre's `peak_slip`, `sliding_slip`
 and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after the words below are read, wherever
-they are in the file; `rallysim params <scenario>` marks what a car does not use. And:
+they are in the file; `rallysim params <scenario>` marks what a car does not use.
+
+A number outside its range is an error too; nothing is clamped:
+
+| Range | Keys |
+|---|---|
+| above 0 | `mass`, `inertia_x/y/z`, `lf`, `lr`, `track_front/rear`, `cg_height`, `max_steer`, `wheel_radius`, `wheel_inertia`, `fz0_*`, `cx_*`, `calpha_*`, `relaxation_*`, `spring_*`, `sliding_slip_*`, `max_drive_power` |
+| 0 or more | `mu_*`, `k_*`, `damper_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
+| 0 to 1 | `front_transfer_share`, `drive_split_front`, `brake_bias_front`, `sliding_ratio_*` |
+| 1.5 to 3 | `peak_slip_*` |
+
+On a `peak_slide` axle, `sliding_slip` must also be above `peak_slip`.
+
+The words:
 
 | Key | Values | Default |
 |---|---|---|
@@ -159,6 +172,7 @@ A file with any error does not run and writes no telemetry. Every error is liste
 --set: mass: not a number: 'abc'
 my_run.ini:2: duration: 1.0003 s is not a whole number of 0.001 s steps
 my_run.ini:4: speed: give speed or velocity, not both
+my_run.ini:7: mass: must be above 0
 my_run.ini:8: spring_front: unit km/h is not N/m
 my_run.ini:9: unknown section [track]
 ```

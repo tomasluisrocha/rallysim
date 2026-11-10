@@ -68,11 +68,14 @@ rallysim_test(scenario_file)
 target_compile_definitions(test_ini PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}") # to read scenarios/*.ini
 target_compile_definitions(test_scenario_file PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-# The command line: --set reaches a four-wheel car; a bad name, a missing value or a model without settings fails.
+# The command line: --set reaches a four-wheel car; a bad name, a missing value, a model without settings or a value
+# outside its range fails.
 add_test(NAME cli_set COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_set.csv
          --set spring_front=60000 --set mu_rear=0.8)
 set_tests_properties(cli_set PROPERTIES PASS_REGULAR_EXPRESSION "with --set")
 add_test(NAME cli_set_unknown COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set sprng_front=1)
 add_test(NAME cli_set_no_value COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set spring_front)
 add_test(NAME cli_set_not_four_wheel COMMAND rallysim st_circle ${CMAKE_BINARY_DIR}/cli_bad.csv --set mass=1)
-set_tests_properties(cli_set_unknown cli_set_no_value cli_set_not_four_wheel PROPERTIES WILL_FAIL TRUE)
+add_test(NAME cli_set_out_of_range COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set mass=0)
+set_tests_properties(cli_set_unknown cli_set_no_value cli_set_not_four_wheel cli_set_out_of_range
+                     PROPERTIES WILL_FAIL TRUE)

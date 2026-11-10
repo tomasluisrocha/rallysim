@@ -22,7 +22,8 @@ namespace rallysim
     //   [run]       model (four_wheel), duration (s, required), dt (s, default 0.001)
     //   [start]     position (m), heading, pitch, roll (rad), speed (m/s) or velocity (m/s), angular_velocity (rad/s)
     //   [car]       every registry name (rallysim params) the car uses, tyre_curve or tyre_curve_front / _rear,
-    //               vertical; a number the chosen model or tyre curve does not use is refused (param_used)
+    //               vertical; a number the chosen model or tyre curve does not use is refused (param_used), and so is
+    //               one outside its range (range_error)
     //   [driver]    steer (rad), throttle, brake, handbrake (0 to 1) as timelines; hold_speed (m/s, a timeline) for
     //               the speed controller (gain speed_gain, 1/s), in place of throttle and brake; hold_heading (rad)
     //               from hold_heading_from (s) for the heading-hold driver, with its gains heading_gain (1/s),
@@ -186,7 +187,11 @@ namespace rallysim
                     if (const param_entry *param = find_param(e.key))
                     {
                         Real v = 0;
-                        if (number(e, param->unit, v))
+                        if (!number(e, param->unit, v))
+                            continue;
+                        if (const std::string wrong = range_error(*param, v); !wrong.empty())
+                            fail(e, wrong); // and the default stays, so the rest of the file is still checked
+                        else
                         {
                             param->field(run.params) = v;
                             refit = refit || std::find(fit_keys.begin(), fit_keys.end(), e.key) != fit_keys.end();
@@ -214,6 +219,17 @@ namespace rallysim
                 for (const ini_entry &e : s.entries)
                     if (const param_entry *param = find_param(e.key); param && !param_used(*param, run.params))
                         fail(e, "only used " + param_use_text(*param) + "; this car does not use it");
+        // a peak_slide tyre slides fully past its peak, not before it
+        for (const std::string axle : {"front", "rear"})
+        {
+            const tyre_params &t = axle == "front" ? run.params.front_tyre : run.params.rear_tyre;
+            if (t.curve != tyre_curve::peak_slide || t.sliding_slip > t.peak_slip)
+                continue;
+            if (const ini_entry *e = entry_of("car", "sliding_slip_" + axle))
+                fail(*e, "must be above peak_slip_" + axle + " (" + number_text(t.peak_slip) + ")");
+            else if (const ini_entry *e2 = entry_of("car", "peak_slip_" + axle))
+                fail(*e2, "must be below sliding_slip_" + axle + " (" + number_text(t.sliding_slip) + ")");
+        }
         if (refit)
             rebuild_tyres(run.params);
 

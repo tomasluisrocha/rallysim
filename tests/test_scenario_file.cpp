@@ -323,6 +323,28 @@ int main()
                    r.params.front_tyre.cornering_stiffness, 1e-6);
     }
 
+    // ---- numbers outside their range are refused, each on its line ---------------------------------------------
+    {
+        const std::vector<std::string> e = errors_of(kMinimal + "[car]\nmass = 0\ndamper_front = -1\n");
+        for (const std::string &m : e)
+            std::printf("  %s\n", m.c_str());
+        check_true("range: both reported", e.size() == 2);
+        check_true("range: mass, on its line", e.size() == 2 && e[0] == "t.ini:4: mass: must be above 0");
+        check_true("range: damper, on its line", e.size() == 2 && e[1] == "t.ini:5: damper_front: must be 0 or more");
+    }
+    check_one_error("range: from --set", kMinimal, "--set:", "mass: must be above 0", {{"mass", "0"}});
+    check_one_error("range: a share above 1", kMinimal + "[car]\ndrive_split_front = 120 %\n", "t.ini:4:",
+                    "drive_split_front: must be within 0 to 1");
+    check_one_error("range: a peak_slide peak past 3", kMinimal + "[car]\ntyre_curve = peak_slide\npeak_slip_rear = 4\n",
+                    "t.ini:5:", "peak_slip_rear: must be within 1.5 to 3");
+    check_one_error("range: sliding before the peak", kMinimal + "[car]\ntyre_curve = peak_slide\nsliding_slip_front = 2\n",
+                    "t.ini:5:", "sliding_slip_front: must be above peak_slip_front (2)");
+    check_one_error("range: sliding at the peak, both given",
+                    kMinimal + "[car]\ntyre_curve_front = peak_slide\nsliding_slip_front = 2.5\npeak_slip_front = 2.5\n",
+                    "t.ini:5:", "sliding_slip_front: must be above peak_slip_front (2.5)");
+    check_true("range: sliding past the peak loads",
+               errors_of(kMinimal + "[car]\ntyre_curve = peak_slide\npeak_slip_front = 3\nsliding_slip_front = 3.5\n").empty());
+
     // ---- the showcase file loads and runs to the end --------------------------------------------------------
     {
         const four_wheel_run r = load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {});

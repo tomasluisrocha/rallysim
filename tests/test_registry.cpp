@@ -27,6 +27,22 @@ namespace
         return false;
     }
 
+    // apply() refuses the value with exactly `message`, and leaves the car as it was.
+    bool refused(const std::string &name, const std::string &value, const std::string &message)
+    {
+        four_wheel_params p;
+        const Real before = find_param(name)->field(p);
+        try
+        {
+            apply(p, name, value);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            return message == e.what() && find_param(name)->field(p) == before;
+        }
+        return false;
+    }
+
     // The stiffness a tmeasy tyre has at `load`, along and across.
     Real along_at(const tyre_params &t, Real load) { return tmeasy_at(t.tmeasy_x, load, t.nominal_load).stiffness; }
     Real across_at(const tyre_params &t, Real load) { return tmeasy_at(t.tmeasy_y, load, t.nominal_load).stiffness; }
@@ -131,6 +147,24 @@ int main()
     check_true("apply: infinity throws", throws("spring_front", "inf"));
     check_true("apply: nan throws", throws("spring_front", "nan"));
     check_true("apply: overflow throws", throws("spring_front", "1e999"));
+
+    // ---- ranges ---------------------------------------------------------------------------------------------
+    {
+        four_wheel_params p;
+        for (const param_entry &e : table)
+        {
+            check_true(e.name, e.range != param_range::any); // every number so far has one
+            check_true(e.name, range_error(e, e.field(p)).empty());
+        }
+    }
+    check_true("range: mass = 0", refused("mass", "0", "parameter mass: must be above 0"));
+    check_true("range: a negative spring", refused("spring_front", "-1", "parameter spring_front: must be above 0"));
+    check_true("range: a negative damper", refused("damper_rear", "-1", "parameter damper_rear: must be 0 or more"));
+    check_true("range: a bias above 1",
+               refused("brake_bias_front", "1.5", "parameter brake_bias_front: must be within 0 to 1"));
+    check_true("range: a peak past 3", refused("peak_slip_front", "4", "parameter peak_slip_front: must be within 1.5 to 3"));
+    check_true("range: the ends are inside", !throws("drive_split_front", "100 %") && !throws("mu_front", "0") &&
+                                                 !throws("peak_slip_rear", "1.5") && !throws("peak_slip_rear", "3"));
 
     // ---- rebuild_tyres --------------------------------------------------------------------------------------
     {
