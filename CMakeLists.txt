@@ -80,6 +80,7 @@ rallysim_test(registry)
 rallysim_test(ini)
 rallysim_test(ini_values)
 rallysim_test(scenario_file)
+rallysim_test(quarter_car)
 target_compile_definitions(test_ini PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}") # to read scenarios/*.ini
 target_compile_definitions(test_scenario_file PRIVATE RALLYSIM_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
