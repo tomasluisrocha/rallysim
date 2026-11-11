@@ -113,7 +113,8 @@ class TestCompare(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 self.assertEqual(cli.main(["diff", str(path_a), str(path_b), "--tol", "*=1e-8", "--all"]), 1)
         names = [line.split("\t")[0] for line in output.getvalue().splitlines() if "\t" in line]
-        self.assertEqual(names[:4], ["y", "x", "w", "z"])
+        self.assertEqual(names[:5], ["column", "y", "x", "w", "z"])
+        self.assertIn("column\tlargest\tt_largest\tt_first", output.getvalue().splitlines())
 
     def test_cli_reports_metadata_only_differences(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -59,13 +59,17 @@ def steady(run: Run, start=None, end=None) -> dict:
     }
 
 
-_QUANTITIES = (
+# Means over the window: shown only when the window is steady.
+_WINDOW = (
     "roll_deg",
     "a_lat",
     "roll_gradient",
     "transfer_front",
     "transfer_rear",
     "front_share",
+)
+# Over the whole run: always shown.
+_WHOLE_RUN = (
     "max_abs_roll_deg",
     "min_fz",
     "max_deflection",
@@ -76,9 +80,10 @@ def table(runs, start=None, end=None) -> str:
     runs = list(runs)
     metrics = [steady(run, start, end) for run in runs]
     lines = ["quantity\t" + "\t".join(run.name for run in runs)]
-    for quantity in _QUANTITIES:
+    for quantity in _WINDOW + _WHOLE_RUN:
         values = []
         for metric in metrics:
-            values.append("not steady" if not metric["is_steady"] else str(metric[quantity]))
+            hidden = quantity in _WINDOW and not metric["is_steady"]
+            values.append("not steady" if hidden else str(metric[quantity]))
         lines.append(quantity + "\t" + "\t".join(values))
     return "\n".join(lines)

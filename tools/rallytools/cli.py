@@ -43,6 +43,8 @@ def _print_result(path_a, path_b, result, show_all):
     if show_all:
         columns += sorted((column for column in result.columns if not column.beyond),
                           key=lambda column: -column.largest)
+    if columns:
+        print("column\tlargest\tt_largest\tt_first")
     for column in columns:
         print(f"{column.name}\t{column.largest!r}\t{column.t_largest!r}\t{column.t_first!r}")
 

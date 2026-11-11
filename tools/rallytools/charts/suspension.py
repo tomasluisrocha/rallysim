@@ -24,7 +24,9 @@ def figure(runs, start=None, end=None, fig=None) -> Figure:
         fig = Figure(figsize=(15, 10))
     else:
         fig.set_size_inches(15, 10)
-    grid = fig.add_gridspec(8, 4, width_ratios=(1.35, 1.35, 1, 1), hspace=0.8, wspace=0.45)
+    # matplotlib places titles and labels so they do not overlap.
+    fig.set_layout_engine("constrained")
+    grid = fig.add_gridspec(8, 4, width_ratios=(1.35, 1.35, 1, 1))
 
     left = [
         fig.add_subplot(grid[0:2, 0:2]),
@@ -86,5 +88,4 @@ def figure(runs, start=None, end=None, fig=None) -> Figure:
     for axis in axes[4:]:
         axis.set_xlabel("time (s)")
         axis.grid(True)
-    fig.subplots_adjust(left=0.06, right=0.98, bottom=0.06, top=0.96, hspace=0.8, wspace=0.45)
     return fig

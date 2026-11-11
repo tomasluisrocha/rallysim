@@ -63,7 +63,14 @@ class TestChannels(unittest.TestCase):
         roll = np.linspace(0.01, 0.02, 3)
         run = four(roll=roll)
         self.assertFalse(steady(run)["is_steady"])
-        self.assertIn("not steady", table([run]))
+        lines = dict(line.split("\t", 1) for line in table([run]).splitlines()[1:])
+        for quantity in ("roll_deg", "a_lat", "roll_gradient", "transfer_front", "transfer_rear",
+                         "front_share"):
+            self.assertEqual(lines[quantity], "not steady")
+        # Whole-run values do not depend on the window: still shown (roll peaks at 0.02 rad).
+        self.assertAlmostEqual(float(lines["max_abs_roll_deg"]), np.degrees(0.02), places=12)
+        self.assertEqual(float(lines["min_fz"]), 2000.0)
+        self.assertEqual(float(lines["max_deflection"]), 0.1)
 
     def test_non_four_wheel_rejected(self):
         run = from_frame(pd.DataFrame({"time": [0.0], "yaw": [0.0], "speed": [1.0]}),
