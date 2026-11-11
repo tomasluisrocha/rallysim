@@ -49,12 +49,12 @@ Install the Python plotting dependencies, then run every scenario and make
 every picture:
 
 ```text
-py -m pip install -r tools/requirements.txt
-py tools/run_all.py
-py tools/topdown.py out/runs/fw_hairpin.csv     the interactive dashboard
+python -m pip install -r tools/requirements.txt
+python tools/run_all.py
+python tools/topdown.py out/runs/fw_hairpin.csv     the interactive dashboard
 ```
 
-`py tools/run_all.py --gif` also makes the animated dashboards and 3D views.
+`python tools/run_all.py --gif` also makes the animated dashboards and 3D views.
 Output is written under `out/`, which is ignored by git.
 
 ## A few outputs

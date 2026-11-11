@@ -33,10 +33,11 @@ simpler model and with a physical or mathematical expectation.
 | Area | Decision | Reason |
 |---|---|---|
 | Language | C++17 for the header-only core; Python for analysis and plots | Keeps the simulation portable and makes the analysis tools easy to iterate |
-| Time | Fixed 1 ms physics step; wheel spin uses smaller internal substeps | A fixed clock makes scripted runs reproducible, while wheel spin needs finer integration |
+| Time | Fixed physics step, 1 ms by default and set per scenario (`run.dt`); wheel spin uses smaller internal substeps | A fixed clock makes scripted runs reproducible, while wheel spin needs finer integration |
 | Units | SI units throughout the core and telemetry | Avoids hidden conversions between model components |
 | Coordinates | ISO 8855: x forward, y left, z up | Gives the vehicle quantities a consistent automotive convention |
 | Orientation | Body-to-world Hamilton quaternions, w first | Avoids Euler-angle singularities in the rigid-body state |
+| State frames | Position and velocity in the world frame; angular velocity and torque in the body frame | The inertia is constant in the body frame, where Euler's equations are simplest |
 | Wheel order | FL, FR, RL, RR everywhere | Makes telemetry, load transfer and tests unambiguous |
 | Floating point | No fast-math; precise floating point; finite values are required | Numerical failures should be visible rather than converted into plausible output |
 | Rendering | No renderer in the simulator; Python tools replay telemetry | Keeps visualisation separate from physics and makes generated views reproducible |
@@ -72,9 +73,8 @@ The project keeps three levels of vehicle model:
   lateral tyre forces and quasi-static load transfer. It is a compact
   reference for the four-wheel car.
 - **Four-wheel:** individual wheels, wheel rotation, combined-slip tyres,
-  drive and brake torques, load transfer and corner springs (by default; a
-  planar mode without them is kept for comparison). This is the main
-  exploratory model.
+  drive and brake torques and load transfer, with a choice of three vertical
+  models (below). This is the main exploratory model.
 
 The four-wheel model is not yet a complete rally simulator. The ground is
 currently flat, terrain and surface data are reserved for later work, and the
@@ -96,47 +96,72 @@ compare against the tyre rig and to replace independently later.
 
 ### Loads and suspension
 
-The planar four-wheel mode uses a quasi-static estimate of longitudinal and
-lateral load transfer. The spring mode applies gravity and a spring/damper at
-each corner, allowing heave, pitch and roll to emerge from the rigid-body
-motion. Both modes are retained: the planar mode is easier to compare directly
-with the single-track model, while the spring mode is more representative of
-the vehicle's vertical behaviour.
+The four-wheel car finds its vertical loads in one of three ways, chosen with
+`vertical` in a scenario file:
 
-### Wheel masses and the suspension upgrade path
+- **`planar`**: gravity is cancelled and the body stays flat; the loads come
+  from a quasi-static estimate of longitudinal and lateral load transfer. It
+  compares directly with the single-track model.
+- **`springs`** (the default): gravity acts and each corner is a massless
+  vertical spring and damper, so heave, pitch and roll emerge from the
+  rigid-body motion. A corner can push the body up but never pulls it down.
+- **`unsprung`**: each corner is a quarter-car. A wheel mass sits on a tyre
+  spring under a vertical strut (spring, damper and a droop stop that limits
+  how far the wheel can hang). The tyre only pushes; the strut may also pull,
+  through its damper and the droop stop.
 
-Decided 2026-11-10 for the mode that adds wheel mass and a tyre spring
-(`unsprung`):
+All three are kept, so each can be compared with the one before it.
 
-- **Chosen: a simple mass split.** The whole mass moves the car along the
-  ground; vertically the body has the sprung mass and each wheel its own, on a
-  vertical strut. Static loads, steady pitch and roll, load transfer, wheel
-  hop and landing loads are exact. Left out: the wheels' horizontal inertia
-  about the body's CG, about 0.4% of pitch inertia and 2% of roll inertia.
-- **Rejected: a coupled mass matrix** (the four wheels as point masses solved
-  together with the body, 10x10 each step). It removes only that 2%, replaces
-  the body step, has no closed forms to test against, and would be discarded
-  by the upgrade below.
-- **Possible upgrade, not scheduled: a multibody suspension mode.** Wheel
-  carriers and links as rigid bodies held by constraints, with a constraint
-  solver. This is what gives anti-dive, anti-squat, roll centres, jacking and
-  camber and toe change from the geometry itself, the 10 to 30% effects that
-  formulas and tables only approximate. It is a new mode beside the others,
-  not a replacement: the tyre, wheel spin, driveline, surfaces, telemetry and
-  energy books carry over. Consider it only after the drivetrain and surface
-  phases pass their gates, when there is a trusted car to compare it with.
+### Wheel masses
+
+In the `unsprung` model the whole mass moves the car along the ground, while
+vertically the body has the sprung mass (the car less its four wheels) and each
+wheel its own. The wheels' horizontal inertia about the body's centre of mass
+is left out: about 0.4% of the pitch inertia and 2% of the roll inertia. A
+coupled mass matrix (the wheels as point masses solved together with the body)
+would remove only that, at the cost of replacing the rigid-body step and losing
+the closed forms the model is tested against.
+
+What the tests establish, within the model's own assumptions:
+
+- at rest the car is level and each tyre carries its share of the weight;
+- with the centre of mass midway between the axles, pure heave matches the
+  standalone two-mass quarter-car within 1e-9 m, and the quarter-car's modes
+  are within 1% of their closed forms;
+- steady roll is within 3% of the closed form with the spring and tyre in
+  series;
+- a light wheel on a stiff tyre (2 kg on 5 MN/m) reproduces the `springs`
+  model to within millimetres, run at a 0.1 ms step (such a stiff corner
+  needs a small step);
+- drops from 0.3 m and 1 m never gain energy and settle back to the static
+  loads.
+
+These are agreements with closed forms and simpler models, not a claim of
+accuracy against a real car.
 
 ## Architecture and dependency direction
 
-- `core/` contains maths, rigid-body integration, fixed-step timing,
-  telemetry and finite-value checks.
-- `vehicle/` contains bicycle, single-track and four-wheel models plus tyres,
-  wheels, brakes and suspension.
-- `driver/` contains scripted inputs and controllers.
-- `scenarios/` combines a model, driver and run length.
-- `apps/` contains the `rallysim` command-line program.
-- `tests/` contains focused tests and independent reference checks.
-- `tools/` reads telemetry and never changes the physics.
+| Folder | Holds |
+|---|---|
+| `core/` | Maths, rigid-body integration, fixed-step timing, telemetry writer, `.ini` parser, finite-value checks |
+| `vehicle/` | The bicycle, single-track and four-wheel models; tyre, wheel, corner, drive and brakes, energy books, telemetry columns, parameter registry |
+| `driver/` | Input scripts and closed-loop drivers |
+| `runner/` | How a scenario runs: the run loops and the scenario-file loader |
+| `runner/builtin/` | The earlier models' scenarios and the tyre rig, written in C++ |
+| `scenarios/` | The four-wheel scenario files (`.ini`) that `rallysim <name>` runs |
+| `apps/` | The `rallysim` command-line program |
+| `tests/` | Focused tests and independent reference checks, one program per file |
+| `tools/` | Python tools that read telemetry and never change the physics |
+
+One four-wheel run: the scenario file is loaded and the starting state
+checked. Each step then takes the driver's inputs and, when telemetry is on,
+writes a row for the state at the start of the step. From that state it
+evaluates the drive and brake torques, then each wheel's contact, load, patch
+velocity and tyre force; it steps the wheels' spin in sub-steps, applies the
+resulting force and torque to the body and, in the `unsprung` model, then moves
+each wheel vertically. After the step the run stops with an error if the state
+is not finite or the car is where the model cannot represent it (on its side
+or roof, or with its centre of mass at or below the ground).
 
 Dependencies point from the application toward the core. `world/` and `data/`
 are reserved for future terrain, surfaces and vehicle-data loading.
