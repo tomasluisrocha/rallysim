@@ -100,16 +100,30 @@ class TestSuspensionChart(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_show_registers_generated_figure(self):
-        chart = Figure()
-        with patch("rallytools.charts.suspension.figure", return_value=chart), \
+    def test_show_draws_into_a_pyplot_figure(self):
+        plt.close("all")
+        pyplot_figure = plt.figure
+
+        def as_in_matplotlib_3_10(*args, **kwargs):
+            # matplotlib 3.10 (the CI floor) refuses a figure pyplot did not make; 3.11 adopts it.
+            if args and isinstance(args[0], Figure) and args[0].canvas.manager is None:
+                raise ValueError("The passed figure is not managed by pyplot")
+            return pyplot_figure(*args, **kwargs)
+
+        with patch("matplotlib.pyplot.figure", side_effect=as_in_matplotlib_3_10), \
                 patch("matplotlib.pyplot.show") as show:
             self.assertEqual(
                 cli.main(["suspension", str(FIXTURES / "four_wheel_springs.csv"), "--show"]),
                 0,
             )
-        self.assertIn(chart.number, plt.get_fignums())
+        self.assertEqual(len(plt.get_fignums()), 1)
+        self.assertEqual(len(plt.gcf().axes), 12)
         show.assert_called_once_with()
+
+    def test_figure_draws_into_a_given_figure(self):
+        target = Figure()
+        self.assertIs(figure(self.runs, fig=target), target)
+        self.assertEqual(len(target.axes), 12)
 
     def test_save_and_show_are_rejected_together(self):
         error = io.StringIO()

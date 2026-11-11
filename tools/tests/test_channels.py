@@ -41,6 +41,7 @@ class TestChannels(unittest.TestCase):
         values[1000:] = 1.0
         run = four(2001, a_lat=values)
         self.assertEqual(np.mean(run.column("a_lat")[window(run)]), 1.0)
+        self.assertEqual(int(window(run).sum()), 1001)
 
     def test_grip_use_zero_grip_is_nan(self):
         run = four()

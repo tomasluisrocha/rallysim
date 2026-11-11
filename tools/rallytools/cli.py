@@ -39,18 +39,16 @@ def _print_result(path_a, path_b, result, show_all):
         print("only B: " + ", ".join(result.only_b))
     if result.end_a != result.end_b:
         print(f"end: A {result.end_a!r}, B {result.end_b!r}")
-    columns = [column for column in result.columns if column.beyond]
+    columns = sorted((column for column in result.columns if column.beyond), key=lambda column: column.t_first)
     if show_all:
-        columns += [column for column in result.columns if not column.beyond]
-        columns.sort(key=lambda column: (-column.largest if show_all else 0))
-    else:
-        columns.sort(key=lambda column: column.t_first)
+        columns += sorted((column for column in result.columns if not column.beyond),
+                          key=lambda column: -column.largest)
     for column in columns:
         print(f"{column.name}\t{column.largest!r}\t{column.t_largest!r}\t{column.t_first!r}")
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
     command = subparsers.add_parser("diff")
     command.add_argument("a")
@@ -84,15 +82,16 @@ def main(argv=None):
                     import matplotlib
                     matplotlib.use("Agg")
                 from .charts.suspension import figure
-                chart = figure(runs, args.start, args.end)
                 if args.save is not None:
+                    chart = figure(runs, args.start, args.end)
                     output = Path(args.save)
                     output.parent.mkdir(parents=True, exist_ok=True)
                     chart.savefig(output, dpi=110)
                     print(f"wrote {output}")
                 if args.show:
+                    # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
                     import matplotlib.pyplot as plt
-                    plt.figure(chart)
+                    figure(runs, args.start, args.end, fig=plt.figure())
                     plt.show()
             return 0
         rules = _rules(args.tol)

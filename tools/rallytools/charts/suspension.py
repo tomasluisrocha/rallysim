@@ -16,10 +16,14 @@ def _shade(ax, run: Run, start, end) -> None:
         ax.axvspan(float(time[selected][0]), float(time[selected][-1]), color="0.85", zorder=0)
 
 
-def figure(runs, start=None, end=None) -> Figure:
-    """Build the twelve-panel suspension chart without showing or saving it."""
+def figure(runs, start=None, end=None, fig=None) -> Figure:
+    """Build the twelve-panel suspension chart without showing or saving it. Draws into fig when given
+    (an empty figure, such as one from pyplot for a window), else into a new Figure."""
     runs = list(runs)
-    fig = Figure(figsize=(15, 10))
+    if fig is None:
+        fig = Figure(figsize=(15, 10))
+    else:
+        fig.set_size_inches(15, 10)
     grid = fig.add_gridspec(8, 4, width_ratios=(1.35, 1.35, 1, 1), hspace=0.8, wspace=0.45)
 
     left = [

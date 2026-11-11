@@ -94,6 +94,27 @@ class TestCompare(unittest.TestCase):
                                     cwd=root / "tools", capture_output=True, text=True, check=True)
             self.assertEqual(output.stdout.splitlines()[-1], "False")
 
+    def test_cli_all_order(self):
+        # Beyond: x first at 0.5 s (larger), y first at 0.1 s (smaller). Within: w larger than z.
+        times = np.arange(1000) * .001
+        data = frame(times, x=np.zeros(1000), y=np.zeros(1000), z=np.zeros(1000), w=np.zeros(1000),
+                     yaw=np.zeros(1000), speed=np.ones(1000))
+        changed = data.copy()
+        changed.loc[500:, "x"] = 1e-6
+        changed.loc[100:, "y"] = 1e-7
+        changed["z"] = 1e-12
+        changed["w"] = 1e-10
+        with tempfile.TemporaryDirectory() as directory:
+            path_a, path_b = Path(directory) / "a.csv", Path(directory) / "b.csv"
+            write_run(path_a, data)
+            write_run(path_b, changed)
+            from rallytools import cli
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(cli.main(["diff", str(path_a), str(path_b), "--tol", "*=1e-8", "--all"]), 1)
+        names = [line.split("\t")[0] for line in output.getvalue().splitlines() if "\t" in line]
+        self.assertEqual(names[:4], ["y", "x", "w", "z"])
+
     def test_cli_reports_metadata_only_differences(self):
         with tempfile.TemporaryDirectory() as directory:
             path_a = Path(directory) / "a.csv"
