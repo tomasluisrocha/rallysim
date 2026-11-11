@@ -65,8 +65,13 @@ def main(argv=None):
     command.add_argument("runs", nargs="+")
     command.add_argument("--from", dest="start", type=float)
     command.add_argument("--to", dest="end", type=float)
+    command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
+    command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "suspension" and args.save is not None and args.show:
+            print("suspension: --save and --show are mutually exclusive", file=sys.stderr)
+            return 2
         if args.command == "setup":
             runs = [load(path) for path in args.runs]
             print(setup_text(runs, args.changed))
@@ -74,6 +79,21 @@ def main(argv=None):
         if args.command == "suspension":
             runs = [load(path) for path in args.runs]
             print(suspension_table(runs, args.start, args.end))
+            if args.save is not None or args.show:
+                if args.save is not None:
+                    import matplotlib
+                    matplotlib.use("Agg")
+                from .charts.suspension import figure
+                chart = figure(runs, args.start, args.end)
+                if args.save is not None:
+                    output = Path(args.save)
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    chart.savefig(output, dpi=110)
+                    print(f"wrote {output}")
+                if args.show:
+                    import matplotlib.pyplot as plt
+                    plt.figure(chart)
+                    plt.show()
             return 0
         rules = _rules(args.tol)
         run_a, run_b = load(args.a), load(args.b)
