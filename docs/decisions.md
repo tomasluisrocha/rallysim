@@ -106,9 +106,11 @@ The four-wheel car finds its vertical loads in one of three ways, chosen with
   vertical spring and damper, so heave, pitch and roll emerge from the
   rigid-body motion. A corner can push the body up but never pulls it down.
 - **`unsprung`**: each corner is a quarter-car. A wheel mass sits on a tyre
-  spring under a vertical strut (spring, damper and a droop stop that limits
-  how far the wheel can hang). The tyre only pushes; the strut may also pull,
-  through its damper and the droop stop.
+  spring under a vertical strut: a spring, a damper with separate bump and
+  rebound rates (`rebound_ratio_*` times `damper_*`), a progressive bump stop
+  and a droop stop that limits how far the wheel can hang. The tyre only
+  pushes; the strut may also pull, through its damper and the droop stop. The
+  bump stop only pushes.
 
 All three are kept, so each can be compared with the one before it.
 
@@ -122,6 +124,13 @@ coupled mass matrix (the wheels as point masses solved together with the body)
 would remove only that, at the cost of replacing the rigid-body step and losing
 the closed forms the model is tested against.
 
+The defaults keep the damper symmetric (rebound ratio 1), and the bump-stop
+values are placeholders that no shipped scenario reaches, not measured values
+for any car. The loader refuses an unsprung car whose corner step number
+reaches 2 at the run's step: a screening rule for the step's stability (a
+light wheel on a stiff tyre needs a small step), not a bound and not a measure
+of accuracy.
+
 What the tests establish, within the model's own assumptions:
 
 - at rest the car is level and each tyre carries its share of the weight;
@@ -134,7 +143,14 @@ What the tests establish, within the model's own assumptions:
   model to within millimetres, run at a 0.1 ms step (such a stiff corner
   needs a small step);
 - drops from 0.3 m and 1 m never gain energy and settle back to the static
-  loads.
+  loads;
+- with a bump stop, drops in pure heave match an independent fine-step
+  quarter-car within 1 mm of travel and 3% of peak stop force, and the energy
+  books balance during the landing, while the stop holds energy, not only at
+  the end;
+- the step screening: linear two-mass cases at a screening number of 3.9 do
+  not grow, and the light-wheel car at a step just inside the simple limit
+  stays within 20% of its static tyre load.
 
 These are agreements with closed forms and simpler models, not a claim of
 accuracy against a real car.
