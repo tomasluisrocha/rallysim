@@ -19,10 +19,93 @@ python tools/run_all.py                   # every scenario + the tyre rig, and a
 python tools/topdown.py out/runs/fw_handbrake.csv
 ```
 
+## rally.py
+
+Numbers rather than pictures: four commands that read runs from `out/runs/`. `python tools/rally.py --help` lists
+them; each has `--help`. Run `rallysim <scenario>` (or `run_all.py`) first.
+
+### diff
+
+```
+python tools/rally.py diff out/runs/fw_brake.csv out/runs/fw_launch.csv
+python tools/rally.py diff out/runs/fw_brake.csv out/runs/fw_launch.csv --tol "wheel.*.slip*=1e-6,1e-4" --tol yaw=1e-3
+python tools/rally.py diff out/runs/fw_brake.csv out/runs/fw_launch.csv --ignore-missing --all
+```
+
+Compares every column of two runs and prints the ones beyond tolerance, with the largest difference, the time it
+occurs and the first time it passes the tolerance. A value differs when `|b - a| > abs + rel * max(|a|, |b|)`; the
+default is `abs` 1e-9, `rel` 0. `--tol PATTERN=ABS[,REL]` sets it for the columns matching PATTERN, where `*`
+matches any text including dots; the last matching `--tol` wins. `yaw` is compared wrapped, and `beta` is left
+out where either run is below 0.3 m/s. Runs on different time steps are compared at A's times. Differences on
+line 1 (the car parameters) are printed but never counted.
+
+Exit 0 within tolerance, 1 beyond it, or if the columns or the end times differ (`--ignore-missing` stops the
+columns counting), 2 on an error. `--all` also lists the columns within tolerance.
+
+### setup
+
+```
+python tools/rally.py setup out/runs/fw_brake.csv out/runs/fw_showcase.csv
+python tools/rally.py setup out/runs/fw_brake.csv out/runs/fw_showcase.csv --changed
+```
+
+Every line-1 parameter, one row per key and one column per run, at full precision. `*` marks a row where the
+runs differ, `-` a run that lacks the key. `--changed` keeps only the marked rows.
+
+### suspension
+
+```
+python tools/rally.py suspension out/runs/fw_circle.csv
+python tools/rally.py suspension out/runs/fw_circle.csv out/runs/fw_hairpin.csv --from 3 --to 6
+python tools/rally.py suspension out/runs/fw_circle.csv --save out/plots/suspension.png
+```
+
+A table with one column per run, over the last 1 s of the run, or `--from S` to `--to S`. The window means (roll,
+lateral acceleration, roll gradient, load transfer) read "not steady" when the window is not steady; the peak roll,
+the lowest tyre load and the largest suspension deflection are always shown. `--save PNG` also draws the
+twelve-panel chart without a window; `--show` opens it. Not both.
+
+### landing
+
+```
+python tools/rally.py landing out/runs/fw_showcase.csv
+python tools/rally.py landing out/runs/fw_showcase.csv --window 4
+rallysim fw_showcase --set vertical=unsprung      # with wheel mass and stops: margins are shown
+python tools/rally.py landing out/runs/fw_showcase.csv
+```
+
+A landing starts when all four tyre loads have been zero (the car in the air) and the first one comes back: the
+touchdown. Each landing is measured over a window of 2 s after touchdown (`--window S`), cut short at the next
+flight. It prints the peak load of each tyre and:
+
+- **settling**: the time from touchdown until every tyre load stays within 5% of its value at the end of the
+  window; "not settled" if any load still varies by more than 1% over the window's last 0.5 s.
+- **rebound**: a local maximum of the CG height after its lowest point that is more than 2% of the dip (the end
+  height minus the lowest) above the end height. **Overshoot** is the first one's height above the end height,
+  over the dip.
+- **travel** and **margin**: the strut's compression past rest (from `rest_deflection_*` on line 1) and what is
+  left before the bump stop (unsprung runs only). A file from an older build prints "n/a ... rerun with a newer
+  build".
+
+Overshoot and settling are measured against the window's end, so a window shorter than the body's bounce
+misreads them. Use one long enough for the body to come back down.
+
+## Tests
+
+```
+python -m unittest discover -s tools/tests -t tools
+```
+
+Run from `sim/`. Two environment variables: `RALLYSIM_EXE` names a built `rallysim`, for the check against real
+output (skipped without it); `RALLYTOOLS_CI=1` makes a check that cannot run fail instead of skip. CI runs the
+suite on the lowest supported versions in `tools/requirements-ci.txt`. The small runs in `tools/tests/fixtures/`
+are remade, deliberately, from a built `rallysim` with `python tools/tests/make_fixtures.py`.
+
 ## The tools
 
 | Tool | Does |
 |---|---|
+| `rally.py` | Analysis commands on runs: `diff`, `setup`, `suspension`, `landing` (see [rally.py](#rallypy)) |
 | `run_all.py` | Runs every scenario and the rig, then makes the views, the tyre plots and (with `--gif`) the GIFs |
 | `topdown.py` | The car seen from above: interactive dashboard, one frame, the whole path, or a GIF |
 | `view3d.py` | A four-wheel run in 3D (isometric by default): the body's roll, pitch and ride height, and every force where it acts |

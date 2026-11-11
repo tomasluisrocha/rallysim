@@ -53,22 +53,35 @@ def _print_result(path_a, path_b, result, show_all):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    command = subparsers.add_parser("diff")
-    command.add_argument("a")
-    command.add_argument("b")
-    command.add_argument("--tol", action="append", default=[])
-    command.add_argument("--ignore-missing", action="store_true")
-    command.add_argument("--all", action="store_true")
-    command = subparsers.add_parser("setup")
-    command.add_argument("runs", nargs="+")
-    command.add_argument("--changed", action="store_true")
-    command = subparsers.add_parser("landing")
-    command.add_argument("runs", nargs="+")
-    command.add_argument("--window", type=float, default=2.0)
-    command = subparsers.add_parser("suspension")
-    command.add_argument("runs", nargs="+")
-    command.add_argument("--from", dest="start", type=float)
-    command.add_argument("--to", dest="end", type=float)
+    command = subparsers.add_parser("diff", help="compare two runs column by column against a tolerance",
+                                    description="Compare two runs column by column. Exit 0 within tolerance, "
+                                                "1 beyond it, 2 on an error.")
+    command.add_argument("a", metavar="A", help="first run (CSV)")
+    command.add_argument("b", metavar="B", help="second run (CSV)")
+    command.add_argument("--tol", action="append", default=[], metavar="PATTERN=ABS[,REL]",
+                         help="tolerance for the columns matching PATTERN (* matches any text); "
+                              "repeatable, the last matching one wins")
+    command.add_argument("--ignore-missing", action="store_true",
+                         help="do not count columns present in only one run as a difference")
+    command.add_argument("--all", action="store_true", help="also list the columns within tolerance")
+    command = subparsers.add_parser("setup", help="show the car parameters of runs side by side",
+                                    description="Show every parameter on line 1 of each run side by side.")
+    command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
+    command.add_argument("--changed", action="store_true", help="show only the parameters that differ")
+    command = subparsers.add_parser("landing", help="settling, rebound and suspension travel after each landing",
+                                    description="Measure each landing of a run: settling time, rebound, "
+                                                "overshoot, travel and margin.")
+    command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
+    command.add_argument("--window", type=float, default=2.0, metavar="S",
+                         help="seconds after touchdown to measure over (default 2)")
+    command = subparsers.add_parser("suspension", help="table and chart of body motion and suspension travel",
+                                    description="Print a table of the body's motion and the suspension, "
+                                                "and optionally draw the twelve-panel chart.")
+    command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
+    command.add_argument("--from", dest="start", type=float, metavar="S",
+                         help="start of the window in seconds (default: 1 s before the end)")
+    command.add_argument("--to", dest="end", type=float, metavar="S",
+                         help="end of the window in seconds (default: the end of the run)")
     command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
     command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     args = parser.parse_args(argv)
