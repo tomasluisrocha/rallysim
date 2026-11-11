@@ -237,6 +237,60 @@ int main()
         check_halves("landing, tyre damping 2000", damped);
     }
 
+    // rebound damping three times the bump damping: the books still close, and the damper only takes energy out
+    {
+        four_wheel_run lane = unsprung_scenario("fw_lane");
+        lane.params.front_corner.rebound_ratio = lane.params.rear_corner.rebound_ratio = 3;
+        check_run("fw_lane, unsprung, rebound 3", lane, 0.005);
+        check_halves("fw_lane, unsprung, rebound 3", lane);
+
+        four_wheel_run r;
+        r.params.vertical = vertical_model::unsprung;
+        r.params.front_corner.tyre_damping = r.params.rear_corner.tyre_damping = 0;
+        r.params.front_corner.rebound_ratio = r.params.rear_corner.rebound_ratio = 3;
+        r.initial = four_wheel_initial(r.params, 0.0);
+        r.initial.body.pos.z += 0.2;
+        for (corner_state &w : r.initial.corners)
+            w.z += 0.2;
+        r.script.keys = {{0.0, four_wheel_input{}}};
+        r.steps = 3000;
+        check_run("landing, rebound 3", r, 0.005);
+        // unsprung drops without tyre damping converge faster than first order, so only "below 0.6 of the coarser"
+        {
+            const booked coarse = run_booked(r, 0.002);
+            const Real r2 = coarse.books.residual(coarse.e_end);
+            const booked fine = run_booked(r, 0.001), finer = run_booked(r, 0.0005);
+            const Real r1 = fine.books.residual(fine.e_end), r05 = finer.books.residual(finer.e_end);
+            std::printf("convergence, landing, rebound 3: residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n",
+                        r2, r1, r05, r1 / r2, r05 / r1);
+            check_true("convergence, landing, rebound 3: each halving of dt leaves under 0.6 of the residual",
+                       std::fabs(r1) < 0.6 * std::fabs(r2) && std::fabs(r05) < 0.6 * std::fabs(r1));
+        }
+
+        four_wheel_state s = r.initial;
+        long rebound_steps = 0;
+        Real min_power = 0;
+        bool never_gives = true, rebound_seen = false;
+        for (long i = 0; i < r.steps; ++i)
+        {
+            const four_wheel_forces f = evaluate(s, r.params, driver_input(r, s, i * r.dt));
+            for (std::size_t k = 0; k < kWheels; ++k)
+            {
+                const corner_load &l = f.corner[k];
+                never_gives = never_gives && l.damper * l.deflection_rate >= 0;
+                min_power = std::min(min_power, l.damper * l.deflection_rate);
+                const bool reb = l.deflection_rate < 0 && l.damper < 0;
+                rebound_seen = rebound_seen || reb;
+                rebound_steps += reb;
+            }
+            step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+        }
+        std::printf("landing, rebound 3: %ld corner-steps on the rebound side; smallest damper power %.3f W\n", rebound_steps,
+                    min_power);
+        check_true("landing, rebound 3: every damper power is >= 0 at every step", never_gives);
+        check_true("landing, rebound 3: the rebound side was exercised", rebound_seen);
+    }
+
     // the scenarios the checks above leave out, in the unsprung model: the jump (0.5 ms), launch, handbrake, hairpin
     for (const char *name : {"fw_showcase", "fw_launch", "fw_handbrake", "fw_hairpin"})
         check_run((std::string(name) + ", unsprung").c_str(), unsprung_scenario(name), 0.005);

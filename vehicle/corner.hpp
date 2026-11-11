@@ -10,6 +10,8 @@ namespace rallysim
     {
         Real spring_rate = 50000; // N/m: about 2.1 Hz with the ~290 kg each corner of this car carries
         Real damper_rate = 3800;  // N s/m: a damping ratio of about 0.5 on that spring
+        Real rebound_ratio = 1;   // rebound damping as a multiple of damper_rate, used by the unsprung corner only;
+                                  // 1 keeps the damper symmetric. A parameterisation, not a property of the car
         Real unsprung_mass = 40;  // kg: wheel, tyre, hub, brake
         Real tyre_rate = 250000;  // N/m, the tyre's vertical stiffness
         Real tyre_damping = 0;    // N s/m
@@ -48,7 +50,8 @@ namespace rallysim
     }
 
     // The corner with a wheel. deflection is the strut's compression, static_deflection its compression with the
-    // car at rest. The strut may pull (damper, droop stop); the tyre only pushes.
+    // car at rest. The strut may pull (damper, droop stop); the tyre only pushes. The damper is rebound_ratio
+    // times stiffer while extending.
     inline corner_load unsprung_corner_force(const corner_params &c, Real deflection, Real deflection_rate,
                                              Real static_deflection, Real tyre_deflection,
                                              Real tyre_deflection_rate)
@@ -59,7 +62,8 @@ namespace rallysim
         l.tyre_deflection = tyre_deflection;
         l.tyre_deflection_rate = tyre_deflection_rate;
         l.spring = c.spring_rate * std::max(deflection, static_cast<Real>(0));
-        l.damper = c.damper_rate * deflection_rate;
+        l.damper = deflection_rate >= 0 ? c.damper_rate * deflection_rate
+                                        : c.rebound_ratio * c.damper_rate * deflection_rate;
         const Real e = deflection - (static_deflection - c.droop);
         l.stop = e < 0 ? c.stop_rate * e : static_cast<Real>(0);
         l.strut = l.spring + l.damper + l.stop;

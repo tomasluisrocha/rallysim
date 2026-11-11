@@ -79,5 +79,30 @@ int main()
                    l.stop == 0 && l.strut == 0 && l.tyre_deflection == 0 && l.tyre_deflection_rate == 0);
     }
 
+    // rebound damping three times the bump damping
+    {
+        corner_params rp = cp;
+        rp.rebound_ratio = 3;
+        const corner_load bump = unsprung_corner_force(rp, 0.05, 0.2, x0, 0.01, 0.0);
+        check_near("rebound ratio 3: bump damper", bump.damper, 760, 1e-9);
+        const corner_load reb = unsprung_corner_force(rp, 0.05, -0.2, x0, 0.01, 0.0);
+        check_near("rebound ratio 3: rebound damper", reb.damper, -2280, 1e-9);
+        check_near("rebound ratio 3: rebound strut", reb.strut, 220, 1e-9);
+        check_true("rebound ratio 3: rate zero gives no damper", unsprung_corner_force(rp, 0.05, 0.0, x0, 0.01, 0.0).damper == 0);
+        const corner_load up = unsprung_corner_force(rp, 0.05, 1e-9, x0, 0.01, 0.0);
+        const corner_load dn = unsprung_corner_force(rp, 0.05, -1e-9, x0, 0.01, 0.0);
+        check_true("rebound ratio 3: continuous at zero", std::fabs(up.damper) < 2e-5 && std::fabs(dn.damper) < 2e-5);
+        bool takes_energy = true;
+        for (int i = 0; i <= 400; ++i)
+        {
+            const Real v = -2 + 0.01 * i;
+            if (unsprung_corner_force(rp, 0.05, v, x0, 0.01, 0.0).damper * v < 0)
+                takes_energy = false;
+        }
+        check_true("rebound ratio 3: the damper always takes energy out", takes_energy);
+        check_near("default ratio: rebound damper unchanged", unsprung_corner_force(cp, 0.05, -0.2, x0, 0.01, 0.0).damper, -760, 1e-9);
+        check_near("springs corner ignores the ratio", corner_force(rp, 0.05, -0.1).fz, 2120, 1e-9);
+    }
+
     return finish("unsprung_corner");
 }
