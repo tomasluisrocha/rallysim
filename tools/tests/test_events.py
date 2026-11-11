@@ -68,6 +68,36 @@ class TestAirborne(unittest.TestCase):
         self.assertAlmostEqual(airborne(t, np.column_stack([fz] * 4))[0][1], t[-1], delta=1e-12)
 
 
+class TestWindow(unittest.TestCase):
+    def late_peak(self, **kw):
+        fz = flight(**kw)
+        fz[np.arange(1000) * 0.001 >= 0.45] = 5000.0
+        return fz
+
+    def test_window_limits_the_rows(self):
+        run = four(self.late_peak())
+        self.assertEqual(landings(run, 0.1)[0].peak_fz["FL"], 3000.0)
+        self.assertEqual(landings(run)[0].peak_fz["FL"], 5000.0)
+
+    def test_window_end_is_inclusive(self):
+        fz = flight()
+        fz[400] = 5000.0
+        run = four(fz)
+        self.assertEqual(landings(run, 0.1)[0].peak_fz["FL"], 5000.0)
+        self.assertEqual(landings(run, 0.099)[0].peak_fz["FL"], 3000.0)
+
+    def test_window_stops_before_next_flight(self):
+        fz = flight(gaps=((0.0, 0.3), (0.6, 0.7)))
+        fz[np.arange(1000) * 0.001 >= 0.7] = 5000.0
+        self.assertEqual(landings(four(fz), 5.0)[0].peak_fz["FL"], 3000.0)
+
+    def test_window_must_be_positive(self):
+        run = four(flight())
+        for window in (0, -1):
+            with self.assertRaises(ValueError):
+                landings(run, window)
+
+
 class TestSettling(unittest.TestCase):
     def setUp(self):
         self.t = np.arange(3001) * 0.001

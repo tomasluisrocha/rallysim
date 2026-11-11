@@ -13,6 +13,7 @@ _BAND = 0.05
 _QUIET_WINDOW = 0.5
 _QUIET_VARIATION = 0.01
 _REBOUND_MIN = 0.02
+_WINDOW_SLACK = 1e-9
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,10 @@ def rebounds(z):
     return len(heights), float(heights[0] / d0)
 
 
-def landings(run):
+def landings(run, window=None):
+    """Landings of a four-wheel run. With a window (s), a landing's rows end window after touchdown."""
+    if window is not None and not window > 0.0:
+        raise ValueError(f"landing window must be positive, not {window}")
     if run.kind != "four_wheel":
         raise ValueError(f"run '{run.name}': landings need a four-wheel run, not {run.kind}")
     t = run.column("time")
@@ -91,6 +95,8 @@ def landings(run):
         if end >= n:
             continue
         stop = stretches[k + 1][0] if k + 1 < len(stretches) else n
+        if window is not None:
+            stop = end + int(np.searchsorted(t[end:stop], t[end] + window + _WINDOW_SLACK, side="right"))
         rows = slice(end, stop)
         peak_fz, nominal, travel, margin, peak_stop, stop_time = {}, {}, {}, {}, {}, {}
         for i, w in enumerate(WHEELS):

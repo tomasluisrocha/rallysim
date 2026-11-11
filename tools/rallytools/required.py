@@ -1,5 +1,7 @@
 SCHEMA = 6
 
+FOUR_WHEEL_FACTS = ("gravity", "rest_deflection_front", "rest_deflection_rear")
+
 FOUR_WHEEL: dict[str, str] = {
     "step": "count",
     "time": "s",

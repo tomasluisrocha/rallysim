@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from .compare import Tolerance, diff
+from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
 from .suspension import table as suspension_table
@@ -61,6 +62,9 @@ def main(argv=None):
     command = subparsers.add_parser("setup")
     command.add_argument("runs", nargs="+")
     command.add_argument("--changed", action="store_true")
+    command = subparsers.add_parser("landing")
+    command.add_argument("runs", nargs="+")
+    command.add_argument("--window", type=float, default=2.0)
     command = subparsers.add_parser("suspension")
     command.add_argument("runs", nargs="+")
     command.add_argument("--from", dest="start", type=float)
@@ -75,6 +79,10 @@ def main(argv=None):
         if args.command == "setup":
             runs = [load(path) for path in args.runs]
             print(setup_text(runs, args.changed))
+            return 0
+        if args.command == "landing":
+            for path in args.runs:
+                print(landing_text(load(path), args.window))
             return 0
         if args.command == "suspension":
             runs = [load(path) for path in args.runs]

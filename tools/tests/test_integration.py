@@ -39,6 +39,10 @@ class TestIntegration(unittest.TestCase):
             with self.subTest(column=column):
                 self.assertIn(column, telemetry.data.columns)
                 self.assertEqual(telemetry.units.get(column), unit)
+        for fact in required.FOUR_WHEEL_FACTS:
+            with self.subTest(fact=fact):
+                self.assertIn(fact, telemetry.meta)
+        self.assertGreater(telemetry.meta["gravity"], 0.0)
 
 
 if __name__ == "__main__":
