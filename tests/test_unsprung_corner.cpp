@@ -138,6 +138,18 @@ int main()
         check_true("bump stop in the corner: zero at its start", unsprung_corner_force(b, x0 + 0.10, 0.0, x0, 0.01, 0.0).stop == 0);
     }
 
+    // the bump stop uses its own rate and length, not the droop stop's rate
+    {
+        corner_params b = cp;
+        b.bump_travel = 0.10;
+        b.bump_stop_rate = 300000;
+        b.bump_stop_length = 0.02;
+        check_near("own bump stop: in the ramp", unsprung_corner_force(b, x0 + 0.10 + 0.02, 0.0, x0, 0.01, 0.0).stop,
+                   3000, 1e-6);
+        check_near("own bump stop: past the ramp", unsprung_corner_force(b, x0 + 0.10 + 0.05, 0.0, x0, 0.01, 0.0).stop,
+                   12000, 1e-6);
+    }
+
     // the defaults never reach the bump stop below 0.25 m past rest
     {
         bool untouched = true;

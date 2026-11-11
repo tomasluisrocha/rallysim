@@ -315,7 +315,7 @@ int main()
             long engaged = 0;
         };
         // the run stepped by hand at time step dt (3 s), its books kept step by step
-        auto drop = [&r](Real dt)
+        auto drop = [](const four_wheel_run &r, Real dt)
         {
             const four_wheel_params &p = r.params;
             const long steps = std::lround(r.steps * r.dt / dt);
@@ -349,7 +349,7 @@ int main()
             d.scale = std::max({books.start(), energy_of(s, p).total(), w.drive, w.brake + w.damper + w.tyre});
             return d;
         };
-        const drop_run d2 = drop(0.002), d1 = drop(0.001), d05 = drop(0.0005);
+        const drop_run d2 = drop(r, 0.002), d1 = drop(r, 0.001), d05 = drop(r, 0.0005);
         std::printf("drop, bump stop: engaged for %ld corner-steps, peak %.1f N, peak stop energy %.1f J\n", d1.engaged,
                     d1.peak_force, d1.peak_stop_energy);
         std::printf("drop, bump stop: largest residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n",
@@ -364,11 +364,61 @@ int main()
                    q1 > 0.4 && q1 < 0.6 && q05 > 0.4 && q05 < 0.6);
         check_run("drop, bump stop", r, 0.005);
         check_shrinks("drop, bump stop", r);
+
+        // the same drop with the bump stop's own rate and length set apart from the droop stop's rate (500000)
+        const four_wheel_run own = unsprung_drop(1.0,
+                                                 [](corner_params &c)
+                                                 {
+                                                     c.tyre_damping = 0;
+                                                     c.bump_travel = 0.10;
+                                                     c.bump_stop_rate = 300000;
+                                                     c.bump_stop_length = 0.02;
+                                                 });
+        const drop_run o1 = drop(own, 0.001), o05 = drop(own, 0.0005);
+        std::printf("drop, own bump stop: engaged for %ld corner-steps, peak %.1f N, peak stop energy %.1f J\n", o1.engaged,
+                    o1.peak_force, o1.peak_stop_energy);
+        std::printf("drop, own bump stop: largest residual %.3f J at 1 ms (of %.0f J), %.3f at 0.5 ms (ratio %.3f)\n",
+                    o1.peak_residual, o1.scale, o05.peak_residual, o05.peak_residual / o1.peak_residual);
+        check_true("drop, own bump stop: the stop is engaged", o1.peak_force > 1000 && o1.engaged > 10);
+        check_true("drop, own bump stop: the largest residual during the run is within 0.50% of the energy that flows",
+                   o1.peak_residual <= 0.005 * o1.scale);
+        const Real qo = o05.peak_residual / o1.peak_residual;
+        check_true("drop, own bump stop: halving dt halves the largest residual (ratio 0.4 to 0.6)", qo > 0.4 && qo < 0.6);
     }
 
-    // the scenarios the checks above leave out, in the unsprung model: the jump (0.5 ms), launch, handbrake, hairpin
+    // the scenarios the checks above leave out, in the unsprung model: showcase, launch, handbrake, hairpin. Each starts
+    // at rest at its ride height (unsprung_scenario), so the showcase run here is not the jump.
     for (const char *name : {"fw_showcase", "fw_launch", "fw_handbrake", "fw_hairpin"})
         check_run((std::string(name) + ", unsprung").c_str(), unsprung_scenario(name), 0.005);
+
+    // the jump itself: fw_showcase from its own lifted, pitched start
+    check_run("fw_showcase, unsprung, from its own start", four_wheel_scenario("fw_showcase", {{"vertical", "unsprung"}}),
+              0.005);
+
+    // the shipped scenarios, unsprung, never reach a stop, and their struts stay well short of the bump stop
+    for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_showcase"})
+    {
+        const four_wheel_run r = four_wheel_scenario(name, {{"vertical", "unsprung"}});
+        const four_wheel_params &p = r.params;
+        four_wheel_state s = r.initial;
+        Real peak_stop = 0, peak_travel = 0;
+        for (long i = 0; i < r.steps; ++i)
+        {
+            const four_wheel_input in = driver_input(r, s, i * r.dt);
+            const four_wheel_forces f = evaluate(s, p, in);
+            for (std::size_t k = 0; k < kWheels; ++k)
+            {
+                peak_stop = std::max(peak_stop, std::fabs(f.corner[k].stop));
+                peak_travel = std::max(peak_travel, f.corner[k].deflection - p.strut_static_deflection(k));
+            }
+            step(s, p, in, r.dt);
+        }
+        std::printf("%s, unsprung: largest stop force %.1f N, largest strut travel past rest %.1f mm\n", name, peak_stop,
+                    1000 * peak_travel);
+        check_true((std::string(name) + ", unsprung: no stop is ever reached").c_str(), peak_stop == 0);
+        check_true((std::string(name) + ", unsprung: strut travel past rest stays below 0.125 m").c_str(),
+                   peak_travel < 0.125);
+    }
 
     return finish("energy");
 }

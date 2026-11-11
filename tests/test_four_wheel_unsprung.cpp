@@ -445,6 +445,11 @@ int main()
         s.front_corner.stop_rate = 1e6;
         check_true("step number: the larger of the two stops counts", corner_step_number(s, FL, 0.001) == with_bump);
 
+        four_wheel_params t = p;
+        t.front_corner.tyre_damping = 2000;
+        check_near("step number: front tyre damping 2000 adds 2 dt ct / mu", corner_step_number(t, FL, 0.001) - f1, 0.1, 1e-9);
+        check_true("step number: front tyre damping leaves the rear unchanged", corner_step_number(t, RL, 0.001) == r1);
+
         four_wheel_params o4 = unsprung_car();
         for (corner_params *c : {&o4.front_corner, &o4.rear_corner})
         {

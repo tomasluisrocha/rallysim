@@ -157,6 +157,16 @@ int main()
         if (!e2.empty())
             std::printf("  loader message: %s\n", e2[0].c_str());
     }
+    // the rear axle is screened on its own
+    {
+        const std::string rear = kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_rear = 2\ntyre_rate_rear = 5000000\n";
+        check_one_error("step: a light rear wheel on a stiff tyre at 1 ms", rear, "t.ini:4:", "rear wheel: step number");
+        const std::vector<std::string> e = errors_of(rear);
+        if (!e.empty())
+            std::printf("  loader message: %s\n", e[0].c_str());
+        check_true("step: light wheels on both axles give two errors",
+                   errors_of(rear + "unsprung_mass_front = 2\ntyre_rate_front = 5000000\n").size() == 2);
+    }
     for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_showcase"})
     {
         bool loads = true;
