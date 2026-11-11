@@ -97,6 +97,39 @@ namespace
         check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
     }
 
+    // Residuals at 2, 1 and 0.5 ms, and whether each halving of dt leaves under 0.6 of the residual: the rule for
+    // unsprung drops without tyre damping, which converge faster than first order.
+    void check_shrinks(const char *name, const four_wheel_run &scenario)
+    {
+        const booked coarse = run_booked(scenario, 0.002), fine = run_booked(scenario, 0.001),
+                     finer = run_booked(scenario, 0.0005);
+        const Real r2 = coarse.books.residual(coarse.e_end), r1 = fine.books.residual(fine.e_end),
+                   r05 = finer.books.residual(finer.e_end);
+        std::printf("convergence, %s: residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n", name, r2, r1,
+                    r05, r1 / r2, r05 / r1);
+        char what[200];
+        std::snprintf(what, sizeof what, "convergence, %s: each halving of dt leaves under 0.6 of the residual", name);
+        check_true(what, std::fabs(r1) < 0.6 * std::fabs(r2) && std::fabs(r05) < 0.6 * std::fabs(r1));
+    }
+
+    // The unsprung car at rest, body and wheels lifted `height` and let go, no input, 3000 steps. `tune` sets each
+    // corner's parameters before the car is placed.
+    template <class F>
+    four_wheel_run unsprung_drop(Real height, F tune)
+    {
+        four_wheel_run r;
+        r.params.vertical = vertical_model::unsprung;
+        tune(r.params.front_corner);
+        tune(r.params.rear_corner);
+        r.initial = four_wheel_initial(r.params, 0.0);
+        r.initial.body.pos.z += height;
+        for (corner_state &w : r.initial.corners)
+            w.z += height;
+        r.script.keys = {{0.0, four_wheel_input{}}};
+        r.steps = 3000;
+        return r;
+    }
+
     void check_run(const char *name, const four_wheel_run &r, Real tolerance)
     {
         const booked b = run_booked(r, r.dt);
@@ -216,18 +249,7 @@ int main()
     // The dampers' book takes more out than with none, and the residual still obeys the bound and halves with dt.
     {
         auto landing = [](Real tyre_damping)
-        {
-            four_wheel_run r;
-            r.params.vertical = vertical_model::unsprung;
-            r.params.front_corner.tyre_damping = r.params.rear_corner.tyre_damping = tyre_damping;
-            r.initial = four_wheel_initial(r.params, 0.0);
-            r.initial.body.pos.z += 0.2;
-            for (corner_state &w : r.initial.corners)
-                w.z += 0.2;
-            r.script.keys = {{0.0, four_wheel_input{}}};
-            r.steps = 3000;
-            return r;
-        };
+        { return unsprung_drop(0.2, [tyre_damping](corner_params &c) { c.tyre_damping = tyre_damping; }); };
         const four_wheel_run damped = landing(2000), plain = landing(0);
         check_run("landing, tyre damping 2000", damped, 0.005);
         const Real with = run_booked(damped, damped.dt).books.work().damper,
@@ -244,28 +266,14 @@ int main()
         check_run("fw_lane, unsprung, rebound 3", lane, 0.005);
         check_halves("fw_lane, unsprung, rebound 3", lane);
 
-        four_wheel_run r;
-        r.params.vertical = vertical_model::unsprung;
-        r.params.front_corner.tyre_damping = r.params.rear_corner.tyre_damping = 0;
-        r.params.front_corner.rebound_ratio = r.params.rear_corner.rebound_ratio = 3;
-        r.initial = four_wheel_initial(r.params, 0.0);
-        r.initial.body.pos.z += 0.2;
-        for (corner_state &w : r.initial.corners)
-            w.z += 0.2;
-        r.script.keys = {{0.0, four_wheel_input{}}};
-        r.steps = 3000;
+        const four_wheel_run r = unsprung_drop(0.2,
+                                               [](corner_params &c)
+                                               {
+                                                   c.tyre_damping = 0;
+                                                   c.rebound_ratio = 3;
+                                               });
         check_run("landing, rebound 3", r, 0.005);
-        // unsprung drops without tyre damping converge faster than first order, so only "below 0.6 of the coarser"
-        {
-            const booked coarse = run_booked(r, 0.002);
-            const Real r2 = coarse.books.residual(coarse.e_end);
-            const booked fine = run_booked(r, 0.001), finer = run_booked(r, 0.0005);
-            const Real r1 = fine.books.residual(fine.e_end), r05 = finer.books.residual(finer.e_end);
-            std::printf("convergence, landing, rebound 3: residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n",
-                        r2, r1, r05, r1 / r2, r05 / r1);
-            check_true("convergence, landing, rebound 3: each halving of dt leaves under 0.6 of the residual",
-                       std::fabs(r1) < 0.6 * std::fabs(r2) && std::fabs(r05) < 0.6 * std::fabs(r1));
-        }
+        check_shrinks("landing, rebound 3", r);
 
         four_wheel_state s = r.initial;
         long rebound_steps = 0;
@@ -289,6 +297,73 @@ int main()
                     min_power);
         check_true("landing, rebound 3: every damper power is >= 0 at every step", never_gives);
         check_true("landing, rebound 3: the rebound side was exercised", rebound_seen);
+    }
+
+    // the bump stop: a 1 m unsprung drop with the stop moved to 0.10 m past rest (test values, not car data), so the
+    // landing runs into it. The books are checked during the landing, while the stop holds energy, not only at the
+    // end: the largest residual over the run is a small part of the energy that flows and halves with dt.
+    {
+        const four_wheel_run r = unsprung_drop(1.0,
+                                               [](corner_params &c)
+                                               {
+                                                   c.tyre_damping = 0;
+                                                   c.bump_travel = 0.10;
+                                               });
+        struct drop_run
+        {
+            Real peak_force = 0, peak_residual = 0, peak_stop_energy = 0, scale = 0;
+            long engaged = 0;
+        };
+        // the run stepped by hand at time step dt (3 s), its books kept step by step
+        auto drop = [&r](Real dt)
+        {
+            const four_wheel_params &p = r.params;
+            const long steps = std::lround(r.steps * r.dt / dt);
+            four_wheel_state s = r.initial;
+            energy_books books(s, p);
+            drop_run d;
+            for (long i = 0; i < steps; ++i)
+            {
+                const four_wheel_input in = driver_input(r, s, i * dt);
+                const four_wheel_forces f = evaluate(s, p, in);
+                for (std::size_t k = 0; k < kWheels; ++k)
+                {
+                    d.peak_force = std::max(d.peak_force, f.corner[k].stop);
+                    d.engaged += f.corner[k].stop > 0;
+                }
+                books.add(rates_of(s, p, f), dt);
+                step(s, p, in, dt);
+                d.peak_residual = std::max(d.peak_residual, std::fabs(books.residual(energy_of(s, p))));
+                Real stop_energy = 0; // each corner's compression as energy_of computes it
+                for (std::size_t k = 0; k < kWheels; ++k)
+                {
+                    const corner_params &c = p.corner(k);
+                    const Real mount = p.static_deflection(k) - contact_of(p, s.body, k, 0.0).deflection;
+                    const Real x = p.strut_static_deflection(k) - mount + (s.corners[k].z - p.wheel_rest_height(k));
+                    stop_energy += bump_stop_energy(x - (p.strut_static_deflection(k) + c.bump_travel), c.bump_stop_rate,
+                                                    c.bump_stop_length);
+                }
+                d.peak_stop_energy = std::max(d.peak_stop_energy, stop_energy);
+            }
+            const energy_work &w = books.work();
+            d.scale = std::max({books.start(), energy_of(s, p).total(), w.drive, w.brake + w.damper + w.tyre});
+            return d;
+        };
+        const drop_run d2 = drop(0.002), d1 = drop(0.001), d05 = drop(0.0005);
+        std::printf("drop, bump stop: engaged for %ld corner-steps, peak %.1f N, peak stop energy %.1f J\n", d1.engaged,
+                    d1.peak_force, d1.peak_stop_energy);
+        std::printf("drop, bump stop: largest residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n",
+                    d2.peak_residual, d1.peak_residual, d05.peak_residual, d1.peak_residual / d2.peak_residual,
+                    d05.peak_residual / d1.peak_residual);
+        check_true("drop, bump stop: the stop is engaged", d1.peak_force > 1000 && d1.engaged > 10);
+        check_true("drop, bump stop: the stop stores over 100 J", d1.peak_stop_energy > 100);
+        check_true("drop, bump stop: the largest residual during the run is within 0.50% of the energy that flows",
+                   d1.peak_residual <= 0.005 * d1.scale);
+        const Real q1 = d1.peak_residual / d2.peak_residual, q05 = d05.peak_residual / d1.peak_residual;
+        check_true("drop, bump stop: halving dt halves the largest residual (ratio 0.4 to 0.6, twice)",
+                   q1 > 0.4 && q1 < 0.6 && q05 > 0.4 && q05 < 0.6);
+        check_run("drop, bump stop", r, 0.005);
+        check_shrinks("drop, bump stop", r);
     }
 
     // the scenarios the checks above leave out, in the unsprung model: the jump (0.5 ms), launch, handbrake, hairpin

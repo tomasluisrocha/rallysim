@@ -23,7 +23,7 @@ namespace rallysim
         Real translation = 0; // body: 1/2 m |v|^2
         Real rotation = 0;    // body: 1/2 (Ix wx^2 + Iy wy^2 + Iz wz^2), omega in the body frame
         Real gravity = 0;     // m g z (springs; the planar model cancels gravity); unsprung: sprung body and wheels
-        Real springs = 0;     // 1/2 k x^2 per compressed spring (springs); unsprung: strut, tyre and droop stop
+        Real springs = 0;     // 1/2 k x^2 per compressed spring (springs); unsprung: strut, tyre, droop stop and bump stop
         Real wheels = 0;      // each wheel's spin: 1/2 I omega^2
 
         Real total() const { return translation + rotation + gravity + springs + wheels; }
@@ -78,6 +78,8 @@ namespace rallysim
                     e.springs += 0.5 * c.tyre_rate * d * d;
                 if (stop < 0)
                     e.springs += 0.5 * c.stop_rate * stop * stop;
+                e.springs += bump_stop_energy(x - (p.strut_static_deflection(i) + c.bump_travel), c.bump_stop_rate,
+                                              c.bump_stop_length);
             }
         }
 

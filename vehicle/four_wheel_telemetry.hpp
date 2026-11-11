@@ -110,7 +110,7 @@ namespace rallysim
     // Fy are in the wheel's frame; grip is the most force the tyre can take at that load, mu(Fz) Fz (tyre_grip);
     // driveTorque and brakeTorque are what the pedals put on that wheel. deflection, deflVel, springF and damperF
     // are the corner's suspension (zero in the planar model); in the unsprung model they are the strut's and Fz is
-    // the tyre's. tyreDefl, wheelZ and stopF (the droop stop, zero or negative) are zero except in that model. The energy columns are this state's stored energy and
+    // the tyre's. tyreDefl, wheelZ and stopF (the stops: negative in droop, positive in bump) are zero except in that model. The energy columns are this state's stored energy and
     // `books`' work and residual: the books must hold the work of every step before this one. See
     // docs/telemetry_schema.md.
     inline std::vector<Real> four_wheel_row(long step, Real dt, const four_wheel_state &s,

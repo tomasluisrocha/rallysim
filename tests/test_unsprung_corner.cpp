@@ -104,5 +104,48 @@ int main()
         check_near("springs corner ignores the ratio", corner_force(rp, 0.05, -0.1).fz, 2120, 1e-9);
     }
 
+    // the bump stop's law: k = 500000, L = 0.03
+    {
+        const Real k = 500000, L = 0.03;
+        check_near("bump stop force at 0.015", bump_stop_force(0.015, k, L), 1875, 1e-9);
+        check_near("bump stop force at 0.03", bump_stop_force(0.03, k, L), 7500, 1e-9);
+        check_near("bump stop force at 0.06", bump_stop_force(0.06, k, L), 22500, 1e-9);
+        check_near("bump stop energy at 0.015", bump_stop_energy(0.015, k, L), 9.375, 1e-9);
+        check_near("bump stop energy at 0.03", bump_stop_energy(0.03, k, L), 75, 1e-9);
+        check_near("bump stop energy at 0.06", bump_stop_energy(0.06, k, L), 525, 1e-9);
+        check_true("bump stop: nothing at 0 and before",
+                   bump_stop_force(0, k, L) == 0 && bump_stop_energy(0, k, L) == 0 && bump_stop_force(-0.01, k, L) == 0 &&
+                       bump_stop_energy(-0.01, k, L) == 0);
+        const Real h = 1e-6;
+        check_true("bump stop: smooth contact", (bump_stop_force(h, k, L) - bump_stop_force(0, k, L)) / h < 1e-4 * k);
+        check_near("bump stop: stiffness below L", (bump_stop_force(L, k, L) - bump_stop_force(L - h, k, L)) / h, k, 1e-4 * k);
+        check_near("bump stop: stiffness above L", (bump_stop_force(L + h, k, L) - bump_stop_force(L, k, L)) / h, k, 1e-4 * k);
+        for (const Real e : {0.015, 0.03, 0.06})
+        {
+            const Real F = bump_stop_force(e, k, L);
+            const Real dU = (bump_stop_energy(e + 1e-7, k, L) - bump_stop_energy(e - 1e-7, k, L)) / 2e-7;
+            check_near("bump stop: the energy's slope is the force", dU, F, 1e-6 * F);
+        }
+    }
+
+    // the bump stop in the corner, moved to 0.10 m past rest
+    {
+        corner_params b = cp;
+        b.bump_travel = 0.10;
+        const corner_load in = unsprung_corner_force(b, x0 + 0.10 + 0.03, 0.0, x0, 0.01, 0.0);
+        check_near("bump stop in the corner: stop", in.stop, 7500, 1e-6);
+        check_near("bump stop in the corner: strut = spring + stop", in.strut, 50000 * 0.1787 + 7500, 1e-6);
+        check_true("bump stop in the corner: zero at its start", unsprung_corner_force(b, x0 + 0.10, 0.0, x0, 0.01, 0.0).stop == 0);
+    }
+
+    // the defaults never reach the bump stop below 0.25 m past rest
+    {
+        bool untouched = true;
+        for (int i = 0; 0.001 * i <= x0 + 0.24; ++i)
+            if (unsprung_corner_force(cp, 0.001 * i, 0.0, x0, 0.01, 0.0).stop > 0)
+                untouched = false;
+        check_true("defaults: no bump stop up to x0 + 0.24", untouched);
+    }
+
     return finish("unsprung_corner");
 }
