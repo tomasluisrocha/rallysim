@@ -1,0 +1,5 @@
+# Pins the lowest supported versions and is used only by CI.
+numpy==2.0.0
+pandas==3.0.0
+matplotlib==3.10.0
+pillow==11.0.0
