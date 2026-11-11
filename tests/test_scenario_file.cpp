@@ -142,6 +142,42 @@ int main()
                     "unsprung_mass_front: the wheel's weight", {{"unsprung_mass_front", "300"}});
     check_true("range: heavy but still carried (front 150 kg, rear 100 kg)",
                errors_of(kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 150\nunsprung_mass_rear = 100\n").empty());
+    // the corner step screen: a 2 kg front wheel on a 5 MN/m tyre needs a small step (front number about 6.6 at 1 ms)
+    {
+        const std::string stiff = kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 2\ntyre_rate_front = 5000000\n";
+        check_one_error("step: a light wheel on a stiff tyre at 1 ms", stiff, "t.ini:4:", "front wheel: step number");
+        check_one_error("step: the message says why", stiff, "t.ini:4:", "not below 2");
+        check_one_error("step: from --set, anchored there", stiff, "--set:", "front wheel: step number",
+                        {{"run.dt", "0.5ms"}});
+        check_true("step: a small enough dt loads", errors_of(stiff, {{"run.dt", "0.25ms"}}).empty());
+        const std::vector<std::string> e = errors_of(stiff);
+        if (!e.empty())
+            std::printf("  loader message: %s\n", e[0].c_str());
+        const std::vector<std::string> e2 = errors_of(stiff, {{"run.dt", "0.5ms"}});
+        if (!e2.empty())
+            std::printf("  loader message: %s\n", e2[0].c_str());
+    }
+    for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_showcase"})
+    {
+        bool loads = true;
+        try
+        {
+            load_scenario_file(std::string(RALLYSIM_SOURCE_DIR "/scenarios/") + name + ".ini", {{"vertical", "unsprung"}});
+        }
+        catch (const ini_error &e)
+        {
+            loads = false;
+            for (const std::string &m : e.messages)
+                std::printf("  got: %s\n", m.c_str());
+        }
+        check_true((std::string("step: shipped scenario loads unsprung: ") + name).c_str(), loads);
+    }
+    check_true("step: the springs car is not screened", errors_of(kMinimal + "[car]\nvertical = springs\n").empty());
+    check_true("step: the springs car with a 10 ms dt is not screened",
+               errors_of("[run]\nduration = 1 s\ndt = 10 ms\n[car]\nvertical = springs\n").empty());
+    // no sprung mass: only the existing error, no screening (and no division by a non-positive mass)
+    check_one_error("step: no screening without a sprung mass", kMinimal + "[car]\nvertical = unsprung\nmass = 160\n", "t.ini:",
+                    "the four unsprung masses");
     {
         // the default ride height follows the file's cg_height
         const four_wheel_run r = load(kMinimal + "[car]\ncg_height = 520 mm\n");

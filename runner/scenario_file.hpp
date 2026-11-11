@@ -52,6 +52,10 @@ namespace rallysim
         return name == "linear" ? tyre_curve::linear : name == "peak_slide" ? tyre_curve::peak_slide : tyre_curve::tmeasy;
     }
 
+    // An unsprung car is refused when a corner's step number (four_wheel.hpp) reaches this. Provisional: a margin
+    // under the linear limit of 4.
+    inline constexpr Real kCornerStepLimit = 2;
+
     // Reads a scenario from `in` (`source` names it in messages). `overrides` are --set pairs, applied over the file:
     // "spring_front" is a [car] key, "run.dt" names its section. Throws ini_error with every problem in the file (and
     // in the overrides, shown as "--set"), each as "source:line: key: message".
@@ -268,6 +272,22 @@ namespace rallysim
             {
                 fail(*e, "must be above 0");
                 dt_ok = false;
+            }
+        }
+        // the explicit corner step must be fast enough for the wheels (see corner_step_number)
+        if (run.params.vertical == vertical_model::unsprung && run.params.sprung_mass() > 0 && dt_ok)
+        {
+            const ini_entry *dt_entry = entry_of("run", "dt");
+            const ini_entry *anchor = dt_entry ? dt_entry : entry_of("car", "vertical");
+            for (const std::string axle : {"front", "rear"})
+            {
+                const std::size_t i = axle == "front" ? FL : RL;
+                const Real s = corner_step_number(run.params, i, run.dt);
+                if (anchor && s >= kCornerStepLimit)
+                    fail(*anchor, axle + " wheel: step number " + number_text(s) + " at dt " + number_text(run.dt) +
+                                      " s is not below " + number_text(kCornerStepLimit) +
+                                      " (light wheel, stiff tyre or strong damping for this step); the largest dt is about " +
+                                      number_text(corner_step_largest_dt(run.params, i, kCornerStepLimit)) + " s");
             }
         }
         Real duration = 0;

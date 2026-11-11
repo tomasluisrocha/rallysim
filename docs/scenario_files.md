@@ -122,6 +122,10 @@ with `vertical = unsprung` (whose four wheel masses must add up to less than `ma
 and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after the words below are read, wherever
 they are in the file; `rallysim params <scenario>` marks what a car does not use.
 
+An unsprung car is refused when a corner's step number reaches 2 at the run's `dt` (a light wheel, a stiff tyre or
+stop, or strong damping for the step); the message gives the largest `dt`. The number screens step stability only, not
+accuracy.
+
 `rebound_ratio_*` multiplies `damper_*` while the strut extends (1: the same in both directions). `bump_travel_*` is the
 compression past rest where the bump stop starts, and its stiffness rises to `bump_stop_rate_*` over
 `bump_stop_length_*`; `droop_stop_rate_*` is the droop stop's stiffness. The bump-stop defaults are placeholders that no

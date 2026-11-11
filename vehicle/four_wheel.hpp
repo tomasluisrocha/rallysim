@@ -139,6 +139,43 @@ namespace rallysim
         }
     };
 
+    // The step number S = a dt^2 + b dt of corner i (unsprung model): a and b are its two sums below.
+    // A screening number for the explicit corner step, not a bound. For one wheel stepped as here, linear and
+    // against a fixed body, the step is stable exactly when the simple form (wheel mass alone) is below 4; with the
+    // strut terms over the reduced mass it was at least 4 at the stability limit of every linear two-mass case
+    // tried. It says nothing about accuracy.
+    struct corner_step_terms
+    {
+        Real a = 0; // stiffness over mass (1/s^2)
+        Real b = 0; // twice the damping over mass (1/s)
+    };
+
+    inline corner_step_terms corner_step_coefficients(const four_wheel_params &p, std::size_t i)
+    {
+        const corner_params &c = p.corner(i);
+        const vec3 r = p.suspension_point(i);
+        const Real mu = c.unsprung_mass, ms = p.sprung_mass();
+        const Real body = 1 / (1 / ms + r.y * r.y / p.chassis.inertia.x + r.x * r.x / p.chassis.inertia.y);
+        const Real reduced = mu * body / (mu + body);
+        corner_step_terms t;
+        t.a = (c.spring_rate + std::max(c.bump_stop_rate, c.stop_rate)) / reduced + c.tyre_rate / mu;
+        t.b = 2 * (std::max(Real(1), c.rebound_ratio) * c.damper_rate / reduced + c.tyre_damping / mu);
+        return t;
+    }
+
+    inline Real corner_step_number(const four_wheel_params &p, std::size_t i, Real dt)
+    {
+        const corner_step_terms t = corner_step_coefficients(p, i);
+        return dt * dt * t.a + dt * t.b;
+    }
+
+    // The largest dt with corner_step_number below `limit`: a dt^2 + b dt = limit.
+    inline Real corner_step_largest_dt(const four_wheel_params &p, std::size_t i, Real limit)
+    {
+        const corner_step_terms t = corner_step_coefficients(p, i);
+        return (-t.b + std::sqrt(t.b * t.b + 4 * t.a * limit)) / (2 * t.a);
+    }
+
     // Refits both tyres' stiffness tables to the car as it is now (fit_stiffness at each axle's load at rest). The
     // tyres are fitted when the params are built, so after changing mass, lf, lr or a tyre's stiffness, call this
     // once, after all the changes: then the order of the changes does not matter.

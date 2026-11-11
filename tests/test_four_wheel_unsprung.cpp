@@ -421,5 +421,128 @@ int main()
         }
     }
 
+    // the step number against hand values (default car, 1 ms and 2 ms), then each term on its own
+    {
+        const four_wheel_params p = unsprung_car();
+        const Real f1 = corner_step_number(p, FL, 0.001), r1 = corner_step_number(p, RL, 0.001);
+        const Real f2 = corner_step_number(p, FL, 0.002);
+        std::printf("step number, default car: front %.4f, rear %.4f at 1 ms; front %.4f at 2 ms\n", f1, r1, f2);
+        check_near("step number: front at 1 ms", f1, 0.2369, 1e-4);
+        check_near("step number: rear at 1 ms", r1, 0.2358, 1e-4);
+        check_near("step number: front at 2 ms", f2, 0.5175, 1e-4);
+
+        four_wheel_params q = p;
+        q.front_corner.rebound_ratio = 3;
+        check_near("step number: rebound ratio 3 adds 2 dt (3 - 1) c / mr", corner_step_number(q, FL, 0.001) - f1, 0.43027, 1e-4);
+        q.front_corner.rebound_ratio = 0.5;
+        check_true("step number: a rebound ratio below 1 changes nothing", corner_step_number(q, FL, 0.001) == f1);
+
+        four_wheel_params b = p;
+        b.front_corner.bump_stop_rate = 1e6;
+        const Real with_bump = corner_step_number(b, FL, 0.001);
+        check_near("step number: a stiffer bump stop adds dt^2 dk / mr", with_bump - f1, 0.014153, 1e-5);
+        four_wheel_params s = p;
+        s.front_corner.stop_rate = 1e6;
+        check_true("step number: the larger of the two stops counts", corner_step_number(s, FL, 0.001) == with_bump);
+
+        four_wheel_params o4 = unsprung_car();
+        for (corner_params *c : {&o4.front_corner, &o4.rear_corner})
+        {
+            c->unsprung_mass = 2;
+            c->tyre_rate = 5e6;
+        }
+        const Real o4_front = corner_step_number(o4, FL, 0.001);
+        std::printf("step number, 2 kg wheels on 5 MN/m tyres: front %.4f at 1 ms\n", o4_front);
+        check_near("step number: the light-wheel set", o4_front, 6.6010, 1e-3);
+        check_true("step number: the largest dt gives the limit",
+                   std::fabs(corner_step_number(o4, FL, corner_step_largest_dt(o4, FL, 2.0)) - 2.0) < 1e-12);
+    }
+
+    // the claim behind the number, on a linear two-mass step written here (body on a strut over a wheel on a tyre,
+    // the car's scheme: both velocities from the start-of-step forces, then positions). At a screening number of
+    // 3.9 the motion must not grow; past the coupled limit it does.
+    {
+        struct two_mass
+        {
+            Real Mb, mu, ks, kt, cs, ct;
+        };
+        // largest |z| of body and wheel over steps [from, to) of a run of `steps` steps at step h
+        auto run_two_mass = [](const two_mass &m, Real h, int steps, int window, Real &early, Real &late, bool &finite)
+        {
+            Real zb = 0.01, zu = 0, vb = 0, vu = 0;
+            early = late = 0;
+            finite = true;
+            for (int i = 0; i < steps; ++i)
+            {
+                const Real S = m.ks * (zu - zb) + m.cs * (vu - vb);
+                vb += h * S / m.Mb;
+                vu += h * (-S - m.kt * zu - m.ct * vu) / m.mu;
+                zb += h * vb;
+                zu += h * vu;
+                const Real big = std::max(std::fabs(zb), std::fabs(zu));
+                if (!std::isfinite(big))
+                {
+                    finite = false;
+                    early = late = std::numeric_limits<Real>::infinity();
+                    return;
+                }
+                if (i < window)
+                    early = std::max(early, big);
+                if (i >= steps - window)
+                    late = std::max(late, big);
+            }
+        };
+        const two_mass cases[] = {{260, 40, 5e4, 2.5e5, 3800, 0}, {260, 2, 5e4, 5e6, 3800, 0},   {30, 40, 5e4, 2.5e5, 11400, 0},
+                                  {600, 2, 6e5, 1e5, 12000, 0},   {30, 80, 2e5, 5e6, 3800, 0},   {100, 10, 2e5, 1e6, 0, 2000}};
+        for (const two_mass &m : cases)
+        {
+            const Real mr = m.mu * m.Mb / (m.mu + m.Mb);
+            const Real a = m.ks / mr + m.kt / m.mu, b = 2 * (m.cs / mr + m.ct / m.mu);
+            const Real h = (-b + std::sqrt(b * b + 4 * a * 3.9)) / (2 * a);
+            Real early, late;
+            bool finite;
+            run_two_mass(m, h, 20000, 2000, early, late, finite);
+            std::printf("two-mass (%g, %g, %g, %g, %g, %g) at Sr 3.9, h %.4g s: late / early = %.3g\n", m.Mb, m.mu, m.ks, m.kt,
+                        m.cs, m.ct, h, late / early);
+            check_true("claim: a case at screening number 3.9 does not grow", finite && late <= early);
+        }
+        // control: the same code past the limit must show growth
+        Real early, late;
+        bool finite;
+        run_two_mass(cases[1], 0.00075, 2000, 2000, early, late, finite);
+        std::printf("control (260, 2, ...) at h 0.75 ms: %s, largest |z| %.3g (start 0.01)\n", finite ? "finite" : "non-finite", late);
+        check_true("claim: the control grows past 1e6 times its start", !finite || late > 1e6 * 0.01);
+    }
+
+    // the car itself: the light-wheel set on fw_lane at 0.7 ms (simple number 3.90) keeps the front-left tyre
+    // load within 20% of its static load at every step; at 0.8 ms (4.66) the range is printed only
+    {
+        four_wheel_params o4 = unsprung_car();
+        for (corner_params *c : {&o4.front_corner, &o4.rear_corner})
+        {
+            c->unsprung_mass = 2;
+            c->tyre_rate = 5e6;
+        }
+        for (Real h : {0.0007, 0.0008})
+        {
+            const four_wheel_run r = in_mode("fw_lane", o4, 15.0, h);
+            four_wheel_state s = r.initial;
+            Real lo = 1e30, hi = -1e30;
+            for (long i = 0; i < r.steps; ++i)
+            {
+                const four_wheel_input in = driver_input(r, s, i * r.dt);
+                const Real fz = evaluate(s, o4, in).fz[FL];
+                lo = std::min(lo, fz);
+                hi = std::max(hi, fz);
+                step(s, o4, in, r.dt);
+            }
+            std::printf("light wheels on fw_lane at %.1f ms: FL load %.0f to %.0f N (static %.0f N)\n", h * 1000, lo, hi,
+                        o4.static_load(FL));
+            if (h < 0.00075)
+                check_true("car: at 0.7 ms the FL load stays within 20% of its static load",
+                           lo >= 0.8 * o4.static_load(FL) && hi <= 1.2 * o4.static_load(FL));
+        }
+    }
+
     return finish("four_wheel_unsprung");
 }
