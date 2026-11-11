@@ -156,6 +156,48 @@ int main()
         check_true("wheel: negative tyre_damping refused", throws("tyre_damping_rear", "-1"));
     }
 
+    {
+        // the suspension's strut numbers: defaults from corner_params, one axle at a time, ranges, use
+        const char *names[] = {"rebound_ratio_front", "rebound_ratio_rear", "bump_travel_front", "bump_travel_rear",
+                               "bump_stop_length_front", "bump_stop_length_rear", "bump_stop_rate_front",
+                               "bump_stop_rate_rear", "droop_stop_rate_front", "droop_stop_rate_rear"};
+        four_wheel_params p;
+        check_near("strut: rebound_ratio_front default", find_param("rebound_ratio_front")->field(p), 1, 0);
+        check_near("strut: bump_travel_rear default", find_param("bump_travel_rear")->field(p), 0.25, 0);
+        check_near("strut: bump_stop_length_front default", find_param("bump_stop_length_front")->field(p), 0.03, 0);
+        check_near("strut: bump_stop_rate_rear default", find_param("bump_stop_rate_rear")->field(p), 500000, 0);
+        check_near("strut: droop_stop_rate_front default", find_param("droop_stop_rate_front")->field(p), 500000, 0);
+        apply(p, "rebound_ratio_rear", "2.5");
+        check_near("strut: rebound_ratio_rear set", p.rear_corner.rebound_ratio, 2.5, 0);
+        check_near("strut: rebound_ratio_front untouched", p.front_corner.rebound_ratio, 1, 0);
+        apply(p, "bump_travel_front", "120 mm");
+        check_near("strut: bump_travel_front set", p.front_corner.bump_travel, 0.12, 1e-15);
+        check_near("strut: bump_travel_rear untouched", p.rear_corner.bump_travel, 0.25, 0);
+        apply(p, "bump_stop_length_rear", "40 mm");
+        check_near("strut: bump_stop_length_rear set", p.rear_corner.bump_stop_length, 0.04, 1e-15);
+        check_near("strut: bump_stop_length_front untouched", p.front_corner.bump_stop_length, 0.03, 0);
+        apply(p, "bump_stop_rate_front", "600 kN/m");
+        check_near("strut: bump_stop_rate_front set", p.front_corner.bump_stop_rate, 600000, 1e-9);
+        check_near("strut: bump_stop_rate_rear untouched", p.rear_corner.bump_stop_rate, 500000, 0);
+        apply(p, "droop_stop_rate_rear", "400 kN/m");
+        check_near("strut: droop_stop_rate_rear set", p.rear_corner.stop_rate, 400000, 1e-9);
+        check_near("strut: droop_stop_rate_front untouched", p.front_corner.stop_rate, 500000, 0);
+        for (const char *n : names)
+        {
+            check_true("strut: 0 refused", throws(n, "0"));
+            check_true("strut: negative refused", throws(n, "-1"));
+        }
+        four_wheel_params q;
+        for (const char *n : names)
+            check_true("strut: unused on the springs car", !param_used(*find_param(n), q));
+        q.vertical = vertical_model::planar;
+        for (const char *n : names)
+            check_true("strut: unused on the planar car", !param_used(*find_param(n), q));
+        q.vertical = vertical_model::unsprung;
+        for (const char *n : names)
+            check_true("strut: used on the unsprung car", param_used(*find_param(n), q));
+    }
+
     // ---- apply ----------------------------------------------------------------------------------------------
     {
         four_wheel_params p;

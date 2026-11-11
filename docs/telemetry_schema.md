@@ -224,7 +224,7 @@ Each wheel block, in this order:
 | `damperF` | N | Damper force, positive while compressing; in the springs model `Fz` is spring + damper, never below zero; in the unsprung model `Fz` is the tyre's load, from the tyre spring, not the strut's |
 | `tyreDefl` | m | The tyre's compression; zero or less means it is off the ground. 0 except in the unsprung model |
 | `wheelZ` | m | Height of the wheel centre above the ground. 0 except in the unsprung model |
-| `stopF` | N | The droop stop's force: zero or negative (it pulls the wheel up). 0 except in the unsprung model; bump stops add the positive side later |
+| `stopF` | N | The stops' force: negative from the droop stop (it pulls the wheel up), positive from the bump stop (it pushes the body up); never both. 0 except in the unsprung model |
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own
@@ -241,7 +241,7 @@ work columns add up every step before it, from the start of the run:
 | `energy.translation` | Body: ½ m \|v\|². Unsprung model: ½ m (vx² + vy²) + ½ m_s vz² + each wheel's ½ m_u vz² |
 | `energy.rotation` | Body: ½ (Ix ωx² + Iy ωy² + Iz ωz²), body frame |
 | `energy.gravity` | Body: m g z (springs model; 0 in the planar model, which cancels gravity). Unsprung model: m_s g (height of the sprung body's CG) + each wheel's m_u g z |
-| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model). Unsprung model: the strut spring, the tyre spring (while on the ground) and the droop stop (while engaged) |
+| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model). Unsprung model: the strut spring, the tyre spring (while on the ground), the droop stop and the bump stop (each while engaged) |
 | `energy.wheels` | Wheel spin: ½ I ω² for each wheel |
 | `energy.total` | The sum of the five above |
 | `work.drive` | Put in by the drive: drive torque × spin |

@@ -91,7 +91,7 @@ namespace rallysim
             PARAM_IF("spring_rear", "N/m", rear_corner.spring_rate, param_use::sprung, param_range::positive),
             PARAM_IF("damper_front", "N s/m", front_corner.damper_rate, param_use::sprung, param_range::non_negative),
             PARAM_IF("damper_rear", "N s/m", rear_corner.damper_rate, param_use::sprung, param_range::non_negative),
-            // the wheel (vertical = unsprung)
+            // the wheel and its strut (vertical = unsprung)
             PARAM_IF("unsprung_mass_front", "kg", front_corner.unsprung_mass, param_use::unsprung, param_range::positive),
             PARAM_IF("unsprung_mass_rear", "kg", rear_corner.unsprung_mass, param_use::unsprung, param_range::positive),
             PARAM_IF("tyre_rate_front", "N/m", front_corner.tyre_rate, param_use::unsprung, param_range::positive),
@@ -100,6 +100,16 @@ namespace rallysim
             PARAM_IF("tyre_damping_rear", "N s/m", rear_corner.tyre_damping, param_use::unsprung, param_range::non_negative),
             PARAM_IF("droop_front", "m", front_corner.droop, param_use::unsprung, param_range::positive),
             PARAM_IF("droop_rear", "m", rear_corner.droop, param_use::unsprung, param_range::positive),
+            PARAM_IF("rebound_ratio_front", "-", front_corner.rebound_ratio, param_use::unsprung, param_range::positive),
+            PARAM_IF("rebound_ratio_rear", "-", rear_corner.rebound_ratio, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_travel_front", "m", front_corner.bump_travel, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_travel_rear", "m", rear_corner.bump_travel, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_stop_length_front", "m", front_corner.bump_stop_length, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_stop_length_rear", "m", rear_corner.bump_stop_length, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_stop_rate_front", "N/m", front_corner.bump_stop_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("bump_stop_rate_rear", "N/m", rear_corner.bump_stop_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("droop_stop_rate_front", "N/m", front_corner.stop_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("droop_stop_rate_rear", "N/m", rear_corner.stop_rate, param_use::unsprung, param_range::positive),
             // drive and brakes
             PARAM("max_drive_torque", "N m", drive_brake.max_drive_torque, param_range::non_negative),
             PARAM("max_drive_power", "W", drive_brake.max_drive_power, param_range::positive),
