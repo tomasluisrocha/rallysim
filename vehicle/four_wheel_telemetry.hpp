@@ -76,7 +76,9 @@ namespace rallysim
     }
 
     // Line 1 of the file: the model and its choices (vertical 0 planar, 1 springs, 2 unsprung; springs 1 for both
-    // sprung modes, 0 for planar; curve 0 linear, 1 peak_slide, 2 tmeasy), then
+    // sprung modes, 0 for planar; curve 0 linear, 1 peak_slide, 2 tmeasy), then gravity and, off planar, each
+    // axle's rest_deflection (the `deflection` column with the car at rest: static_deflection on springs,
+    // strut_static_deflection unsprung; front is FL, rear is RL), then
     // every parameter of the registry under its own name, so the file records the whole car that made it (rallysim
     // --set included), then each tyre's TMeasy tables. A viewer draws the car from it to scale.
     inline telemetry_meta four_wheel_meta(const four_wheel_params &p)
@@ -86,6 +88,14 @@ namespace rallysim
                             {"vertical", static_cast<Real>(p.vertical)},
                             {"curve_front", static_cast<Real>(p.front_tyre.curve)},
                             {"curve_rear", static_cast<Real>(p.rear_tyre.curve)}};
+        meta.push_back({"gravity", kGravity});
+        if (p.vertical != vertical_model::planar)
+        {
+            const bool unsprung = p.vertical == vertical_model::unsprung;
+            auto rest = [&](std::size_t i) { return unsprung ? p.strut_static_deflection(i) : p.static_deflection(i); };
+            meta.push_back({"rest_deflection_front", rest(FL)});
+            meta.push_back({"rest_deflection_rear", rest(RL)});
+        }
         four_wheel_params copy = p; // the registry reaches fields through a non-const reference
         for (const param_entry &e : four_wheel_registry())
             meta.push_back({e.name, e.field(copy)});

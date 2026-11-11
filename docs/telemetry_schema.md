@@ -37,6 +37,8 @@ ignore them, and adding keys needs no schema change.
 | `cg_height` | m | single-track, four-wheel | CG above the ground |
 | `mass` | kg | single-track, four-wheel | Car mass |
 | every `rallysim params` name | its unit | four-wheel | Every parameter of the car, under the name `--set` and scenario files use (`vehicle/four_wheel_registry.hpp`): geometry, inertia, tyres, suspension, drive and brakes. So a four-wheel file records the whole car that made it, settings included |
+| `gravity` | m/s^2 | four-wheel | The gravity the run used |
+| `rest_deflection_front`, `rest_deflection_rear` | m | four-wheel on springs or unsprung | The `deflection` of that axle's corners with the car at rest, so travel is `deflection` minus it; in the unsprung model the bump stop engages `bump_travel_*` past it and the droop stop `droop_*` before it |
 | `vertical` | - | four-wheel | The vertical model: 0 planar, 1 springs, 2 unsprung (`vertical_model` in `vehicle/four_wheel.hpp`) |
 | `springs` | - | four-wheel | 1 if the car is on springs (the springs and unsprung models), 0 for the flat (planar) model |
 | `curve_front`, `curve_rear` | - | four-wheel | Each tyre's curve: 0 linear, 1 peak_slide, 2 tmeasy (`tyre_curve` in `vehicle/tyre.hpp`) |

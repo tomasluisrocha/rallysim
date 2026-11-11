@@ -418,6 +418,28 @@ int main()
             o.vertical = modes[k];
             check_near("meta: vertical", meta_value(o, "vertical"), k, 0);
             check_near("meta: springs is 1 for both sprung modes", meta_value(o, "springs"), k == 0 ? 0 : 1, 0);
+            check_near("meta: gravity", meta_value(o, "gravity"), kGravity, 0);
+            if (k == 0)
+            {
+                check_near("meta: no rest_deflection_front when planar", meta_value(o, "rest_deflection_front"), -1, 0);
+                check_near("meta: no rest_deflection_rear when planar", meta_value(o, "rest_deflection_rear"), -1, 0);
+                continue;
+            }
+            const four_wheel_state s0 = four_wheel_initial(o, 0.0);
+            const std::vector<Real> r0 = four_wheel_row(0, dt, s0, o, none, energy_books(s0, o));
+            const Real front = meta_value(o, "rest_deflection_front"), rear = meta_value(o, "rest_deflection_rear");
+            if (k == 1)
+            {
+                check_near("meta: springs rest_deflection_front", front, 0.056505599999999996, 1e-15);
+                check_near("meta: springs rest_deflection_rear", rear, 0.0612144, 1e-15);
+            }
+            else
+            {
+                check_near("meta: unsprung rest_deflection_front", front, 0.048657599999999995, 1e-15);
+                check_near("meta: unsprung rest_deflection_rear", rear, 0.0533664, 1e-15);
+            }
+            check_column(names, r0, "wheel.FL.deflection", front, 1e-15);
+            check_column(names, r0, "wheel.RL.deflection", rear, 1e-15);
         }
     }
 
