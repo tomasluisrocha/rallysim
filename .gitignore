@@ -28,3 +28,4 @@ __pycache__/
 
 # telemetry output
 *.csv
+!tools/tests/fixtures/*.csv
