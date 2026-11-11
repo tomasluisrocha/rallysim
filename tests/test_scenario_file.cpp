@@ -112,6 +112,37 @@ int main()
         check_near("car: planar starts on the ground plane", planar.initial.body.pos.z, 0, 0);
     }
     {
+        const four_wheel_run u = load(kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 30 kg\ndroop_rear = 80 mm\n");
+        check_true("car: unsprung", u.params.vertical == vertical_model::unsprung);
+        check_near("car: unsprung starts at the ride height", u.initial.body.pos.z, u.params.cg_height, 0);
+        check_near("car: unsprung mass front", u.params.front_corner.unsprung_mass, 30, 0);
+        check_near("car: droop rear", u.params.rear_corner.droop, 0.08, 1e-15);
+        check_near("car: wheel starts at its rest height", u.initial.corners[FL].z, u.params.wheel_rest_height(FL), 1e-12);
+        check_true("car: unsprung settles with the spring and damper keys",
+                   errors_of(kMinimal + "[car]\nvertical = unsprung\nspring_front = 40 kN/m\n").empty());
+    }
+    check_one_error("unused: a wheel mass on the springs car", kMinimal + "[car]\nunsprung_mass_front = 30\n", "t.ini:4:",
+                    "unsprung_mass_front: only used with vertical = unsprung");
+    check_one_error("unused: a tyre rate on the planar car", kMinimal + "[car]\nvertical = planar\ntyre_rate_rear = 2e5\n",
+                    "t.ini:5:", "only used with vertical = unsprung");
+    check_one_error("range: a tyre rate of 0", kMinimal + "[car]\nvertical = unsprung\ntyre_rate_front = 0\n", "t.ini:5:",
+                    "tyre_rate_front: must be above 0");
+    check_true("range: no tyre damping loads",
+               errors_of(kMinimal + "[car]\nvertical = unsprung\ntyre_damping_rear = 0\n").empty());
+    check_one_error("range: wheels as heavy as the car", kMinimal + "[car]\nvertical = unsprung\nmass = 150\n", "t.ini:",
+                    "the four unsprung masses (160 kg) must add up to less than the mass (150 kg)");
+    // per axle: the four wheels together are well under the mass, but one outweighs the load on its tyre
+    check_one_error("range: a front wheel heavier than its static load",
+                    kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 300\nunsprung_mass_rear = 10\n", "t.ini:5:",
+                    "the wheel's weight (2943 N) must be below the front axle");
+    check_one_error("range: a rear wheel heavier than its static load",
+                    kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 10\nunsprung_mass_rear = 320\n", "t.ini:6:",
+                    "the wheel's weight (3139.2 N) must be below the rear axle");
+    check_one_error("range: a heavy wheel from --set", kMinimal + "[car]\nvertical = unsprung\n", "--set:",
+                    "unsprung_mass_front: the wheel's weight", {{"unsprung_mass_front", "300"}});
+    check_true("range: heavy but still carried (front 150 kg, rear 100 kg)",
+               errors_of(kMinimal + "[car]\nvertical = unsprung\nunsprung_mass_front = 150\nunsprung_mass_rear = 100\n").empty());
+    {
         // the default ride height follows the file's cg_height
         const four_wheel_run r = load(kMinimal + "[car]\ncg_height = 520 mm\n");
         check_near("car: start at the file's ride height", r.initial.body.pos.z, 0.52, 0);

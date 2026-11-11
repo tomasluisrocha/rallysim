@@ -22,7 +22,7 @@ namespace rallysim
     //   [run]       model (four_wheel), duration (s, required), dt (s, default 0.001)
     //   [start]     position (m), heading, pitch, roll (rad), speed (m/s) or velocity (m/s), angular_velocity (rad/s)
     //   [car]       every registry name (rallysim params) the car uses, tyre_curve or tyre_curve_front / _rear,
-    //               vertical; a number the chosen model or tyre curve does not use is refused (param_used), and so is
+    //               vertical (springs, planar, unsprung); a number the chosen model or tyre curve does not use is refused (param_used), and so is
     //               one outside its range (range_error)
     //   [driver]    steer (rad), throttle, brake, handbrake (0 to 1) as timelines; hold_speed (m/s, a timeline) for
     //               the speed controller (gain speed_gain, 1/s), in place of throttle and brake; hold_heading (rad)
@@ -210,8 +210,32 @@ namespace rallysim
             run.params.front_tyre.curve = tyre_curve_named(name);
         if (rear && !both && word(*rear, curves, name))
             run.params.rear_tyre.curve = tyre_curve_named(name);
-        if (const ini_entry *e = entry_of("car", "vertical"); e && word(*e, {"springs", "planar"}, name))
-            run.params.vertical = name == "planar" ? vertical_model::planar : vertical_model::springs;
+        if (const ini_entry *e = entry_of("car", "vertical"); e && word(*e, {"springs", "planar", "unsprung"}, name))
+        {
+            run.params.vertical = name == "planar"     ? vertical_model::planar
+                                  : name == "unsprung" ? vertical_model::unsprung
+                                                       : vertical_model::springs;
+            // the body is what is left of the car once the four wheels are taken out
+            if (run.params.vertical == vertical_model::unsprung && !(run.params.sprung_mass() > 0))
+                fail(*e, "the four unsprung masses (" +
+                             number_text(2 * run.params.front_corner.unsprung_mass + 2 * run.params.rear_corner.unsprung_mass) +
+                             " kg) must add up to less than the mass (" + number_text(run.params.chassis.mass) + " kg)");
+            else if (run.params.vertical == vertical_model::unsprung)
+                // a wheel heavier than the load on its tyre leaves no load for the strut: the car cannot rest
+                for (const std::string axle : {"front", "rear"})
+                {
+                    const std::size_t i = axle == "front" ? FL : RL;
+                    const Real weight = run.params.corner(i).unsprung_mass * kGravity;
+                    if (weight >= run.params.static_load(i))
+                    {
+                        const std::string key = "unsprung_mass_" + axle;
+                        const ini_entry *at = entry_of("car", key);
+                        fail(at ? *at : *e, std::string(at ? "" : key + ": ") + "the wheel's weight (" + number_text(weight) +
+                                                " N) must be below the " + axle + " axle's static load per wheel (" +
+                                                number_text(run.params.static_load(i)) + " N)");
+                    }
+                }
+        }
         // a number this car does not use (a spring on the planar car, a peak_slide shape on a tmeasy tyre) would change
         // nothing: refuse it, judged against the words above wherever they are in the file
         for (const ini_section &s : file.sections)
@@ -265,7 +289,7 @@ namespace rallysim
 
         // [start]: read after [car], whose cg_height and vertical model set the default ride height
         four_wheel_pose pose;
-        pose.position = {0, 0, run.params.vertical == vertical_model::springs ? run.params.cg_height : 0};
+        pose.position = {0, 0, run.params.vertical != vertical_model::planar ? run.params.cg_height : 0};
         if (const ini_entry *e = entry_of("start", "position"))
             vec(*e, "m", pose.position);
         if (const ini_entry *e = entry_of("start", "heading"))

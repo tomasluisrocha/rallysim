@@ -127,6 +127,33 @@ int main()
         check_true("used: the front shape on a front peak_slide", param_used(*find_param("sliding_ratio_front"), p));
         check_true("used: not the rear shape", !param_used(*find_param("sliding_ratio_rear"), p));
         check_true("used: grip always", param_used(*find_param("mu_rear"), p));
+        p.vertical = vertical_model::unsprung;
+        check_true("used: a spring on the unsprung car", param_used(*find_param("spring_front"), p));
+        check_true("used: the wheel mass on the unsprung car", param_used(*find_param("unsprung_mass_rear"), p));
+        check_true("used: no transfer share on the unsprung car", !param_used(*find_param("front_transfer_share"), p));
+        p.vertical = vertical_model::springs;
+        for (const char *n : {"unsprung_mass_front", "tyre_rate_rear", "tyre_damping_front", "droop_rear"})
+            check_true("used: no wheel number on the springs car", !param_used(*find_param(n), p));
+    }
+
+    {
+        // the wheel's numbers: the corner defaults, settable per axle, ranges as designed
+        four_wheel_params p;
+        check_near("wheel: unsprung_mass_front default", find_param("unsprung_mass_front")->field(p), 40, 0);
+        check_near("wheel: tyre_rate_rear default", find_param("tyre_rate_rear")->field(p), 250000, 0);
+        check_near("wheel: droop_front default", find_param("droop_front")->field(p), 0.10, 0);
+        apply(p, "tyre_rate_front", "300 kN/m");
+        apply(p, "droop_rear", "80 mm");
+        apply(p, "unsprung_mass_rear", "35");
+        apply(p, "tyre_damping_front", "0");
+        check_near("wheel: tyre_rate_front set", p.front_corner.tyre_rate, 300000, 1e-9);
+        check_near("wheel: tyre_rate_rear untouched", p.rear_corner.tyre_rate, 250000, 0);
+        check_near("wheel: droop_rear set", p.rear_corner.droop, 0.08, 1e-15);
+        check_near("wheel: unsprung_mass_rear set", p.rear_corner.unsprung_mass, 35, 0);
+        check_true("wheel: unsprung_mass 0 refused", throws("unsprung_mass_front", "0"));
+        check_true("wheel: tyre_rate 0 refused", throws("tyre_rate_rear", "0"));
+        check_true("wheel: droop 0 refused", throws("droop_front", "0"));
+        check_true("wheel: negative tyre_damping refused", throws("tyre_damping_rear", "-1"));
     }
 
     // ---- apply ----------------------------------------------------------------------------------------------

@@ -5,6 +5,8 @@
 #include <string>
 #include "runner/scenario_file.hpp"
 #include "tests/check.hpp"
+#include "tests/telemetry_helpers.hpp"
+#include "vehicle/four_wheel_telemetry.hpp"
 #include "vehicle/quarter_car.hpp"
 
 using namespace rallysim;
@@ -157,7 +159,7 @@ int main()
         check_near("load transfer: the four tyres still carry the weight", right + left, m * g, 0.002 * m * g);
     }
 
-    // a light wheel on a stiff tyre is the springs model: 2 kg and 5 MN/m, both at 0.2 ms (the light wheel needs
+    // a light wheel on a stiff tyre is the springs model: 2 kg and 5 MN/m, both at 0.1 ms (the light wheel needs
     // the small step), over the lane change and the stop
     {
         four_wheel_params light = unsprung_car();
@@ -167,14 +169,55 @@ int main()
             c->tyre_rate = 5e6;
         }
         const four_wheel_params springs;
-        const Real h = 0.0002;
+        const Real h = 0.0001;
         const four_wheel_state lane_s = run(in_mode("fw_lane", springs, 15.0, h)), lane_u = run(in_mode("fw_lane", light, 15.0, h));
         const four_wheel_state brake_s = run(in_mode("fw_brake", springs, 25.0, h)), brake_u = run(in_mode("fw_brake", light, 25.0, h));
         const Real lane_gap = std::hypot(lane_u.body.pos.x - lane_s.body.pos.x, lane_u.body.pos.y - lane_s.body.pos.y);
         const Real brake_gap = std::fabs(brake_u.body.pos.x - brake_s.body.pos.x);
         std::printf("light wheel against springs: lane change ends %.3g m apart, stop %.3g m apart\n", lane_gap, brake_gap);
-        check_true("reduction: the lane change ends within 1 mm of the springs model's", lane_gap < 1e-3);
-        check_true("reduction: the stop is within 5 mm of the springs model's", brake_gap < 5e-3);
+        check_true("reduction: the lane change ends within 0.1 mm of the springs model's", lane_gap < 1e-4);
+        check_true("reduction: the stop is within 2.5 mm of the springs model's", brake_gap < 2.5e-3);
+    }
+
+    // the same light wheel on fw_circle: the tyre spring in series softens the roll (by the tyre's share, about 1%)
+    // and the path stays within millimetres
+    {
+        four_wheel_params light = unsprung_car();
+        for (corner_params *c : {&light.front_corner, &light.rear_corner})
+        {
+            c->unsprung_mass = 2;
+            c->tyre_rate = 5e6;
+        }
+        const four_wheel_params springs;
+        const four_wheel_run base = four_wheel_scenario("fw_circle");
+        const Real speed = base.initial.body.vel.x;
+        const four_wheel_state cs = run(in_mode("fw_circle", springs, speed, 0.0001));
+        const four_wheel_state cu = run(in_mode("fw_circle", light, speed, 0.0001));
+        const Real gap = std::hypot(cu.body.pos.x - cs.body.pos.x, cu.body.pos.y - cs.body.pos.y);
+        const Real roll_s = roll_angle(cs.body.q), roll_u = roll_angle(cu.body.q);
+        std::printf("light wheel on fw_circle: ends %.3g m apart, roll %.5f rad against %.5f (ratio %.4f)\n", gap, roll_u,
+                    roll_s, roll_u / roll_s);
+        check_true("reduction: the circle ends within 0.5 mm of the springs model's", gap < 5e-4);
+        check_true("reduction: the roll is 0 to 3% more than the springs model's", roll_u > roll_s && roll_u < 1.03 * roll_s);
+    }
+
+    // a free drop does not reach the droop stop: body and wheel fall together
+    {
+        const four_wheel_params p = unsprung_car();
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.body.pos.z += 0.3;
+        for (corner_state &w : s.corners)
+            w.z += 0.3;
+        Real most = 0;
+        for (int i = 0; i < 4000; ++i)
+        {
+            const four_wheel_forces f = evaluate(s, p, none);
+            for (std::size_t k = 0; k < kWheels; ++k)
+                most = std::max(most, p.strut_static_deflection(k) - f.corner[k].deflection);
+            step(s, p, none, dt);
+        }
+        std::printf("drop 0.3 m: the struts extend at most %.4f m of the %.2f m allowed\n", most, p.front_corner.droop);
+        check_true("drop: the droop stop is never reached (extension below the droop)", most < p.front_corner.droop);
     }
 
     // a lifted wheel hangs on its droop stop. The springs test's wheel-lift car (high CG, very stiff front), with
@@ -222,8 +265,14 @@ int main()
         check_true("lift: no tyre load is ever negative", lowest >= 0);
         check_true("lift: the other three tyres stay on the ground", others_down);
         check_true("lift: the car stays upright", worst_roll < 5 * kPi / 180);
-        check_near("lift: the hanging wheel rests on its droop stop, at droop + m_u g / stop_rate", extension, hang, 1e-4);
-        check_near("lift: the stop carries the wheel's weight", end.corner[FL].stop + end.corner[FL].spring, -40 * g, 2.0);
+        check_near("lift: the hanging wheel rests on its droop stop, at droop + m_u g / stop_rate", extension, hang, 1e-6);
+        check_near("lift: the stop carries the wheel's weight", end.corner[FL].stop + end.corner[FL].spring, -40 * g, 0.02);
+        {
+            const std::vector<std::string> names = column_names(four_wheel_columns());
+            const std::vector<Real> row = four_wheel_row(r.steps, r.dt, s, q, driver_input(r, s, r.steps * r.dt), energy_books(s, q));
+            check_column(names, row, "wheel.FL.stopF", -40 * g, 0.02);
+            check_column(names, row, "wheel.FL.Fz", 0.0);
+        }
     }
 
     // dropped from 0.3 m: in the air no tyre carries anything; it lands and settles level at its ride height
@@ -284,6 +333,92 @@ int main()
         s.corners[RL].z = 0.3;
         s.corners[FR].vz = std::numeric_limits<Real>::infinity();
         check_true("finite: a wheel's vertical speed is named", std::string(non_finite_field(s)) == "wheel FR vz");
+    }
+
+    // undamped heave: the body lifted 5 mm, no damping anywhere, and the frequency read off the upward zero
+    // crossings of its vertical speed. Against the two-mass closed form (k, kt, a quarter of the sprung mass, one
+    // wheel) for a car with its CG midway between the axles, where heave is four quarter-cars; the default car,
+    // whose axles differ, is slightly lower and is held to its own measured value (2.0204 Hz)
+    {
+        auto heave_hz = [&](four_wheel_params p)
+        {
+            for (corner_params *c : {&p.front_corner, &p.rear_corner})
+            {
+                c->damper_rate = 0;
+                c->tyre_damping = 0;
+            }
+            four_wheel_state s = four_wheel_initial(p, 0.0);
+            s.body.pos.z += 0.005;
+            Real first = -1, last = -1, prev = s.body.vel.z, prev_t = 0;
+            int crossings = 0;
+            for (int i = 1; i <= 5000; ++i)
+            {
+                step(s, p, none, 0.0005);
+                const Real t = i * 0.0005, v = s.body.vel.z;
+                if (prev < 0 && v >= 0)
+                {
+                    const Real tc = prev_t + (t - prev_t) * (-prev) / (v - prev); // the crossing, interpolated
+                    first = crossings == 0 ? tc : first;
+                    last = tc;
+                    ++crossings;
+                }
+                prev = v;
+                prev_t = t;
+            }
+            return crossings > 2 ? (crossings - 1) / (last - first) : Real(0);
+        };
+        four_wheel_params mid = unsprung_car();
+        mid.lf = mid.lr = 1.25;
+        const Real ks = 50000, kt = 250000, ms = (mid.chassis.mass - 160) / 4, mu = 40;
+        const Real b = ms * (ks + kt) + mu * ks, root = std::sqrt(b * b - 4 * ms * mu * ks * kt);
+        const Real expected = std::sqrt((b - root) / (2 * ms * mu)) / (2 * kPi);
+        const Real f_mid = heave_hz(mid), f_default = heave_hz(unsprung_car());
+        std::printf("heave: %.4f Hz (closed form %.4f Hz) with the CG midway, %.4f Hz for the default car\n", f_mid,
+                    expected, f_default);
+        check_near("heave: the body mode matches the two-mass closed form within 0.3%", f_mid, expected, 0.003 * expected);
+        check_near("heave: the default car's body mode, 2.0204 Hz", f_default, 2.0204, 5e-5);
+    }
+
+    // telemetry: at rest, the three wheel columns against the closed forms; the same columns are 0 in the other
+    // modes; line 1 names the mode
+    {
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const four_wheel_params p = unsprung_car();
+        const four_wheel_state s = four_wheel_initial(p, 0.0);
+        const std::vector<Real> row = four_wheel_row(0, dt, s, p, none, energy_books(s, p));
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            const std::string w = std::string("wheel.") + wheel_label(i) + ".";
+            check_column(names, row, w + "tyreDefl", p.static_load(i) / p.corner(i).tyre_rate, 1e-12);
+            check_column(names, row, w + "wheelZ", p.wheel_rest_height(i), 1e-12);
+            check_column(names, row, w + "stopF", 0.0);
+            check_column(names, row, w + "Fz", p.static_load(i), 1e-9);
+        }
+        for (vertical_model m : {vertical_model::planar, vertical_model::springs})
+        {
+            four_wheel_params o;
+            o.vertical = m;
+            const four_wheel_state so = four_wheel_initial(o, 10.0);
+            const std::vector<Real> ro = four_wheel_row(0, dt, so, o, none, energy_books(so, o));
+            for (std::size_t i = 0; i < kWheels; ++i)
+                for (const char *c : {"tyreDefl", "wheelZ", "stopF"})
+                    check_column(names, ro, std::string("wheel.") + wheel_label(i) + "." + c, 0.0);
+        }
+        auto meta_value = [](const four_wheel_params &q, const char *key)
+        {
+            for (const auto &kv : four_wheel_meta(q))
+                if (kv.first == key)
+                    return kv.second;
+            return Real(-1);
+        };
+        const vertical_model modes[3] = {vertical_model::planar, vertical_model::springs, vertical_model::unsprung};
+        for (int k = 0; k < 3; ++k)
+        {
+            four_wheel_params o;
+            o.vertical = modes[k];
+            check_near("meta: vertical", meta_value(o, "vertical"), k, 0);
+            check_near("meta: springs is 1 for both sprung modes", meta_value(o, "springs"), k == 0 ? 0 : 1, 0);
+        }
     }
 
     return finish("four_wheel_unsprung");

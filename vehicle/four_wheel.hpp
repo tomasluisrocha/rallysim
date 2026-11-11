@@ -93,7 +93,7 @@ namespace rallysim
         tyre_params rear_tyre = car_tyre(90000, 35000, 0.5 * chassis.mass * kGravity * lf / (lf + lr));
         drive_brake_params drive_brake;                    // pedals to wheel torques; rear drive by default
         vertical_model vertical = vertical_model::springs; // how the vertical loads are found (see above)
-        corner_params front_corner;                        // suspension of each front corner (springs model)
+        corner_params front_corner;                        // suspension of each front corner (springs, unsprung)
         corner_params rear_corner;                         // and of each rear corner
 
         Real wheelbase() const { return lf + lr; }
@@ -112,7 +112,7 @@ namespace rallysim
         }
 
         // The point on the body where a corner's spring is mounted, from the CG, body frame (m): straight above
-        // the contact patch, at ground level when the car is level with its CG at cg_height (springs model).
+        // the contact patch, at ground level when the car is level with its CG at cg_height (springs, unsprung).
         vec3 suspension_point(std::size_t i) const
         {
             const vec3 w = wheel_position(i);
@@ -294,8 +294,8 @@ namespace rallysim
         vec3 point;               // the contact patch from the CG, body frame (m): where the tyre force acts
         vec3 forward, left;       // the wheel's directions along the ground, world frame, unit length
         patch_velocity velocity;  // how fast the patch moves over the ground, in the wheel's frame (m/s)
-        Real deflection = 0;      // springs model: how far the corner's spring is compressed (m)
-        Real deflection_rate = 0; // springs model: how fast it is being compressed (m/s)
+        Real deflection = 0;      // springs, unsprung: how far the mount's spring is compressed at rest geometry (m)
+        Real deflection_rate = 0; // springs, unsprung: how fast it is being compressed (m/s)
     };
 
     // The contact of wheel i. The patch velocity is v_body + omega x r, with r from the CG to the patch, taken
@@ -402,7 +402,7 @@ namespace rallysim
         body_velocity vel;                         // velocity of the CG in the car's frame, and the yaw rate
         Real a_x = 0, a_y = 0;                     // planar model: accelerations used for the load transfer (m/s^2)
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
-        std::array<corner_load, kWheels> corner;   // springs model: each corner's spring and damper
+        std::array<corner_load, kWheels> corner;   // springs, unsprung: each corner's spring, damper and (unsprung) stop and tyre
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)

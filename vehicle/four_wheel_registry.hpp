@@ -12,7 +12,8 @@ namespace rallysim
     enum class param_use
     {
         always,
-        springs,          // vertical = springs: the corner springs and dampers
+        sprung,           // vertical = springs or unsprung: the corner springs and dampers
+        unsprung,         // vertical = unsprung: the wheel mass, tyre spring and droop stop
         planar,           // vertical = planar: the quasi-static load transfer
         peak_slide_front, // the front tyre on the peak_slide curve: its shape
         peak_slide_rear,  // the rear tyre on the peak_slide curve
@@ -86,10 +87,19 @@ namespace rallysim
             PARAM_IF("sliding_ratio_front", "-", front_tyre.sliding_ratio, param_use::peak_slide_front, param_range::fraction),
             PARAM_IF("sliding_ratio_rear", "-", rear_tyre.sliding_ratio, param_use::peak_slide_rear, param_range::fraction),
             // suspension
-            PARAM_IF("spring_front", "N/m", front_corner.spring_rate, param_use::springs, param_range::positive),
-            PARAM_IF("spring_rear", "N/m", rear_corner.spring_rate, param_use::springs, param_range::positive),
-            PARAM_IF("damper_front", "N s/m", front_corner.damper_rate, param_use::springs, param_range::non_negative),
-            PARAM_IF("damper_rear", "N s/m", rear_corner.damper_rate, param_use::springs, param_range::non_negative),
+            PARAM_IF("spring_front", "N/m", front_corner.spring_rate, param_use::sprung, param_range::positive),
+            PARAM_IF("spring_rear", "N/m", rear_corner.spring_rate, param_use::sprung, param_range::positive),
+            PARAM_IF("damper_front", "N s/m", front_corner.damper_rate, param_use::sprung, param_range::non_negative),
+            PARAM_IF("damper_rear", "N s/m", rear_corner.damper_rate, param_use::sprung, param_range::non_negative),
+            // the wheel (vertical = unsprung)
+            PARAM_IF("unsprung_mass_front", "kg", front_corner.unsprung_mass, param_use::unsprung, param_range::positive),
+            PARAM_IF("unsprung_mass_rear", "kg", rear_corner.unsprung_mass, param_use::unsprung, param_range::positive),
+            PARAM_IF("tyre_rate_front", "N/m", front_corner.tyre_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("tyre_rate_rear", "N/m", rear_corner.tyre_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("tyre_damping_front", "N s/m", front_corner.tyre_damping, param_use::unsprung, param_range::non_negative),
+            PARAM_IF("tyre_damping_rear", "N s/m", rear_corner.tyre_damping, param_use::unsprung, param_range::non_negative),
+            PARAM_IF("droop_front", "m", front_corner.droop, param_use::unsprung, param_range::positive),
+            PARAM_IF("droop_rear", "m", rear_corner.droop, param_use::unsprung, param_range::positive),
             // drive and brakes
             PARAM("max_drive_torque", "N m", drive_brake.max_drive_torque, param_range::non_negative),
             PARAM("max_drive_power", "W", drive_brake.max_drive_power, param_range::positive),
@@ -117,8 +127,10 @@ namespace rallysim
     {
         switch (e.use)
         {
-        case param_use::springs:
-            return p.vertical == vertical_model::springs;
+        case param_use::sprung:
+            return p.vertical != vertical_model::planar;
+        case param_use::unsprung:
+            return p.vertical == vertical_model::unsprung;
         case param_use::planar:
             return p.vertical == vertical_model::planar;
         case param_use::peak_slide_front:
@@ -130,13 +142,15 @@ namespace rallysim
         }
     }
 
-    // When the parameter is used, for messages: "with vertical = springs"; empty for always.
+    // When the parameter is used, for messages: "with vertical = unsprung"; empty for always.
     inline std::string param_use_text(const param_entry &e)
     {
         switch (e.use)
         {
-        case param_use::springs:
-            return "with vertical = springs";
+        case param_use::sprung:
+            return "with vertical = springs or unsprung";
+        case param_use::unsprung:
+            return "with vertical = unsprung";
         case param_use::planar:
             return "with vertical = planar";
         case param_use::peak_slide_front:

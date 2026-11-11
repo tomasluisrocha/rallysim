@@ -221,8 +221,8 @@ int main()
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const energy_books books(s, p); // no work done yet: the residual is zero
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in, books);
-        check_true("telemetry: 26 + 4 x 13 + 11 energy columns, units and values",
-                   names.size() == 89 && units.size() == 89 && row.size() == 89);
+        check_true("telemetry: 26 + 4 x 16 + 11 energy columns, units and values",
+                   names.size() == 101 && units.size() == 101 && row.size() == 101);
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);

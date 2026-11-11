@@ -6,7 +6,7 @@ plus one for the final state. The simulator writes it; the tools in `tools/` onl
 ## File layout
 
 ```
-# schema=5 dt=0.001 units: step[count] time[s] pos.x[m] ...
+# schema=6 dt=0.001 units: step[count] time[s] pos.x[m] ...
 step,time,pos.x,...
 0,0,0,...
 ```
@@ -37,7 +37,8 @@ ignore them, and adding keys needs no schema change.
 | `cg_height` | m | single-track, four-wheel | CG above the ground |
 | `mass` | kg | single-track, four-wheel | Car mass |
 | every `rallysim params` name | its unit | four-wheel | Every parameter of the car, under the name `--set` and scenario files use (`vehicle/four_wheel_registry.hpp`): geometry, inertia, tyres, suspension, drive and brakes. So a four-wheel file records the whole car that made it, settings included |
-| `springs` | - | four-wheel | 1 if the car is on springs, 0 for the flat (planar) model |
+| `vertical` | - | four-wheel | The vertical model: 0 planar, 1 springs, 2 unsprung (`vertical_model` in `vehicle/four_wheel.hpp`) |
+| `springs` | - | four-wheel | 1 if the car is on springs (the springs and unsprung models), 0 for the flat (planar) model |
 | `curve_front`, `curve_rear` | - | four-wheel | Each tyre's curve: 0 linear, 1 peak_slide, 2 tmeasy (`tyre_curve` in `vehicle/tyre.hpp`) |
 | `tmeasy_<axis>_<field><n>_<axle>` | | four-wheel | The tyres' TMeasy tables: `<axis>` x (along) or y (across); `<field>` `stiffness` (N per unit slip ratio, N/rad), `peak_slip`, `sliding_slip` (slip ratio along, tangent of the slip angle across), `sliding_ratio` (-); `<n>` 1 at the nominal load, 2 at twice it; `<axle>` front or rear (32 keys) |
 
@@ -136,6 +137,9 @@ whole axle, and when an axle lifts the other one carries the whole car.
 so moving load between the two wheels of an axle lowers the axle's grip. `axle.front.Fy` is limited by
 `axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
 
+Schema 6 inserted `tyreDefl`, `wheelZ` and `stopF` after `damperF` in each wheel's block, and line 1 of the four-wheel
+files gained `vertical`.
+
 Schema 5 inserted `net.Fx`, `net.Fy` and `yaw_moment` after `a_lat`, and `grip` after `Fy` in each wheel's block,
 and line 1 of the four-wheel files lists every parameter.
 
@@ -144,7 +148,7 @@ Schema 4 regrouped the four-wheel body columns (see the four-wheel table) and ad
 
 Schema 3 inserted columns into the four-wheel files rather than appending them: `pos.z`, `roll` and `pitch` after
 `a_lat`, and `deflection`, `deflVel`, `springF` and `damperF` at the end of each wheel's block. Readers that look columns
-up by name (every tool in `tools/`) read schema 2 to 5 files alike; anything that counts columns does not.
+up by name (every tool in `tools/`) read schema 2 to 6 files alike; anything that counts columns does not.
 
 Schema 2 renamed the single-track columns `alpha_f`, `alpha_r`, `fy_f`, `fy_r` and `fz_fl` to `fz_rr` to the dotted
 names above, so a plot script can build a name from an axle or wheel label.
@@ -190,11 +194,11 @@ the pedals replace `drive_force`.
 | 24 | `net.Fx` | N | The four tyre forces summed, along the body's x axis |
 | 25 | `net.Fy` | N | Along the body's y axis, positive to the left |
 | 26 | `yaw_moment` | N m | Their moment about the CG, about the body's z axis: what turns the car; positive turning left |
-| 27-39 | `wheel.FL.*` | | Front-left wheel, the thirteen fields below |
-| 40-52 | `wheel.FR.*` | | Front-right wheel |
-| 53-65 | `wheel.RL.*` | | Rear-left wheel |
-| 66-78 | `wheel.RR.*` | | Rear-right wheel |
-| 79-89 | `energy.*`, `work.*` | J | The energy books, below |
+| 27-42 | `wheel.FL.*` | | Front-left wheel, the sixteen fields below |
+| 43-58 | `wheel.FR.*` | | Front-right wheel |
+| 59-74 | `wheel.RL.*` | | Rear-left wheel |
+| 75-90 | `wheel.RR.*` | | Rear-right wheel |
+| 91-101 | `energy.*`, `work.*` | J | The energy books, below |
 
 Columns 13-18 are the six ISO vehicle velocities (`body_velocity`), in the body's axes, so they tilt with the body;
 the position, the angles and `vel.z` are in the world frame. So a rate is its angle's slope only while the car is
@@ -208,16 +212,19 @@ Each wheel block, in this order:
 | `omega` | rad/s | Wheel spin, positive rolling forward |
 | `slipRatio` | - | Steady (kinematic) slip ratio of the contact patch, `(omega R - vx) / max(|vx|, |omega R|)`: positive driving, -1 a locked wheel sliding forward. Meaningless at a standstill |
 | `slipAngle` | rad | Steady slip angle, `atan(-vy / max(|vx|, |omega R|))`: positive when the wheel points left of its path |
-| `Fz` | N | Vertical load, with the quasi-static load transfer |
+| `Fz` | N | Vertical load on the wheel. Planar: the quasi-static load-transfer force. Springs: the corner force (spring + damper). Unsprung: the tyre spring's load |
 | `Fx` | N | Tyre force along the wheel |
 | `Fy` | N | Tyre force across the wheel, positive to its left |
 | `grip` | N | The most force the tyre can take at this load, `mu (1 - k (Fz - Fz0) / Fz0) Fz`: `hypot(Fx, Fy) / grip` is the grip in use |
 | `driveTorque` | N m | Drive torque the pedals put on this wheel |
 | `brakeTorque` | N m | Brake torque on this wheel (a magnitude; it opposes the spin) |
-| `deflection` | m | How far the corner's spring is compressed; zero or less means the wheel is off the ground |
+| `deflection` | m | How far the corner's spring is compressed; zero or less means the wheel is off the ground. In the unsprung model it is the strut's compression, not the tyre's: a wheel off the ground can still have a positive `deflection` (see `tyreDefl`) |
 | `deflVel` | m/s | How fast it is being compressed |
 | `springF` | N | Spring force |
-| `damperF` | N | Damper force, positive while compressing; `Fz` is spring + damper, never below zero |
+| `damperF` | N | Damper force, positive while compressing; in the springs model `Fz` is spring + damper, never below zero; in the unsprung model `Fz` is the tyre's load, from the tyre spring, not the strut's |
+| `tyreDefl` | m | The tyre's compression; zero or less means it is off the ground. 0 except in the unsprung model |
+| `wheelZ` | m | Height of the wheel centre above the ground. 0 except in the unsprung model |
+| `stopF` | N | The droop stop's force: zero or negative (it pulls the wheel up). 0 except in the unsprung model; bump stops add the positive side later |
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own
@@ -231,15 +238,15 @@ work columns add up every step before it, from the start of the run:
 
 | Column | Meaning |
 |---|---|
-| `energy.translation` | Body: ½ m \|v\|² |
+| `energy.translation` | Body: ½ m \|v\|². Unsprung model: ½ m (vx² + vy²) + ½ m_s vz² + each wheel's ½ m_u vz² |
 | `energy.rotation` | Body: ½ (Ix ωx² + Iy ωy² + Iz ωz²), body frame |
-| `energy.gravity` | Body: m g z (springs model; 0 in the planar model, which cancels gravity) |
-| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model) |
+| `energy.gravity` | Body: m g z (springs model; 0 in the planar model, which cancels gravity). Unsprung model: m_s g (height of the sprung body's CG) + each wheel's m_u g z |
+| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model). Unsprung model: the strut spring, the tyre spring (while on the ground) and the droop stop (while engaged) |
 | `energy.wheels` | Wheel spin: ½ I ω² for each wheel |
 | `energy.total` | The sum of the five above |
 | `work.drive` | Put in by the drive: drive torque × spin |
 | `work.brake` | Taken out by the brakes: brake torque × \|spin\| (0 while a wheel is locked) |
-| `work.damper` | Taken out by the dampers: the corner force beyond its spring × compression speed |
+| `work.damper` | Taken out by the dampers: the corner force beyond its spring × compression speed. Unsprung model: the strut damper, plus the tyre's damping while it is on the ground |
 | `work.tyre` | Taken out in the contact patches: tyre force × slip velocity |
 | `energy.residual` | `energy.total` − its value in the first row − (drive − brake − damper − tyre): near zero |
 

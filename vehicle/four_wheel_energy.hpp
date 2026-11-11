@@ -22,8 +22,8 @@ namespace rallysim
     {
         Real translation = 0; // body: 1/2 m |v|^2
         Real rotation = 0;    // body: 1/2 (Ix wx^2 + Iy wy^2 + Iz wz^2), omega in the body frame
-        Real gravity = 0;     // body: m g z (springs model only; the planar model cancels gravity)
-        Real springs = 0;     // corners: 1/2 k x^2 for each compressed spring (springs model only)
+        Real gravity = 0;     // m g z (springs; the planar model cancels gravity); unsprung: sprung body and wheels
+        Real springs = 0;     // 1/2 k x^2 per compressed spring (springs); unsprung: strut, tyre and droop stop
         Real wheels = 0;      // each wheel's spin: 1/2 I omega^2
 
         Real total() const { return translation + rotation + gravity + springs + wheels; }

@@ -117,7 +117,8 @@ Every number `rallysim params` lists, in the unit it shows: `mass`, `lf`, `cg_he
 stiffness or a nominal load refits the tyres to the new loads.
 
 A number the car does not use is an error, because it would change nothing: the springs and dampers only with
-`vertical = springs`, `front_transfer_share` only with `vertical = planar`, and a tyre's `peak_slip`, `sliding_slip`
+`vertical = springs` or `unsprung`, the wheel's `unsprung_mass_*`, `tyre_rate_*`, `tyre_damping_*` and `droop_*` only
+with `vertical = unsprung` (whose four wheel masses must add up to less than `mass`), `front_transfer_share` only with `vertical = planar`, and a tyre's `peak_slip`, `sliding_slip`
 and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after the words below are read, wherever
 they are in the file; `rallysim params <scenario>` marks what a car does not use.
 
@@ -125,8 +126,8 @@ A number outside its range is an error too; nothing is clamped:
 
 | Range | Keys |
 |---|---|
-| above 0 | `mass`, `inertia_x/y/z`, `lf`, `lr`, `track_front/rear`, `cg_height`, `max_steer`, `wheel_radius`, `wheel_inertia`, `fz0_*`, `cx_*`, `calpha_*`, `relaxation_*`, `spring_*`, `sliding_slip_*`, `max_drive_power` |
-| 0 or more | `mu_*`, `k_*`, `damper_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
+| above 0 | `mass`, `inertia_x/y/z`, `lf`, `lr`, `track_front/rear`, `cg_height`, `max_steer`, `wheel_radius`, `wheel_inertia`, `fz0_*`, `cx_*`, `calpha_*`, `relaxation_*`, `spring_*`, `unsprung_mass_*`, `tyre_rate_*`, `droop_*`, `sliding_slip_*`, `max_drive_power` |
+| 0 or more | `mu_*`, `k_*`, `damper_*`, `tyre_damping_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
 | 0 to 1 | `front_transfer_share`, `drive_split_front`, `brake_bias_front`, `sliding_ratio_*` |
 | 1.5 to 3 | `peak_slip_*` |
 
@@ -138,7 +139,7 @@ The words:
 |---|---|---|
 | `tyre_curve` | `linear`, `peak_slide`, `tmeasy`, for both axles | `tmeasy` |
 | `tyre_curve_front`, `tyre_curve_rear` | the same, one axle; not together with `tyre_curve` | |
-| `vertical` | `springs`, `planar` | `springs` |
+| `vertical` | `springs`, `planar`, `unsprung` | `springs` |
 
 ### `[driver]`
 

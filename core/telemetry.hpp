@@ -19,7 +19,9 @@ namespace rallysim
     //    from those), with w, vel.z, roll_rate, pitch_rate and a_long added.
     // 5: four-wheel columns inserted: net.Fx, net.Fy and yaw_moment after a_lat, and grip after Fy in each wheel's
     //    block; line 1 lists every registry parameter.
-    inline constexpr int kTelemetrySchema = 5;
+    // 6: four-wheel columns inserted: tyreDefl, wheelZ and stopF after damperF in each wheel's block; line 1 gains
+    //    vertical.
+    inline constexpr int kTelemetrySchema = 6;
 
     // One column: its dotted name and its unit, written together so the two can never drift apart.
     struct telemetry_column

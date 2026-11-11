@@ -21,7 +21,8 @@ namespace rallysim
     {
         return {{"omega", "rad/s"}, {"slipRatio", "-"}, {"slipAngle", "rad"}, {"Fz", "N"}, {"Fx", "N"}, {"Fy", "N"},
                 {"grip", "N"}, {"driveTorque", "N m"}, {"brakeTorque", "N m"}, {"deflection", "m"}, {"deflVel", "m/s"},
-                {"springF", "N"}, {"damperF", "N"}};
+                {"springF", "N"}, {"damperF", "N"}, {"tyreDefl", "m"}, {"wheelZ", "m"},
+                {"stopF", "N"}};
     }
 
     // The energy books, after the wheels: what is stored, term by term, the work done since the start of the run by
@@ -74,13 +75,15 @@ namespace rallysim
             }
     }
 
-    // Line 1 of the file: the model and its choices (springs 1 or 0; curve 0 linear, 1 peak_slide, 2 tmeasy), then
+    // Line 1 of the file: the model and its choices (vertical 0 planar, 1 springs, 2 unsprung; springs 1 for both
+    // sprung modes, 0 for planar; curve 0 linear, 1 peak_slide, 2 tmeasy), then
     // every parameter of the registry under its own name, so the file records the whole car that made it (rallysim
     // --set included), then each tyre's TMeasy tables. A viewer draws the car from it to scale.
     inline telemetry_meta four_wheel_meta(const four_wheel_params &p)
     {
         telemetry_meta meta{{"model", 4},
-                            {"springs", p.vertical == vertical_model::springs ? 1.0 : 0.0},
+                            {"springs", p.vertical != vertical_model::planar ? 1.0 : 0.0},
+                            {"vertical", static_cast<Real>(p.vertical)},
                             {"curve_front", static_cast<Real>(p.front_tyre.curve)},
                             {"curve_rear", static_cast<Real>(p.rear_tyre.curve)}};
         four_wheel_params copy = p; // the registry reaches fields through a non-const reference
@@ -106,7 +109,8 @@ namespace rallysim
     // force stops changing (slip_cap_scale), so they say how far the tyre is twisted, not how fast it slides. Fx and
     // Fy are in the wheel's frame; grip is the most force the tyre can take at that load, mu(Fz) Fz (tyre_grip);
     // driveTorque and brakeTorque are what the pedals put on that wheel. deflection, deflVel, springF and damperF
-    // are the corner's suspension (zero in the planar model). The energy columns are this state's stored energy and
+    // are the corner's suspension (zero in the planar model); in the unsprung model they are the strut's and Fz is
+    // the tyre's. tyreDefl, wheelZ and stopF (the droop stop, zero or negative) are zero except in that model. The energy columns are this state's stored energy and
     // `books`' work and residual: the books must hold the work of every step before this one. See
     // docs/telemetry_schema.md.
     inline std::vector<Real> four_wheel_row(long step, Real dt, const four_wheel_state &s,
@@ -141,7 +145,7 @@ namespace rallysim
                                    std::atan(steady_lateral_slip(p.wheel, w.omega, f.patch[i])), f.fz[i], f.tyre[i].fx,
                                    f.tyre[i].fy, tyre_grip(p.tyre(i), f.fz[i]), f.torque[i].drive, f.torque[i].brake,
                                    f.corner[i].deflection, f.corner[i].deflection_rate, f.corner[i].spring,
-                                   f.corner[i].damper});
+                                   f.corner[i].damper, f.corner[i].tyre_deflection, s.corners[i].z, f.corner[i].stop});
         }
         const stored_energy e = energy_of(s, p);
         const energy_work &w = books.work();

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include "runner/scenario_file.hpp"
 #include "tests/check.hpp"
 
@@ -54,6 +55,48 @@ namespace
         return r;
     }
 
+    // The unsprung car of the lifted-wheel test in test_four_wheel_unsprung: a high CG, a stiff front and 10 mm of
+    // front droop, turned hard enough that the inner front wheel hangs on its droop stop.
+    four_wheel_run lift_run()
+    {
+        four_wheel_run r;
+        r.params.vertical = vertical_model::unsprung;
+        r.params.set_tyre_curve(tyre_curve::linear);
+        r.params.front_corner.spring_rate = 300000;
+        r.params.front_corner.droop = 0.01;
+        r.params.rear_corner.spring_rate = 30000;
+        r.params.cg_height = 0.85;
+        r.initial = four_wheel_initial(r.params, 18.0);
+        r.hold_speed = constant_script<Real>(18.0);
+        r.steps = 6000;
+        r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{}},
+                         {1.5, four_wheel_input{0.09, 0.0, 0.0, 0.0}}, {6.0, four_wheel_input{0.09, 0.0, 0.0, 0.0}}};
+        return r;
+    }
+
+    // The scenario `name` in the unsprung model.
+    four_wheel_run unsprung_scenario(const char *name)
+    {
+        four_wheel_run r = four_wheel_scenario(name);
+        r.params.vertical = vertical_model::unsprung;
+        r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
+        return r;
+    }
+
+    // Residuals at 2, 1 and 0.5 ms, and whether each halving of dt halves the residual (ratio 0.4 to 0.6).
+    void check_halves(const char *name, const four_wheel_run &scenario)
+    {
+        const booked coarse = run_booked(scenario, 0.002), fine = run_booked(scenario, 0.001),
+                     finer = run_booked(scenario, 0.0005);
+        const Real r2 = coarse.books.residual(coarse.e_end), r1 = fine.books.residual(fine.e_end),
+                   r05 = finer.books.residual(finer.e_end);
+        std::printf("convergence, %s: residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n", name, r2, r1,
+                    r05, r1 / r2, r05 / r1);
+        char what[200];
+        std::snprintf(what, sizeof what, "convergence, %s: halving dt halves the residual (ratio 0.4 to 0.6, twice)", name);
+        check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
+    }
+
     void check_run(const char *name, const four_wheel_run &r, Real tolerance)
     {
         const booked b = run_booked(r, r.dt);
@@ -92,6 +135,18 @@ int main()
         check_run("fw_circle, planar", r, 0.005);
     }
 
+    // the unsprung model (wheel masses on tyre springs): the same scenarios, the same bounds
+    {
+        const char *const names[3] = {"fw_circle", "fw_lane", "fw_brake"};
+        for (const char *name : names)
+        {
+            four_wheel_run r = four_wheel_scenario(name);
+            r.params.vertical = vertical_model::unsprung;
+            r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
+            check_run((std::string(name) + ", unsprung").c_str(), r, 0.005);
+        }
+    }
+
     // a free bounce: lifted 2 cm on the springs and let go, nothing driving or braking. The springs and gravity trade
     // energy back and forth; only the dampers (and the tyres' patch damping at rest) take any out, so the energy
     // the car loses is what they took.
@@ -120,6 +175,71 @@ int main()
         std::snprintf(what, sizeof what, "convergence, %s: halving dt halves the residual (ratio 0.4 to 0.6, twice)", name);
         check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
     }
+
+    // the same convergence in the unsprung model
+    for (const char *name : {"fw_lane", "fw_brake"})
+    {
+        four_wheel_run scenario = four_wheel_scenario(name);
+        scenario.params.vertical = vertical_model::unsprung;
+        scenario.initial = four_wheel_initial(scenario.params, scenario.initial.body.vel.x);
+        const booked coarse = run_booked(scenario, 0.002), fine = run_booked(scenario, 0.001),
+                     finer = run_booked(scenario, 0.0005);
+        const Real r2 = coarse.books.residual(coarse.e_end), r1 = fine.books.residual(fine.e_end),
+                   r05 = finer.books.residual(finer.e_end);
+        std::printf("convergence, %s, unsprung: residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms (ratios %.3f, %.3f)\n",
+                    name, r2, r1, r05, r1 / r2, r05 / r1);
+        char what[200];
+        std::snprintf(what, sizeof what, "convergence, %s, unsprung: halving dt halves the residual (ratio 0.4 to 0.6, twice)", name);
+        check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
+    }
+
+    // the droop stop: the lifted inner front wheel hangs on it for seconds, so its energy is in the books
+    {
+        const four_wheel_run r = lift_run();
+        four_wheel_state s = r.initial;
+        Real deepest = 0;
+        long engaged = 0;
+        for (long i = 0; i < r.steps; ++i)
+        {
+            const four_wheel_forces f = evaluate(s, r.params, driver_input(r, s, i * r.dt));
+            deepest = std::min(deepest, f.corner[FL].stop);
+            engaged += f.corner[FL].stop < 0;
+            step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+        }
+        std::printf("lift: the droop stop is engaged for %ld steps, at most %.1f N\n", engaged, deepest);
+        check_true("lift: the droop stop is engaged for over 2 s", engaged > 2000 && deepest < -300);
+        check_run("lift, droop stop engaged", r, 0.005);
+        check_halves("lift, droop stop engaged", r);
+    }
+
+    // tyre damping: a landing from 0.2 m (tyre compression speeds of metres per second) with a nonzero coefficient.
+    // The dampers' book takes more out than with none, and the residual still obeys the bound and halves with dt.
+    {
+        auto landing = [](Real tyre_damping)
+        {
+            four_wheel_run r;
+            r.params.vertical = vertical_model::unsprung;
+            r.params.front_corner.tyre_damping = r.params.rear_corner.tyre_damping = tyre_damping;
+            r.initial = four_wheel_initial(r.params, 0.0);
+            r.initial.body.pos.z += 0.2;
+            for (corner_state &w : r.initial.corners)
+                w.z += 0.2;
+            r.script.keys = {{0.0, four_wheel_input{}}};
+            r.steps = 3000;
+            return r;
+        };
+        const four_wheel_run damped = landing(2000), plain = landing(0);
+        check_run("landing, tyre damping 2000", damped, 0.005);
+        const Real with = run_booked(damped, damped.dt).books.work().damper,
+                   without = run_booked(plain, plain.dt).books.work().damper;
+        std::printf("landing: damper work %.1f J with tyre damping 2000, %.1f J with none\n", with, without);
+        check_true("landing: tyre damping takes more energy out through the dampers", with > without + 1);
+        check_halves("landing, tyre damping 2000", damped);
+    }
+
+    // the scenarios the checks above leave out, in the unsprung model: the jump (0.5 ms), launch, handbrake, hairpin
+    for (const char *name : {"fw_showcase", "fw_launch", "fw_handbrake", "fw_hairpin"})
+        check_run((std::string(name) + ", unsprung").c_str(), unsprung_scenario(name), 0.005);
 
     return finish("energy");
 }
