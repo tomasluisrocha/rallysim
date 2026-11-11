@@ -8,6 +8,7 @@ import sys
 from .compare import Tolerance, diff
 from .run import load
 from .setup_sheet import text as setup_text
+from .suspension import table as suspension_table
 
 
 def _rules(values):
@@ -60,11 +61,19 @@ def main(argv=None):
     command = subparsers.add_parser("setup")
     command.add_argument("runs", nargs="+")
     command.add_argument("--changed", action="store_true")
+    command = subparsers.add_parser("suspension")
+    command.add_argument("runs", nargs="+")
+    command.add_argument("--from", dest="start", type=float)
+    command.add_argument("--to", dest="end", type=float)
     args = parser.parse_args(argv)
     try:
         if args.command == "setup":
             runs = [load(path) for path in args.runs]
             print(setup_text(runs, args.changed))
+            return 0
+        if args.command == "suspension":
+            runs = [load(path) for path in args.runs]
+            print(suspension_table(runs, args.start, args.end))
             return 0
         rules = _rules(args.tol)
         run_a, run_b = load(args.a), load(args.b)
