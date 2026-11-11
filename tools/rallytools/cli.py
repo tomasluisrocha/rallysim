@@ -7,6 +7,7 @@ import sys
 
 from .compare import Tolerance, diff
 from .run import load
+from .setup_sheet import text as setup_text
 
 
 def _rules(values):
@@ -56,8 +57,15 @@ def main(argv=None):
     command.add_argument("--tol", action="append", default=[])
     command.add_argument("--ignore-missing", action="store_true")
     command.add_argument("--all", action="store_true")
+    command = subparsers.add_parser("setup")
+    command.add_argument("runs", nargs="+")
+    command.add_argument("--changed", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "setup":
+            runs = [load(path) for path in args.runs]
+            print(setup_text(runs, args.changed))
+            return 0
         rules = _rules(args.tol)
         run_a, run_b = load(args.a), load(args.b)
         result = diff(run_a, run_b, rules)
