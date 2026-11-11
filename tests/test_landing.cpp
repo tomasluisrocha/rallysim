@@ -28,12 +28,28 @@ namespace
         four_wheel_state end;
     };
 
+    // Height of the whole car's CG (m). With springs it is the body's; with a wheel mass it is the sprung body and
+    // the wheels together, which fall freely while no tyre touches because the struts only push between them.
+    Real car_cg_z(const four_wheel_state &s, const four_wheel_params &p)
+    {
+        if (p.vertical != vertical_model::unsprung)
+            return s.body.pos.z;
+        const Real ms = p.sprung_mass();
+        Real moment = ms * s.body.pos.z;
+        for (std::size_t i = 0; i < kWheels; ++i)
+            moment += p.corner(i).unsprung_mass * s.corners[i].z;
+        return moment / p.chassis.mass;
+    }
+
     landing drop(const four_wheel_params &p, Real lift, Real dt, Real seconds)
     {
         landing l;
+        const bool wheels = p.vertical == vertical_model::unsprung;
         four_wheel_state s = four_wheel_initial(p, 0.0);
         s.body.pos.z += lift;
-        const Real z0 = s.body.pos.z;
+        for (corner_state &c : s.corners)
+            c.z += lift;
+        const Real z0 = car_cg_z(s, p);
         const four_wheel_input none{};
         energy_books books(s, p);
         const Real e0 = books.start();
@@ -48,14 +64,14 @@ namespace
                 const int axle = is_front(k) ? 0 : 1;
                 l.peak[axle] = std::max(l.peak[axle], f.fz[k]);
                 l.x_max[axle] = std::max(l.x_max[axle], f.corner[k].deflection);
-                falling = falling && f.corner[k].deflection <= 0;
+                falling = falling && (wheels ? f.corner[k].tyre_deflection : f.corner[k].deflection) <= 0;
             }
             step(s, p, none, dt);
             if (falling)
             {
                 // semi-implicit Euler from rest: z = z0 - 0.5 g t^2 - 0.5 g t dt
                 const Real t = (i + 1) * dt;
-                const Real error = std::fabs(s.body.pos.z - (z0 - 0.5 * kGravity * t * t - 0.5 * kGravity * t * dt));
+                const Real error = std::fabs(car_cg_z(s, p) - (z0 - 0.5 * kGravity * t * t - 0.5 * kGravity * t * dt));
                 l.worst_fall = std::max(l.worst_fall, error);
                 l.fall_ok = l.fall_ok && error <= 1e-9;
                 ++l.fall_steps;
@@ -134,6 +150,37 @@ int main()
                     l.peak[1], l.lowest, l.residual);
         check_true("drop 1 m: the stored energy is never above its starting value", l.never_gained);
         check_settled("drop 1 m", p, l);
+    }
+
+    // The same drops with wheel masses on tyre springs. Both the sprung body and the wheels fall, so the check is on
+    // the car's CG; the tyre meets the ground first, so there is no c v bound to compare the peak with.
+    {
+        four_wheel_params u;
+        u.vertical = vertical_model::unsprung;
+        const Real lift = 0.3;
+        const landing l = drop(u, lift, dt, 4.0);
+        std::printf("unsprung drop 0.3 m: %ld free-fall steps (worst error %.2e m), peak tyre load front %.0f N "
+                    "rear %.0f N, lowest CG %.3f m, residual %.3f J\n",
+                    l.fall_steps, l.worst_fall, l.peak[0], l.peak[1], l.lowest, l.residual);
+        check_true("unsprung fall: the car is in the air at first (over 200 steps)", l.fall_steps > 200);
+        check_true("unsprung fall: the CG falls as z0 - 0.5 g t^2 - 0.5 g t dt within 1e-9", l.fall_ok);
+        check_true("unsprung landing: the stored energy is never above its starting value", l.never_gained);
+        for (int a = 0; a < 2; ++a)
+            check_true("unsprung landing: the peak tyre load is above the static load", l.peak[a] > u.static_load(a ? RL : FL));
+        check_settled("unsprung drop 0.3 m", u, l);
+
+        // the residual is first order, falling at least as fast: halving dt takes it below 0.6 of the coarser one
+        const landing fine = drop(u, lift, 0.5 * dt, 4.0);
+        std::printf("unsprung convergence: residual %.3f J at 1 ms, %.3f J at 0.5 ms (ratio %.3f)\n", l.residual,
+                    fine.residual, fine.residual / l.residual);
+        check_true("unsprung convergence: halving dt takes the residual below 0.6 of the coarser one",
+                   std::fabs(fine.residual) < 0.6 * std::fabs(l.residual));
+
+        const landing hard = drop(u, 1.0, dt, 4.0);
+        std::printf("unsprung drop 1 m: peak tyre load front %.0f N rear %.0f N, lowest CG %.3f m, residual %.3f J\n",
+                    hard.peak[0], hard.peak[1], hard.lowest, hard.residual);
+        check_true("unsprung drop 1 m: the stored energy is never above its starting value", hard.never_gained);
+        check_settled("unsprung drop 1 m", u, hard);
     }
 
     return finish("landing");

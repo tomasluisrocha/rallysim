@@ -50,6 +50,37 @@ namespace rallysim
             }
         }
 
+        if (p.vertical == vertical_model::unsprung)
+        {
+            // the body moves vertically with the sprung mass only, each wheel with its own
+            const Real ms = p.sprung_mass();
+            e.translation = 0.5 * m * (s.body.vel.x * s.body.vel.x + s.body.vel.y * s.body.vel.y) +
+                            0.5 * ms * s.body.vel.z * s.body.vel.z;
+            vec3 cs{0, 0, 0}; // the sprung body's CG in the body frame: the whole car's less the wheels
+            for (std::size_t i = 0; i < kWheels; ++i)
+                cs = cs - p.corner(i).unsprung_mass * p.wheel_position(i);
+            cs = (1.0 / ms) * cs;
+            e.gravity = ms * kGravity * (s.body.pos.z + to_world(s.body.q, cs).z);
+            for (std::size_t i = 0; i < kWheels; ++i)
+            {
+                const corner_params &c = p.corner(i);
+                const corner_state &wc = s.corners[i];
+                e.translation += 0.5 * c.unsprung_mass * wc.vz * wc.vz;
+                e.gravity += c.unsprung_mass * kGravity * wc.z;
+
+                const Real mount = p.static_deflection(i) - contact_of(p, s.body, i, 0.0).deflection;
+                const Real x = p.strut_static_deflection(i) - mount + (wc.z - p.wheel_rest_height(i));
+                const Real d = p.wheel.radius - wc.z;
+                const Real stop = x - (p.strut_static_deflection(i) - c.droop); // the stop's travel, negative when engaged
+                if (x > 0)
+                    e.springs += 0.5 * c.spring_rate * x * x;
+                if (d > 0)
+                    e.springs += 0.5 * c.tyre_rate * d * d;
+                if (stop < 0)
+                    e.springs += 0.5 * c.stop_rate * stop * stop;
+            }
+        }
+
         for (const wheel_state &wheel : s.wheels)
             e.wheels += 0.5 * p.wheel.inertia * wheel.omega * wheel.omega;
 
@@ -81,6 +112,15 @@ namespace rallysim
             // the corner pushes the body with fz; its spring part is stored energy, the rest is the damper
             if (p.vertical == vertical_model::springs && f.corner[i].deflection > 0)
                 r.damper += (f.fz[i] - f.corner[i].spring) * f.corner[i].deflection_rate;
+
+            // unsprung: the strut's damper, and the tyre's damping (its load less its spring) while it is on the ground
+            if (p.vertical == vertical_model::unsprung)
+            {
+                const corner_load &l = f.corner[i];
+                r.damper += l.damper * l.deflection_rate;
+                if (l.tyre_deflection > 0)
+                    r.damper += (f.fz[i] - p.corner(i).tyre_rate * l.tyre_deflection) * l.tyre_deflection_rate;
+            }
 
             // the tyre pushes the body at the patch (fx vx + fy vy) and the wheel back (- fx R omega);
             // together they lose fx (omega R - vx) - fy vy, the force times how fast the patch slides
