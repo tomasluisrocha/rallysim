@@ -20,8 +20,9 @@ namespace rallysim
     //     pitches and the load transfer comes out of the springs;
     //   planar (steps 3 to 5): gravity is cancelled and the tyre forces act at CG height, so the body stays flat
     //     on the ground plane, as the single-track; the loads come from the quasi-static load transfer.
-    //   unsprung (phase 6): as springs, but each wheel has its own mass on a tyre spring below the strut, so the
-    //     tyre load is the tyre spring's and the wheel can hop and hang (see "the corner with a wheel" below).
+    //   unsprung (phase 6): as springs, but each wheel has its own mass on a tyre spring below the strut, with stops
+    //     and an optional anti-roll bar, so the tyre load is the tyre spring's and the wheel can hop and hang (see
+    //     "the corner with a wheel" below).
     // The planar model stays so the four-wheel car can still be compared one to one with the single-track, and
     // the springs model so the unsprung one can be compared with it.
     enum class vertical_model
@@ -439,7 +440,7 @@ namespace rallysim
         body_velocity vel;                         // velocity of the CG in the car's frame, and the yaw rate
         Real a_x = 0, a_y = 0;                     // planar model: accelerations used for the load transfer (m/s^2)
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
-        std::array<corner_load, kWheels> corner;   // springs, unsprung: each corner's spring, damper and (unsprung) stop and tyre
+        std::array<corner_load, kWheels> corner;   // springs, unsprung: each corner's spring, damper, stops, anti-roll bar and tyre
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
@@ -479,6 +480,16 @@ namespace rallysim
             f.patch[i] = c.velocity;
             f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
         }
+        if (p.vertical == vertical_model::unsprung)
+            for (std::size_t l : {FL, RL})
+            {
+                const std::size_t r = l + 1;
+                const Real bar = p.corner(l).antiroll_rate * (f.corner[l].deflection - f.corner[r].deflection);
+                f.corner[l].antiroll = bar;
+                f.corner[r].antiroll = -bar;
+                f.corner[l].strut += bar;
+                f.corner[r].strut -= bar;
+            }
         return f;
     }
 
@@ -486,7 +497,8 @@ namespace rallysim
     // each tyre force along the ground, (Fx forward + Fy left), applied at its contact patch. With springs each
     // corner's load also pushes up at its patch, and gravity acts; in the planar model gravity is cancelled.
     //
-    // Unsprung: the strut's force pushes up at the patch instead of the tyre load (that one acts on the wheel).
+    // Unsprung: the strut's force (including the anti-roll bar) pushes up at the patch instead of the tyre load
+    // (that one acts on the wheel).
     // The body also gets each wheel's weight, upwards, at its corner at CG height. lf, lr and cg_height locate the
     // whole car's CG, not the sprung body's, and that term is what makes the strut forces balance about it: at
     // rest the two together are the tyre's static load, as with springs, and the car sits level.

@@ -209,6 +209,44 @@ int main()
         check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
     }
 
+    // The anti-roll bar stores elastic energy while the car rolls. Sample the largest residual during a rolled
+    // recovery: at the end the bar may have unloaded, so an endpoint-only check would miss the term.
+    {
+        four_wheel_run r;
+        r.params.vertical = vertical_model::unsprung;
+        r.params.front_corner.antiroll_rate = 20000;
+        r.params.rear_corner.antiroll_rate = 10000;
+        four_wheel_pose pose{};
+        pose.position = {0, 0, r.params.cg_height};
+        pose.roll = 0.03;
+        r.initial = four_wheel_start(r.params, pose);
+        r.script.keys = {{0.0, four_wheel_input{}}};
+        r.steps = 3000;
+
+        auto peak_residual = [&](Real dt)
+        {
+            four_wheel_state s = r.initial;
+            energy_books books(s, r.params);
+            Real peak = 0;
+            const long steps = std::lround(r.steps * r.dt / dt);
+            for (long i = 0; i < steps; ++i)
+            {
+                const four_wheel_input in = driver_input(r, s, i * dt);
+                books.add(rates_of(s, r.params, evaluate(s, r.params, in)), dt);
+                step(s, r.params, in, dt);
+                peak = std::max(peak, std::fabs(books.residual(energy_of(s, r.params))));
+            }
+            return peak;
+        };
+        const Real r2 = peak_residual(0.002), r1 = peak_residual(0.001), r05 = peak_residual(0.0005);
+        std::printf("anti-roll, rolled recovery: largest residual %.2f J at 2 ms, %.2f at 1 ms, %.2f at 0.5 ms "
+                    "(ratios %.3f, %.3f)\n",
+                    r2, r1, r05, r1 / r2, r05 / r1);
+        check_true("anti-roll, rolled recovery: residual is below 4 J at 0.5 ms", r05 < 4);
+        check_true("anti-roll, rolled recovery: peak residual shrinks with dt",
+                   r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
+    }
+
     // the same convergence in the unsprung model
     for (const char *name : {"fw_lane", "fw_brake"})
     {
@@ -224,6 +262,19 @@ int main()
         char what[200];
         std::snprintf(what, sizeof what, "convergence, %s, unsprung: halving dt halves the residual (ratio 0.4 to 0.6, twice)", name);
         check_true(what, r1 / r2 > 0.4 && r1 / r2 < 0.6 && r05 / r1 > 0.4 && r05 / r1 < 0.6);
+    }
+
+    // The shipped unsprung scenarios with bars: the force must be the derivative of the stored bar energy.
+    for (const char *name : {"fw_lane", "fw_circle"})
+    {
+        four_wheel_run r = four_wheel_scenario(name);
+        r.params.vertical = vertical_model::unsprung;
+        r.params.front_corner.antiroll_rate = 20000;
+        r.params.rear_corner.antiroll_rate = 10000;
+        r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
+        check_run((std::string(name) + ", unsprung, anti-roll").c_str(), r, 0.005);
+        if (std::string(name) == "fw_lane")
+            check_halves("fw_lane, unsprung, anti-roll", r);
     }
 
     // the droop stop: the lifted inner front wheel hangs on it for seconds, so its energy is in the books

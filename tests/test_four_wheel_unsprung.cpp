@@ -84,6 +84,28 @@ int main()
             check_near("rest: loads unchanged after 10 s", after.fz[i], p.static_load(i), 1e-6);
     }
 
+    // anti-roll bars push the two wheels of one axle in opposite directions, through their difference in strut
+    // compression; the wheel's vertical step and the body wrench use the resulting strut force.
+    {
+        four_wheel_params p = unsprung_car();
+        p.front_corner.antiroll_rate = 20000;
+        p.rear_corner.antiroll_rate = 10000;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[FL].z += 0.02;
+        const four_wheel_forces f = evaluate(s, p, none);
+        check_near("anti-roll: FL force", f.corner[FL].antiroll, 400, 1e-9);
+        check_near("anti-roll: FR force", f.corner[FR].antiroll, -400, 1e-9);
+        check_near("anti-roll: RL force", f.corner[RL].antiroll, 0, 1e-9);
+        check_near("anti-roll: RR force", f.corner[RR].antiroll, 0, 1e-9);
+        check_near("anti-roll: FL strut", f.corner[FL].strut, 3832.88, 1e-6);
+        check_near("anti-roll: FR strut", f.corner[FR].strut, 2032.88, 1e-6);
+        check_near("anti-roll: RL strut", f.corner[RL].strut, 2668.32, 1e-6);
+        check_near("anti-roll: wrench torque", four_wheel_wrench(s, p, f).torque.x, 1350, 1e-6);
+        p.front_corner.antiroll_rate = p.rear_corner.antiroll_rate = 0;
+        const four_wheel_forces no_bar = evaluate(s, p, none);
+        check_near("anti-roll: no-bar wrench torque", four_wheel_wrench(s, p, no_bar).torque.x, 750, 1e-6);
+    }
+
     // a car with its CG midway between the axles, moving only up and down, is four quarter-cars: the body's
     // quarter of the sprung mass (260 kg) on a 40 kg wheel, the standalone model's defaults. Body lifted 10 mm,
     // then wheels lifted 5 mm: the car's body and wheels must follow vehicle/quarter_car.hpp stepped alongside.
@@ -131,32 +153,53 @@ int main()
         }
     }
 
-    // steady left turn at 20 m/s: the body rolls by m a_y h / (K_roll - m g h), with each corner's rate the
-    // spring and the tyre in series, ks kt / (ks + kt); the tyre loads balance the roll moment and carry the weight
+    // steady left turn at 20 m/s: the body rolls against the spring, bar and tyre roll stiffness, and the tyre
+    // loads split between the axles in proportion to their stiffness
     {
-        const four_wheel_params p = unsprung_car();
-        four_wheel_run r;
-        r.params = p;
-        r.initial = four_wheel_initial(p, 20.0);
-        r.hold_speed = constant_script<Real>(20.0);
-        r.script.keys = {{0.0, four_wheel_input{0.0277, 0.0, 0.0, 0.0}}};
-        r.steps = 8000;
-        const four_wheel_state s = run(r);
+        auto turn = [](four_wheel_params p)
+        {
+            four_wheel_run r;
+            r.params = p;
+            r.initial = four_wheel_initial(p, 20.0);
+            r.hold_speed = constant_script<Real>(20.0);
+            r.script.keys = {{0.0, four_wheel_input{0.0277, 0.0, 0.0, 0.0}}};
+            r.steps = 8000;
+            return std::pair<four_wheel_run, four_wheel_state>{r, run(r)};
+        };
+        four_wheel_params p = unsprung_car();
+        p.front_corner.antiroll_rate = 20000;
+        p.rear_corner.antiroll_rate = 10000;
+        const auto result = turn(p);
+        const four_wheel_run &r = result.first;
+        const four_wheel_state &s = result.second;
         const body_velocity v = velocity_in_body(s.body);
         const Real m = p.chassis.mass, h = p.cg_height, t = p.track_front;
         const Real a_y = std::hypot(v.u, v.v) * v.r, roll = roll_angle(s.body.q);
-        const Real series = 50000.0 * 250000.0 / (50000.0 + 250000.0);
-        const Real k_roll = (series * t * t + series * t * t) / 2;
-        const Real expected = m * a_y * h / (k_roll - m * g * h);
+        const Real front_series = (50000.0 + 2 * 20000.0) * 250000.0 / (50000.0 + 2 * 20000.0 + 250000.0);
+        const Real rear_series = (50000.0 + 2 * 10000.0) * 250000.0 / (50000.0 + 2 * 10000.0 + 250000.0);
+        const Real k_front = front_series * t * t / 2, k_rear = rear_series * p.track_rear * p.track_rear / 2;
+        const Real expected = m * a_y * h / (k_front + k_rear - m * g * h);
         const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
-        const Real right = f.fz[FR] + f.fz[RR], left = f.fz[FL] + f.fz[RL];
-        std::printf("steady turn: a_y %.3f m/s^2, roll %.4f rad (closed form %.4f), load moment %.0f N m (m h (a_y + g roll) = %.0f)\n",
-                    a_y, roll, expected, (right - left) * t / 2, m * h * (a_y + g * roll));
+        const Real tf = (f.fz[FR] - f.fz[FL]) / 2, tr = (f.fz[RR] - f.fz[RL]) / 2;
+        const Real antiroll_fl = 20000 * (f.corner[FL].deflection - f.corner[FR].deflection);
+        std::printf("steady turn: a_y %.3f m/s^2, roll %.4f rad (closed form %.4f), share %.6f (closed form %.6f), "
+                    "front transfer %.0f N m (K front roll %.0f), anti-roll FL %.3f N\n",
+                    a_y, roll, expected, tf / (tf + tr), k_front / (k_front + k_rear), tf * t, k_front * roll, f.corner[FL].antiroll);
         check_true("roll: positive (right side down) in a left turn", roll > 0);
-        check_near("roll: within 3% of m a_y h / (K_roll - m g h), spring and tyre in series", roll, expected, 0.03 * expected);
-        check_near("load transfer: (right - left) t / 2 = m h (a_y + g roll), within 2%", (right - left) * t / 2,
-                   m * h * (a_y + g * roll), 0.02 * m * h * (a_y + g * roll));
-        check_near("load transfer: the four tyres still carry the weight", right + left, m * g, 0.002 * m * g);
+        check_near("roll: within 1.5% of the anti-roll closed form", roll, expected, 0.015 * expected);
+        check_near("load transfer: front share follows axle roll stiffness", tf / (tf + tr), k_front / (k_front + k_rear), 0.002);
+        check_near("load transfer: front transfer moment follows front roll stiffness", tf * t, k_front * roll, 0.01 * k_front * roll);
+        check_near("load transfer: the four tyres still carry the weight", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
+                   m * g, 0.002 * m * g);
+        check_near("anti-roll: FL is the bar rate times the compression difference", f.corner[FL].antiroll, antiroll_fl, 1e-9);
+
+        p.front_corner.antiroll_rate = 0;
+        p.rear_corner.antiroll_rate = 30000;
+        const auto rear_bar = turn(p);
+        const four_wheel_forces rear_f = evaluate(rear_bar.second, p, driver_input(rear_bar.first, rear_bar.second,
+                                                                                     rear_bar.first.steps * rear_bar.first.dt));
+        const Real rear_tf = (rear_f.fz[FR] - rear_f.fz[FL]) / 2, rear_tr = (rear_f.fz[RR] - rear_f.fz[RL]) / 2;
+        check_near("load transfer: rear-bar-only front share", rear_tf / (rear_tf + rear_tr), 0.352941, 0.002);
     }
 
     // a light wheel on a stiff tyre is the springs model: 2 kg and 5 MN/m, both at 0.1 ms (the light wheel needs
@@ -177,6 +220,47 @@ int main()
         std::printf("light wheel against springs: lane change ends %.3g m apart, stop %.3g m apart\n", lane_gap, brake_gap);
         check_true("reduction: the lane change ends within 0.1 mm of the springs model's", lane_gap < 1e-4);
         check_true("reduction: the stop is within 2.5 mm of the springs model's", brake_gap < 2.5e-3);
+    }
+
+    // Equal left/right travel in heave and pitch does not engage an axle bar. The bar run may drift from the
+    // no-bar run only by roundoff as the two sides are evaluated separately.
+    {
+        four_wheel_params no_bar = unsprung_car(), bars = no_bar;
+        bars.front_corner.antiroll_rate = 20000;
+        bars.rear_corner.antiroll_rate = 10000;
+        auto compare = [&](const char *name, const four_wheel_state &start, long steps)
+        {
+            four_wheel_state a = start, b = start;
+            Real peak_bar = 0, final_difference = 0;
+            for (long i = 0; i < steps; ++i)
+            {
+                const four_wheel_forces fb = evaluate(b, bars, none);
+                for (std::size_t k = 0; k < kWheels; ++k)
+                    peak_bar = std::max(peak_bar, std::fabs(fb.corner[k].antiroll));
+                step(a, no_bar, none, dt);
+                step(b, bars, none, dt);
+            }
+            for (int k = 0; k < 3; ++k)
+                final_difference = std::max(final_difference, std::fabs(a.body.pos[k] - b.body.pos[k]));
+            for (int k = 0; k < 4; ++k)
+                final_difference = std::max(final_difference, std::fabs(a.body.q[k] - b.body.q[k]));
+            for (std::size_t k = 0; k < kWheels; ++k)
+            {
+                final_difference = std::max(final_difference, std::fabs(a.corners[k].z - b.corners[k].z));
+                final_difference = std::max(final_difference, std::fabs(a.corners[k].vz - b.corners[k].vz));
+            }
+            std::printf("anti-roll, %s: peak force %.3g N, final state difference %.3g\n", name, peak_bar, final_difference);
+            check_true((std::string("anti-roll, ") + name + ": no force in heave or pitch").c_str(), peak_bar < 1e-9);
+            check_true((std::string("anti-roll, ") + name + ": no effect in heave or pitch").c_str(), final_difference < 1e-12);
+        };
+
+        compare("rest", four_wheel_initial(no_bar, 0.0), 10000);
+        four_wheel_pose pose{};
+        pose.position = {0, 0, no_bar.cg_height + 0.3};
+        compare("drop", four_wheel_start(no_bar, pose), 3000);
+        pose.position.z = no_bar.cg_height + 0.1;
+        pose.pitch = 0.03;
+        compare("pitched drop", four_wheel_start(no_bar, pose), 3000);
     }
 
     // the same light wheel on fw_circle: the tyre spring in series softens the roll (by the tyre's share, about 1%)

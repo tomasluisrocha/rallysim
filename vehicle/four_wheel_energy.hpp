@@ -23,7 +23,7 @@ namespace rallysim
         Real translation = 0; // body: 1/2 m |v|^2
         Real rotation = 0;    // body: 1/2 (Ix wx^2 + Iy wy^2 + Iz wz^2), omega in the body frame
         Real gravity = 0;     // m g z (springs; the planar model cancels gravity); unsprung: sprung body and wheels
-        Real springs = 0;     // 1/2 k x^2 per compressed spring (springs); unsprung: strut, tyre, droop stop and bump stop
+        Real springs = 0;     // 1/2 k x^2 per compressed spring (springs); unsprung: strut, tyre, stops and anti-roll bar
         Real wheels = 0;      // each wheel's spin: 1/2 I omega^2
 
         Real total() const { return translation + rotation + gravity + springs + wheels; }
@@ -61,6 +61,7 @@ namespace rallysim
                 cs = cs - p.corner(i).unsprung_mass * p.wheel_position(i);
             cs = (1.0 / ms) * cs;
             e.gravity = ms * kGravity * (s.body.pos.z + to_world(s.body.q, cs).z);
+            std::array<Real, kWheels> strut_compression{};
             for (std::size_t i = 0; i < kWheels; ++i)
             {
                 const corner_params &c = p.corner(i);
@@ -70,6 +71,7 @@ namespace rallysim
 
                 const Real mount = p.static_deflection(i) - contact_of(p, s.body, i, 0.0).deflection;
                 const Real x = p.strut_static_deflection(i) - mount + (wc.z - p.wheel_rest_height(i));
+                strut_compression[i] = x;
                 const Real d = p.wheel.radius - wc.z;
                 const Real stop = x - (p.strut_static_deflection(i) - c.droop); // the stop's travel, negative when engaged
                 if (x > 0)
@@ -80,6 +82,12 @@ namespace rallysim
                     e.springs += 0.5 * c.stop_rate * stop * stop;
                 e.springs += bump_stop_energy(x - (p.strut_static_deflection(i) + c.bump_travel), c.bump_stop_rate,
                                               c.bump_stop_length);
+            }
+            for (std::size_t l : {FL, RL})
+            {
+                const std::size_t r = l + 1;
+                const Real dx = strut_compression[l] - strut_compression[r];
+                e.springs += 0.5 * p.corner(l).antiroll_rate * dx * dx;
             }
         }
 
