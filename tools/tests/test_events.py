@@ -109,6 +109,15 @@ class TestSettling(unittest.TestCase):
         fz[(self.t >= 1.0) & (self.t < 1.1), 3] += 300.0
         self.assertAlmostEqual(settling_time(self.t, fz), 1.1, delta=1e-9)
 
+    def test_time_is_counted_from_the_first_row(self):
+        self.assertAlmostEqual(settling_time(self.t + 5.0, self.fz), 0.461, delta=1e-9)
+
+    def test_landing_settles_from_touchdown(self):
+        # Touchdown at 0.3 s; the loads decay into the 5% band 0.05 ln 10 = 0.1151 s later: the row at 0.416.
+        t = np.arange(1000) * 0.001
+        fz = np.where(t < 0.3, 0.0, 3000.0 * (1 + 0.5 * np.exp(-(t - 0.3) / 0.05)))
+        self.assertAlmostEqual(landings(four(fz))[0].settling_time, 0.116, delta=1e-9)
+
     def test_still_moving_is_none(self):
         t = np.arange(3001) * 0.001
         fz = np.full(3001, 3000.0)
@@ -124,6 +133,14 @@ class TestRebounds(unittest.TestCase):
         count, overshoot = rebounds(z)
         self.assertEqual(count, 3)
         self.assertAlmostEqual(overshoot, 0.5442, delta=1e-3)
+
+    def test_only_after_the_lowest_point(self):
+        # A bump on the way down is not a rebound: one maximum after the dip, 10% of it.
+        z = np.full(100, 0.5)
+        z[10], z[20], z[30] = 0.52, 0.4, 0.51
+        count, overshoot = rebounds(z)
+        self.assertEqual(count, 1)
+        self.assertAlmostEqual(overshoot, 0.1, delta=1e-12)
 
 
 class TestMetrics(unittest.TestCase):
@@ -153,6 +170,20 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(land.peak_stop["FL"], 5000.0)
         self.assertEqual(land.peak_stop["FR"], 0.0)
         self.assertIsNone(landings(four(flight(), **{"wheel.FL.stopF": stop}))[0].stop_time["FL"])
+
+    def test_metrics_cover_the_landing_rows_only(self):
+        # Larger values while still in the air (row 100) belong to no landing.
+        defl = np.full(1000, 0.05)
+        defl[100], defl[500] = 0.2, 0.15
+        stop = np.zeros(1000)
+        stop[100:110] = 9000.0
+        stop[400:437] = 5000.0
+        run = four(flight(), run_dt=0.0005, meta={"rest_deflection_front": 0.05},
+                   **{"wheel.FL.deflection": defl, "wheel.FL.stopF": stop})
+        land = landings(run)[0]
+        self.assertAlmostEqual(land.peak_travel["FL"], 0.1, delta=1e-12)
+        self.assertEqual(land.peak_stop["FL"], 5000.0)
+        self.assertAlmostEqual(land.stop_time["FL"], 0.0185, delta=1e-12)
 
     def test_peak_fz_nominal(self):
         fz = flight()

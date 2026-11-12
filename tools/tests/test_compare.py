@@ -43,6 +43,8 @@ class TestCompare(unittest.TestCase):
         a = run.from_frame(frame(times, value=[100., 100.]), kind="bicycle")
         b = run.from_frame(frame(times, value=[102., 102.]), kind="bicycle")
         self.assertFalse(compare.diff(a, b, [("value", compare.Tolerance(0, .0197))]).differs())
+        # The larger of the two values is used, whichever run holds it.
+        self.assertFalse(compare.diff(b, a, [("value", compare.Tolerance(0, .0197))]).differs())
 
     def test_rules_are_last_match_and_wildcards(self):
         times = np.array([0., 1.])
@@ -54,7 +56,10 @@ class TestCompare(unittest.TestCase):
         result = compare.diff(a, b, rules)
         self.assertFalse(next(c for c in result.columns if c.name.endswith("Fz")).beyond)
         self.assertTrue(next(c for c in result.columns if c.name.endswith("Fx")).beyond)
-        self.assertTrue(compare.diff(a, b, list(reversed(rules))).differs())
+        result = compare.diff(a, b, list(reversed(rules)))
+        self.assertTrue(next(c for c in result.columns if c.name.endswith("Fz")).beyond)
+        # "*" matches across the dots of a name.
+        self.assertFalse(compare.diff(a, b, [("*", compare.Tolerance(1))]).differs())
 
     def test_alignment_wrap_missing_and_end(self):
         a_times = np.arange(1000) * .001
@@ -70,8 +75,51 @@ class TestCompare(unittest.TestCase):
         result = compare.diff(same_a, same_time)
         self.assertIn("extra", result.only_b)
         self.assertFalse(result.differs(ignore_missing=True))
-        short = run.from_frame(frame([0., .5], value=[0., .5]), kind="bicycle", dt=.5)
-        self.assertTrue(compare.diff(a, short).differs())
+        self.assertIn("extra", compare.diff(same_time, same_a).only_a)
+        self.assertTrue(compare.diff(same_time, same_a).differs())
+        # B stops at 0.5 s and equals A up to there: nothing beyond, yet the runs differ in length.
+        short = run.from_frame(a.data.iloc[:501].copy(), kind="bicycle", dt=.001)
+        result = compare.diff(a, short)
+        self.assertFalse(any(column.beyond for column in result.columns))
+        self.assertEqual(result.end_b, .5)
+        self.assertTrue(result.differs())
+
+    def test_yaw_on_other_times(self):
+        # The same heading on two time steps, passing +pi at 0.283 s.
+        def heading(dt, rows):
+            times = np.arange(rows) * dt
+            yaw = (3.0 + 0.5 * times + np.pi) % (2 * np.pi) - np.pi
+            return run.from_frame(frame(times, yaw=yaw, speed=np.ones(rows)), kind="bicycle", dt=dt)
+        result = compare.diff(heading(.001, 1001), heading(.0008, 1251))
+        self.assertLess(next(c for c in result.columns if c.name == "yaw").largest, 1e-9)
+
+    def test_beta_is_left_out_at_low_speed(self):
+        times = np.arange(10) * .001
+        speed = np.ones(10)
+        speed[3] = .1
+        beta_b = np.zeros(10)
+        beta_b[3] = 1.
+        a = run.from_frame(frame(times, yaw=np.zeros(10), speed=speed, beta=np.zeros(10)), kind="bicycle")
+        b = run.from_frame(frame(times, yaw=np.zeros(10), speed=np.ones(10), beta=beta_b.copy()), kind="bicycle")
+        self.assertFalse(next(c for c in compare.diff(a, b).columns if c.name == "beta").beyond)
+        beta_b[5] = 1.
+        b = run.from_frame(frame(times, yaw=np.zeros(10), speed=np.ones(10), beta=beta_b), kind="bicycle")
+        beta = next(c for c in compare.diff(a, b).columns if c.name == "beta")
+        self.assertEqual((beta.beyond, beta.t_first, beta.largest), (True, .005, 1.))
+
+    def test_not_a_number_in_one_run_is_a_difference(self):
+        times = np.arange(10) * .001
+        hole = np.zeros(10)
+        hole[4:6] = np.nan
+        a = run.from_frame(frame(times, value=np.zeros(10)), kind="bicycle")
+        b = run.from_frame(frame(times, value=hole), kind="bicycle")
+        value = compare.diff(a, b, [("*", compare.Tolerance(1e9))]).columns[0]
+        self.assertEqual((value.beyond, value.t_first, value.largest), (True, .004, np.inf))
+        self.assertTrue(compare.diff(b, a).differs())
+        self.assertFalse(compare.diff(b, b).differs())
+        infinite = run.from_frame(frame(times, value=np.full(10, np.inf)), kind="bicycle")
+        self.assertTrue(compare.diff(a, infinite).differs())
+        self.assertFalse(compare.diff(infinite, infinite).differs())
 
     def test_cli_and_no_matplotlib(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -130,6 +178,26 @@ class TestCompare(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertIn("meta only A: mass", output.getvalue())
             self.assertIn("meta only B: gravity", output.getvalue())
+
+    def test_cli_line_1_values_and_missing_columns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path_a, path_b = Path(directory) / "a.csv", Path(directory) / "b.csv"
+            data = frame([0.], yaw=[0.], speed=[1.], value=[0.])
+            keys = ("zeta", "mass", "alpha", "lf", "spring_front", "bump")
+            write_run(path_a, data, meta={key: 1. for key in keys})
+            write_run(path_b, data, meta={key: 2. for key in keys})
+            from rallytools import cli
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(cli.main(["diff", str(path_a), str(path_b)]), 0)
+            # A changed setup is printed, in the order of line 1, and is not a difference.
+            self.assertEqual([line for line in output.getvalue().splitlines() if line.startswith("meta")],
+                             [f"meta {key}: 1.0 -> 2.0" for key in keys])
+            write_run(path_b, data.assign(extra=[1.]))
+            self.assertEqual(self._cli([str(path_a), str(path_b)]), 1)
+            self.assertEqual(self._cli([str(path_a), str(path_b), "--ignore-missing"]), 0)
+            (Path(directory) / "empty.csv").write_text("step,time,yaw,speed\n")
+            self.assertEqual(self._cli([str(path_a), str(Path(directory) / "empty.csv")]), 2)
 
     @staticmethod
     def _cli(args):

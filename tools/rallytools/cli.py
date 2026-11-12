@@ -79,7 +79,7 @@ def main(argv=None):
                                                 "and optionally draw the twelve-panel chart.")
     command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
     command.add_argument("--from", dest="start", type=float, metavar="S",
-                         help="start of the window in seconds (default: 1 s before the end)")
+                         help="start of the window in seconds (default: 1 s before its end)")
     command.add_argument("--to", dest="end", type=float, metavar="S",
                          help="end of the window in seconds (default: the end of the run)")
     command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")

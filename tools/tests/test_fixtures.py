@@ -5,6 +5,7 @@ import subprocess
 import unittest
 
 from rallytools import run
+from .support import need
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -47,9 +48,9 @@ class TestFixtures(unittest.TestCase):
         self.assertEqual(springs.column("wheel.FL.wheelZ")[0], 0)
 
     def test_gitignore_exception(self):
-        if shutil.which("git") is None:
-            self.skipTest("git is not on PATH")
         root = FIXTURES.parents[2]
+        need(self, shutil.which("git") is not None, "git is not on PATH")
+        need(self, (root / ".git").exists(), "not a git checkout")
         tracked_fixture = subprocess.run(
             ["git", "check-ignore", "tools/tests/fixtures/bicycle.csv"],
             cwd=root,

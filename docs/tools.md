@@ -36,8 +36,9 @@ Compares every column of two runs and prints the ones beyond tolerance, with the
 occurs and the first time it passes the tolerance. A value differs when `|b - a| > abs + rel * max(|a|, |b|)`; the
 default is `abs` 1e-9, `rel` 0. `--tol PATTERN=ABS[,REL]` sets it for the columns matching PATTERN, where `*`
 matches any text including dots; the last matching `--tol` wins. `yaw` is compared wrapped, and `beta` is left
-out where either run is below 0.3 m/s. Runs on different time steps are compared at A's times. Differences on
-line 1 (the car parameters) are printed but never counted.
+out where either run is below 0.3 m/s. A value that is NaN or infinite in one run only is beyond any tolerance.
+Runs on different time steps are compared at A's times. Differences on line 1 (the car parameters) are printed
+but never counted.
 
 Exit 0 within tolerance, 1 beyond it, or if the columns or the end times differ (`--ignore-missing` stops the
 columns counting), 2 on an error. `--all` also lists the columns within tolerance.
@@ -60,10 +61,10 @@ python tools/rally.py suspension out/runs/fw_circle.csv out/runs/fw_hairpin.csv 
 python tools/rally.py suspension out/runs/fw_circle.csv --save out/plots/suspension.png
 ```
 
-A table with one column per run, over the last 1 s of the run, or `--from S` to `--to S`. The window means (roll,
-lateral acceleration, roll gradient, load transfer) read "not steady" when the window is not steady; the peak roll,
-the lowest tyre load and the largest suspension deflection are always shown. `--save PNG` also draws the
-twelve-panel chart without a window; `--show` opens it. Not both.
+A table with one column per run, over the last 1 s of the run, or `--from S` to `--to S` (`--to` alone: the 1 s
+before it). The window means (roll, lateral acceleration, roll gradient, load transfer) read "not steady" when the
+window is not steady; the peak roll, the lowest tyre load and the largest suspension deflection are always shown.
+`--save PNG` also draws the twelve-panel chart without a window; `--show` opens it. Not both.
 
 ### landing
 

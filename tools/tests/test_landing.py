@@ -41,6 +41,13 @@ class TestText(unittest.TestCase):
         self.assertIn("stop 5000 N for 18.5 ms", out)
         self.assertIn("settling 0.000 s; rebounds 1, overshoot 10.0 %", out)
 
+    def test_each_wheel_has_its_own_line(self):
+        fz = np.column_stack([flight()] * 4)
+        fz[450] = (6000.0, 7000.0, 8000.0, 9000.0)
+        out = text(four(fz))
+        for part in ("FL  peak Fz 6000 N", "FR  peak Fz 7000 N", "RL  peak Fz 8000 N", "RR  peak Fz 9000 N"):
+            self.assertIn(part, out)
+
     def test_no_landing(self):
         self.assertIn("no landing in this run", text(load(FIXTURES / "four_wheel_unsprung.csv")))
 

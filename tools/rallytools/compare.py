@@ -69,7 +69,9 @@ def align(a: Run, b: Run):
     if np.array_equal(tb[(tb >= start) & (tb <= end)], t):
         B = {column: b.column(column)[(tb >= start) & (tb <= end)] for column in columns}
     else:
-        B = {column: np.interp(t, tb, b.column(column)) for column in columns}
+        # yaw is unwrapped first: interpolating across its jump at +-pi would invent a value.
+        B = {column: np.interp(t, tb, np.unwrap(b.column(column)) if column == "yaw" else b.column(column))
+             for column in columns}
     return t, columns, A, B
 
 
@@ -81,24 +83,28 @@ def diff(a: Run, b: Run, rules=()):
     t, columns, values_a, values_b = align(a, b)
     result = []
     for column in columns:
-        va, vb = values_a[column].copy(), values_b[column].copy()
+        va, vb = values_a[column], values_b[column]
+        used = np.ones(len(t), dtype=bool)
         if column == "beta" and a.has("speed") and b.has("speed"):
             speed_a = np.interp(t, a.data["time"], a.column("speed"))
             speed_b = np.interp(t, b.data["time"], b.column("speed"))
-            mask = (speed_a < 0.3) | (speed_b < 0.3)
-            va[mask] = np.nan
-            vb[mask] = np.nan
-        d = vb - va
-        if column == "yaw":
-            d = _wrapped_difference(d)
-        finite = np.isfinite(d)
-        if not finite.any():
+            used = ~((speed_a < 0.3) | (speed_b < 0.3))
+        if not used.any():
             result.append(ColumnDiff(column, a.units.get(column), 0.0, None, None, False))
             continue
-        magnitude = np.abs(d)
-        largest_index = int(np.nanargmax(magnitude))
+        with np.errstate(invalid="ignore"):
+            d = vb - va
+        if column == "yaw":
+            d = _wrapped_difference(d)
+        # A value that is NaN or infinite in one run only is a difference of infinite size.
+        same = (va == vb) | (np.isnan(va) & np.isnan(vb))
+        magnitude = np.where(np.isfinite(d), np.abs(d), np.where(same, 0.0, np.inf))
+        magnitude[~used] = 0.0
+        largest_index = int(np.argmax(magnitude))
         tolerance = tolerance_for(column, rules)
-        beyond = finite & (magnitude > tolerance.abs + tolerance.rel * np.maximum(np.abs(va), np.abs(vb)))
+        with np.errstate(invalid="ignore"):
+            limit = tolerance.abs + tolerance.rel * np.maximum(np.abs(va), np.abs(vb))
+            beyond = used & ((magnitude > limit) | np.isinf(magnitude))
         first_index = np.flatnonzero(beyond)
         result.append(ColumnDiff(
             column,
@@ -111,7 +117,7 @@ def diff(a: Run, b: Run, rules=()):
     only_a = [column for column in a.data.columns if column not in b.data.columns and column not in ("step", "time")]
     only_b = [column for column in b.data.columns if column not in a.data.columns and column not in ("step", "time")]
     meta_changed = {key: (a.meta[key], b.meta[key])
-                    for key in a.meta.keys() & b.meta.keys() if a.meta[key] != b.meta[key]}
+                    for key in a.meta if key in b.meta and a.meta[key] != b.meta[key]}
     step = a.dt
     if step is None and len(a.data["time"]) > 1:
         step = float(np.median(np.diff(a.data["time"].to_numpy(dtype=float))))

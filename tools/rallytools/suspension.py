@@ -8,16 +8,20 @@ from .run import Run, WHEELS
 
 
 def window(run: Run, start=None, end=None) -> np.ndarray:
+    """Rows from start to end, both included; by default the last 1 s before end, and end is the run's."""
     time = run.column("time")
-    if start is None:
-        start = float(time[-1]) - 1.0
     if end is None:
         end = float(time[-1])
+    if start is None:
+        start = end - 1.0
     return (time >= start) & (time <= end)
 
 
 def steady(run: Run, start=None, end=None) -> dict:
     selected = window(run, start, end)
+    if not selected.any():
+        time = run.column("time")
+        raise ValueError(f"run '{run.name}': no rows in the window (the run goes from {time[0]:g} to {time[-1]:g} s)")
     roll = run.column("roll")
     a_lat = run.column("a_lat")
     roll_window = roll[selected]

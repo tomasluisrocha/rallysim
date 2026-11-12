@@ -43,6 +43,12 @@ class TestRun(unittest.TestCase):
         self.assertIsNone(r.dt)
         self.assertEqual(r.meta, {})
 
+    def test_no_rows(self):
+        for text in ("step,time,yaw,speed\n", "# schema=6 dt=0.001 units: step[count]\nstep,time,yaw,speed\n",
+                     "# schema=6 dt=0.001 units: step[count]\n", ""):
+            with self.assertRaises(ValueError):
+                load(text)
+
     def test_vertical(self):
         self.assertEqual(four("vertical=2").vertical, "unsprung")
         self.assertEqual(four("springs=1").vertical, "springs")

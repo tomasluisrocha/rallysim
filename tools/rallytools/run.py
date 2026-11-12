@@ -82,21 +82,26 @@ def _parse_line1(line):
 
 def load(source, name=None):
     if hasattr(source, "read"):
-        text = source.read()
+        table = io.StringIO(source.read())
+        first = table.readline()
+        table.seek(0)
         where = name or "run"
     else:
-        with open(source, encoding="utf-8") as f:
-            text = f.read()
-        where = os.fspath(source)
+        table = where = os.fspath(source)
+        with open(table, encoding="utf-8") as f:
+            first = f.readline()
         if name is None:
             name = os.path.splitext(os.path.basename(where))[0]
     name = name or "run"
-    first = text.split("\n", 1)[0]
-    schema, dt, meta, units = _parse_line1(first) if first.startswith("#") else (None, None, {}, {})
+    facts = first.startswith("#")
+    schema, dt, meta, units = _parse_line1(first.rstrip("\r\n")) if facts else (None, None, {}, {})
     try:
-        data = pd.read_csv(io.StringIO(text), comment="#")
+        # Line 1 is skipped by number: asking pandas to look for comments costs twice the time.
+        data = pd.read_csv(table, skiprows=1 if facts else 0)
     except (pd.errors.ParserError, pd.errors.EmptyDataError) as e:
         raise ValueError(f"{where}: cannot read as telemetry: {e}") from e
+    if len(data) == 0:
+        raise ValueError(f"{where}: no rows")
     return Run(name, _kind(data.columns, where), schema, dt, meta, units, data)
 
 
