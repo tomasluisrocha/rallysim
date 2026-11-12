@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from rallytools.events import airborne, landings, rebounds, settling_time
+from rallytools.events import Event, airborne, events, landings, rebounds, settling_time
 from rallytools.run import from_frame
 
 WHEELS = ("FL", "FR", "RL", "RR")
@@ -15,13 +15,17 @@ def four(fz=None, rows=1000, dt=0.001, meta=None, run_dt=None, **columns):
     fz = np.full(rows, 3000.0) if fz is None else np.asarray(fz, dtype=float)
     if fz.ndim == 1:
         fz = np.column_stack([fz] * 4)
-    data = {"time": t, "pos.z": np.full(rows, 0.5)}
+    data = {"time": t, "pos.z": np.full(rows, 0.5), "speed": np.full(rows, 20.0)}
     for i, w in enumerate(WHEELS):
         data[f"wheel.{w}.Fz"] = fz[:, i]
         data[f"wheel.{w}.deflection"] = np.full(rows, 0.05)
+        data[f"wheel.{w}.slipRatio"] = np.zeros(rows)
+        data[f"wheel.{w}.omega"] = np.full(rows, 66.7)
+        data[f"wheel.{w}.stopF"] = np.zeros(rows)
     for name, values in columns.items():
         data[name] = values
-    return from_frame(pd.DataFrame(data), kind="four_wheel", dt=run_dt, meta=meta)
+    return from_frame(pd.DataFrame(data), kind="four_wheel", dt=run_dt,
+                      meta={"wheel_radius": 0.3, **(meta or {})})
 
 
 def flight(rows=1000, dt=0.001, gaps=((0.0, 0.3),)):
@@ -66,6 +70,77 @@ class TestAirborne(unittest.TestCase):
         self.assertEqual(landings(four(fz)), [])
         t = np.arange(1000) * 0.001
         self.assertAlmostEqual(airborne(t, np.column_stack([fz] * 4))[0][1], t[-1], delta=1e-12)
+
+
+class TestEvents(unittest.TestCase):
+    def test_lock_threshold_and_guards(self):
+        slip = np.zeros(1000)
+        slip[200:500] = -1.0
+        self.assertEqual(events(four(**{"wheel.FL.slipRatio": slip})),
+                         [Event("lock", "FL", 0.2, 0.5)])
+        slip[200:500] = -0.94
+        self.assertEqual(events(four(**{"wheel.FL.slipRatio": slip})), [])
+        self.assertEqual(events(four(**{"speed": np.full(1000, 0.9),
+                                        "wheel.FL.slipRatio": np.full(1000, -1.0)})), [])
+        fz = np.full((1000, 4), 3000.0)
+        fz[200:500, 0] = 0.0
+        lift_slip = np.zeros(1000)
+        lift_slip[200:500] = -1.0
+        self.assertEqual(events(four(fz, **{"wheel.FL.slipRatio": lift_slip})),
+                         [Event("lift", "FL", 0.2, 0.5)])
+
+    def test_spin_threshold_and_radius(self):
+        slip = np.zeros(1000)
+        slip[300:400] = 0.5
+        self.assertEqual(events(four(**{"wheel.RR.slipRatio": slip})),
+                         [Event("spin", "RR", 0.3, 0.4)])
+        slip[300:400] = 0.19
+        self.assertEqual(events(four(**{"wheel.RR.slipRatio": slip})), [])
+        self.assertEqual(events(four(**{"wheel.RR.slipRatio": np.where(
+            np.arange(1000) >= 300, 0.5, 0.0), "wheel.RR.omega": np.full(1000, 3.0)})), [])
+        run = four()
+        run = from_frame(run.data, kind="four_wheel", meta={})
+        with self.assertRaisesRegex(ValueError, "wheel_radius"):
+            events(run)
+
+    def test_minimum_duration_and_stops(self):
+        slip = np.zeros(1000)
+        slip[200:249] = -1.0
+        slip[300:350] = -1.0
+        found = events(four(**{"wheel.FL.slipRatio": slip}))
+        self.assertEqual(found, [Event("lock", "FL", 0.3, 0.35000000000000003)])
+        self.assertEqual(events(four(**{"wheel.FL.slipRatio": slip}), min_time=0),
+                         [Event("lock", "FL", 0.2, 0.249),
+                          Event("lock", "FL", 0.3, 0.35000000000000003)])
+        stop = np.zeros(1000)
+        stop[400:403] = 5000.0
+        stop[500:502] = -100.0
+        self.assertEqual(events(four(**{"wheel.FL.stopF": stop})),
+                         [Event("bump_stop", "FL", 0.4, 0.403),
+                          Event("droop_stop", "FL", 0.5, 0.502)])
+        data = four()
+        data = from_frame(data.data.drop(columns="wheel.FL.stopF"), kind="four_wheel",
+                          meta=data.meta)
+        self.assertEqual(events(data), [])
+
+    def test_order_and_end_time(self):
+        lock = np.zeros(1000)
+        lock[100:] = -1.0
+        spin = np.zeros(1000)
+        spin[100:] = 0.5
+        fz = np.full((1000, 4), 3000.0)
+        fz[50:100, 1] = 0.0
+        found = events(four(fz, **{"wheel.RL.slipRatio": lock,
+                                   "wheel.FL.slipRatio": spin}))
+        self.assertEqual([(event.kind, event.wheel) for event in found[:3]],
+                         [("lift", "FR"), ("spin", "FL"), ("lock", "RL")])
+        self.assertEqual(events(four(rows=300, **{"wheel.FL.slipRatio": np.r_[
+            np.zeros(200), np.full(100, -1.0)]})),
+                         [Event("lock", "FL", 0.2, 0.299)])
+        bicycle = from_frame(pd.DataFrame({"time": [0.0], "yaw": [0.0], "speed": [1.0]}),
+                             kind="bicycle", meta={"wheel_radius": 0.3})
+        with self.assertRaises(ValueError):
+            events(bicycle)
 
 
 class TestWindow(unittest.TestCase):

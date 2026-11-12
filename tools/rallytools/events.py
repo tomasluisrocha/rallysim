@@ -1,4 +1,4 @@
-"""Landing events of a four-wheel run and their metrics. numpy only."""
+"""Events of a four-wheel run and landing metrics. numpy only."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,12 +31,68 @@ class Landing:
     overshoot: float
 
 
+@dataclass(frozen=True)
+class Event:
+    kind: str
+    wheel: str
+    t_start: float
+    t_end: float
+
+
+_LOCK_SLIP = -0.95  # A wheel is locked at or below this slip ratio.
+_SPIN_SLIP = 0.2  # A wheel is spinning at or above this slip ratio.
+_MIN_EVENT_SPEED = 1.0  # Lock and spin require this contact speed in m/s.
+_MIN_EVENT_TIME = 0.05  # Lock, spin and lift events shorter than this are noise.
+_EVENT_EPSILON = 1e-9  # Keep events exactly at the minimum duration.
+
+
 def _stretches(fz):
     """(start, end) row indices of the all-wheels-airborne stretches; end is len(fz) if the run ends airborne."""
     fz = np.asarray(fz, dtype=float)
     air = np.all(fz <= 0.0, axis=1)
     edges = np.diff(np.concatenate(([0], air.astype(int), [0])))
     return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)))
+
+
+def events(run, min_time=_MIN_EVENT_TIME):
+    """Return wheel events in a four-wheel run, ordered by time and wheel."""
+    if run.kind != "four_wheel":
+        raise ValueError(f"run '{run.name}': events need a four-wheel run, not {run.kind}")
+    if "wheel_radius" not in run.meta:
+        raise ValueError(f"run '{run.name}': no line-1 key 'wheel_radius'")
+
+    t = run.column("time")
+    speed = run.column("speed")
+    radius = run.meta["wheel_radius"]
+    found = []
+    conditions = {}
+    for wheel in WHEELS:
+        prefix = f"wheel.{wheel}."
+        fz = run.column(prefix + "Fz")
+        slip = run.column(prefix + "slipRatio")
+        omega = run.column(prefix + "omega")
+        conditions[wheel] = {
+            "lock": (slip <= _LOCK_SLIP) & (speed >= _MIN_EVENT_SPEED) & (fz > 0.0),
+            "spin": (slip >= _SPIN_SLIP) & (omega * radius >= _MIN_EVENT_SPEED) & (fz > 0.0),
+            "lift": fz <= 0.0,
+        }
+        if run.has(prefix + "stopF"):
+            stop = run.column(prefix + "stopF")
+            conditions[wheel]["bump_stop"] = stop > 0.0
+            conditions[wheel]["droop_stop"] = stop < 0.0
+
+    for wheel in WHEELS:
+        for kind, condition in conditions[wheel].items():
+            edges = np.diff(np.concatenate(([False], condition, [False])).astype(int))
+            for start, end in zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)):
+                t_start = float(t[start])
+                t_end = float(t[end] if end < len(t) else t[-1])
+                if kind not in ("bump_stop", "droop_stop") and t_end - t_start < min_time - _EVENT_EPSILON:
+                    continue
+                found.append(Event(kind, wheel, t_start, t_end))
+
+    wheel_order = {wheel: i for i, wheel in enumerate(WHEELS)}
+    return sorted(found, key=lambda event: (event.t_start, wheel_order[event.wheel], event.kind))
 
 
 def airborne(t, fz):
