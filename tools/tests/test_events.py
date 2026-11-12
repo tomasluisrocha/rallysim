@@ -98,6 +98,11 @@ class TestEvents(unittest.TestCase):
         self.assertEqual(events(four(**{"wheel.RR.slipRatio": slip})), [])
         self.assertEqual(events(four(**{"wheel.RR.slipRatio": np.where(
             np.arange(1000) >= 300, 0.5, 0.0), "wheel.RR.omega": np.full(1000, 3.0)})), [])
+        fz = np.full((1000, 4), 3000.0)
+        fz[300:400, 3] = 0.0
+        slip[300:400] = 0.5
+        self.assertEqual(events(four(fz, **{"wheel.RR.slipRatio": slip})),
+                         [Event("lift", "RR", 0.3, 0.4)])
         run = four()
         run = from_frame(run.data, kind="four_wheel", meta={})
         with self.assertRaisesRegex(ValueError, "wheel_radius"):

@@ -189,6 +189,9 @@ int main()
         check_near("roll: within 1.5% of the anti-roll closed form", roll, expected, 0.015 * expected);
         check_near("load transfer: front share follows axle roll stiffness", tf / (tf + tr), k_front / (k_front + k_rear), 0.002);
         check_near("load transfer: front transfer moment follows front roll stiffness", tf * t, k_front * roll, 0.01 * k_front * roll);
+        const Real moment = tf * t + tr * p.track_rear, expected_moment = m * h * (a_y + g * roll);
+        check_near("load transfer: (right - left) t / 2 = m h (a_y + g roll), within 2%", moment, expected_moment,
+                   0.02 * expected_moment);
         check_near("load transfer: the four tyres still carry the weight", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
                    m * g, 0.002 * m * g);
         check_near("anti-roll: FL is the bar rate times the compression difference", f.corner[FL].antiroll, antiroll_fl, 1e-9);
