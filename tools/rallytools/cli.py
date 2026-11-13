@@ -82,6 +82,24 @@ def _tyre_points(args):
     return 0
 
 
+def _tyre_rig(args):
+    from .charts.tyre_rig import figure
+    if args.save is not None:
+        import matplotlib
+        matplotlib.use("Agg")
+        chart = figure(args.file, args.curve, args.combined)
+        output = Path(args.save)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        chart.savefig(output, dpi=110)
+        print(f"wrote {output}")
+        return 0
+    # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+    import matplotlib.pyplot as plt
+    figure(args.file, args.curve, args.combined, fig=plt.figure())
+    plt.show()
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -133,8 +151,21 @@ def main(argv=None):
                          help="write the chart (default name: out/plots/tyres/<run>.png)")
     command.add_argument("--min-speed", type=float, default=1.0, metavar="M/S",
                          help="leave out slower moments (default 1)")
+    command = subparsers.add_parser("tyre-rig", help="chart of the single-tyre rig: force against slip",
+                                    description="Draw Fx against slip ratio and Fy against slip angle at each "
+                                                "load, and one curve's combined sweeps. Make the CSV with "
+                                                "rallysim tyre_rig. Without --save the chart is shown.")
+    command.add_argument("file", nargs="?", default=str(RIG / "tyre_rig.csv"), metavar="FILE",
+                         help="rig CSV (default out/rig/tyre_rig.csv)")
+    command.add_argument("--curve", nargs="+", metavar="NAME",
+                         help="curves for the pure-slip panels (default: all in the file)")
+    command.add_argument("--combined", metavar="NAME",
+                         help="curve for the combined panels (default: the first --curve, else tmeasy)")
+    command.add_argument("--save", metavar="PNG", help="save the chart to this file instead of showing it")
     args = parser.parse_args(argv)
     try:
+        if args.command == "tyre-rig":
+            return _tyre_rig(args)
         if args.command == "tyre-points":
             return _tyre_points(args)
         if args.command == "suspension" and args.events and args.save is None and not args.show:
