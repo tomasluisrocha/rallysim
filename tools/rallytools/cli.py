@@ -6,10 +6,11 @@ from pathlib import Path
 import sys
 
 from .compare import Tolerance, diff
-from .paths import COMPARE, RIG, TYRES
+from .paths import COMPARE, OUT, RIG, ROOT, TYRES, find_exe
 from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
+from .sweep import DEFAULT_METRICS, sweep, values_of
 from .stepsize import report as stepsize_report, text as stepsize_text
 from .suspension import table as suspension_table
 from .tyre import check_against_rig, tyre_from_meta
@@ -143,6 +144,45 @@ def _overlay(args):
     return 0
 
 
+def _shown(path):
+    """A path as printed: relative to the sim folder when it is inside it, else as it is."""
+    path = Path(path).resolve()
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
+
+
+def _sweep(args):
+    from .charts.sweep import figure
+    values = values_of(args.values, args.range, args.unit)
+    exe = find_exe(args.exe)
+    print(f"sweeping {args.setting} over {len(values)} value(s) in {args.scenario}")
+    result = sweep(exe, args.scenario, args.setting, values, args.set, args.metric, OUT, args.jobs)
+    for value, text in result.failed:
+        print(f"  {value}: FAILED\n    " + text.replace("\n", "\n    "))
+    import pandas as pd
+    with pd.option_context("display.width", 160, "display.float_format", "{:.4g}".format):
+        print(result.table.to_string(index=False))
+    print(f"wrote {len(result.rows)} run(s) and summary.csv to {_shown(result.folder)}")
+    if not args.show:
+        import matplotlib
+        matplotlib.use("Agg")
+    output = Path(args.save) if args.save else OUT / "plots" / "sweeps" / f"{result.folder.name}.png"
+    if args.show:
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        import matplotlib.pyplot as plt
+        chart = figure(result, args.trace, fig=plt.figure())
+    else:
+        chart = figure(result, args.trace)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    chart.savefig(output, dpi=100)
+    print(f"wrote {_shown(output)}")
+    if args.show:
+        plt.show()
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -222,12 +262,44 @@ def main(argv=None):
     command.add_argument("--labels", nargs="+", metavar="NAME", help="a name for each run")
     command.add_argument("--save", nargs="?", const="", metavar="PNG",
                          help="write the figure (default name: out/plots/compare/<run>__<A>_vs_<B>.png)")
+    command = subparsers.add_parser("sweep", help="run a scenario over a range of one setting and plot the results",
+                                    formatter_class=argparse.RawDescriptionHelpFormatter,
+                                    description="Run a scenario once per value of one setting "
+                                                "(rallysim <scenario> --set <setting>=<value>; a car parameter "
+                                                "or section.key, values may carry units) and plot how the "
+                                                "results change. A metric is STAT:COLUMN worked out from each "
+                                                "run: max, min, maxabs, mean, final, range. Angles are shown in "
+                                                "degrees. Writes the runs and summary.csv to "
+                                                "out/sweeps/<scenario>__<setting>/ and the picture to "
+                                                "out/plots/sweeps/.",
+                                    epilog="examples:\n"
+                                           "  python tools/sweep.py fw_hairpin max_handbrake_torque 1000 2000 3000\n"
+                                           "  python tools/sweep.py fw_circle spring_front --range 30 80 6 "
+                                           "--unit kN/m --trace roll\n"
+                                           "  python tools/sweep.py fw_brake mu_front --range 0.5 1.1 7 "
+                                           "--metric final:pos.x maxabs:pitch")
+    command.add_argument("scenario", help="a scenario name (rallysim list) or an .ini file")
+    command.add_argument("setting", help="what to change: a car parameter, or section.key")
+    command.add_argument("values", nargs="*", help="the values, as --set takes them (units allowed)")
+    command.add_argument("--range", nargs=3, metavar=("FROM", "TO", "N"), help="N evenly spaced values instead")
+    command.add_argument("--unit", default="", help="a unit written after every --range value (km/h, kN/m, ...)")
+    command.add_argument("--metric", nargs="+", default=list(DEFAULT_METRICS), metavar="STAT:COLUMN",
+                         help=f"what to measure in each run (default: {' '.join(DEFAULT_METRICS)})")
+    command.add_argument("--trace", metavar="COLUMN", default="yaw_rate",
+                         help="column drawn over time for every value")
+    command.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="held for every run")
+    command.add_argument("--save", metavar="PNG", help="where the picture goes (default: out/plots/sweeps/...)")
+    command.add_argument("--show", action="store_true", help="open the picture instead of only saving it")
+    command.add_argument("--exe", help="the rallysim executable (default: found under build/)")
+    command.add_argument("--jobs", type=int, default=None, metavar="N", help="runs at once (default: CPUs - 1)")
     args = parser.parse_args(argv)
     try:
         if args.command == "overlay":
             if len(args.runs) < 2:
                 parser.error("overlay needs at least two runs")
             return _overlay(args)
+        if args.command == "sweep":
+            return _sweep(args)
         if args.command == "columns":
             return _columns(args)
         if args.command == "tyre-rig":
