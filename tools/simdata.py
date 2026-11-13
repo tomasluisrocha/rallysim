@@ -13,39 +13,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent.parent  # the sim/ folder
-OUT = ROOT / "out"
-RUNS = OUT / "runs"            # one telemetry CSV per scenario (rallysim <scenario>)
-RIG = OUT / "rig"              # tyre_rig.csv (rallysim tyre_rig)
-PLOTS = OUT / "plots"
-VIEWS = PLOTS / "views"        # topdown --static, one per run
-TYRES = PLOTS / "tyres"        # the rig plot, and each four-wheel run's tyres on their curve
-COMPARE = PLOTS / "compare"    # compare.py
-SWEEP_PLOTS = PLOTS / "sweeps" # sweep.py: one picture per sweep
-SWEEPS = OUT / "sweeps"        # sweep.py: each sweep's runs and its summary table, one folder per sweep
-GIFS = OUT / "gif"             # topdown --gif (<run>.gif) and view3d --gif (<run>_3d.gif)
-SNAPSHOTS = OUT / "snapshots"  # saved copies of runs/ and rig/ to compare against (run_all.py --snapshot NAME)
-SCRATCH = OUT / "scratch"      # one-off experiments; nothing writes here on its own
-
-WHEELS = ("FL", "FR", "RL", "RR")
+from rallytools.paths import (COMPARE, GIFS, OUT, PLOTS, RIG, ROOT, RUNS, SCRATCH, SNAPSHOTS, SWEEP_PLOTS,  # noqa: F401
+                              SWEEPS, TYRES, VIEWS, WHEELS, label_of, run_command)
+from rallytools import paths as _paths
 
 
-def find_exe(given=None):
+def find_exe(given=None, root=ROOT):
     """The rallysim executable: `given`, or the first build found under build/ (Release first)."""
-    if given:
-        return Path(given)
-    for candidate in ("build/Release/rallysim.exe", "build/rallysim.exe", "build/Release/rallysim", "build/rallysim",
-                      "build/Debug/rallysim.exe", "build/Debug/rallysim"):
-        path = ROOT / candidate
-        if path.exists():
-            return path
-    sys.exit("rallysim not found under build/; build it first or pass --exe")
-
-
-def run_command(command):
-    """Run one command from the sim folder; (ok, text) with its output."""
-    done = subprocess.run([str(c) for c in command], cwd=ROOT, capture_output=True, text=True)
-    return done.returncode == 0, (done.stdout + done.stderr).strip()
+    try:
+        return _paths.find_exe(given, root)
+    except ValueError as error:
+        sys.exit(str(error))
 
 
 def read_units(path):
@@ -306,13 +284,3 @@ def check_against_rig(path=None):
         worst = max(worst, float(np.max(np.abs(fx - rows["fx"].to_numpy()))),
                     float(np.max(np.abs(fy - rows["fy"].to_numpy()))))
     return worst
-
-
-def label_of(path):
-    """A short name for a run file: 'fw_brake', or 'linear/fw_brake' for a snapshot."""
-    path = Path(path).resolve()
-    try:
-        parts = path.relative_to(SNAPSHOTS).parts
-        return f"{parts[0]}/{path.stem}"
-    except ValueError:
-        return path.stem
