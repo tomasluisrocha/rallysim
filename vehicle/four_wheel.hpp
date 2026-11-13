@@ -159,7 +159,8 @@ namespace rallysim
         const Real body = 1 / (1 / ms + r.y * r.y / p.chassis.inertia.x + r.x * r.x / p.chassis.inertia.y);
         const Real reduced = mu * body / (mu + body);
         corner_step_terms t;
-        t.a = (c.spring_rate + std::max(c.bump_stop_rate, c.stop_rate)) / reduced + c.tyre_rate / mu;
+        // in roll each wheel sees twice the anti-roll bar's rate
+        t.a = (c.spring_rate + 2 * c.antiroll_rate + std::max(c.bump_stop_rate, c.stop_rate)) / reduced + c.tyre_rate / mu;
         t.b = 2 * (std::max(Real(1), c.rebound_ratio) * c.damper_rate / reduced + c.tyre_damping / mu);
         return t;
     }

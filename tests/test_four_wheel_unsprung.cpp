@@ -559,6 +559,12 @@ int main()
         check_near("step number: front tyre damping 2000 adds 2 dt ct / mu", corner_step_number(t, FL, 0.001) - f1, 0.1, 1e-9);
         check_true("step number: front tyre damping leaves the rear unchanged", corner_step_number(t, RL, 0.001) == r1);
 
+        // a front bar of 20000 N/m: in roll each wheel sees 2 kb, so S grows by 2 kb dt^2 / mr (mr = 35.327354 kg)
+        four_wheel_params ab = p;
+        ab.front_corner.antiroll_rate = 20000;
+        check_near("step number: front bar 20000 adds 2 kb dt^2 / mr", corner_step_number(ab, FL, 0.001) - f1, 0.001132267, 1e-8);
+        check_true("step number: a front bar leaves the rear unchanged", corner_step_number(ab, RL, 0.001) == r1);
+
         four_wheel_params o4 = unsprung_car();
         for (corner_params *c : {&o4.front_corner, &o4.rear_corner})
         {

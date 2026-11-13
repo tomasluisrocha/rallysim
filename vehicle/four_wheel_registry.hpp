@@ -110,6 +110,8 @@ namespace rallysim
             PARAM_IF("bump_stop_rate_rear", "N/m", rear_corner.bump_stop_rate, param_use::unsprung, param_range::positive),
             PARAM_IF("droop_stop_rate_front", "N/m", front_corner.stop_rate, param_use::unsprung, param_range::positive),
             PARAM_IF("droop_stop_rate_rear", "N/m", rear_corner.stop_rate, param_use::unsprung, param_range::positive),
+            PARAM_IF("antiroll_front", "N/m", front_corner.antiroll_rate, param_use::unsprung, param_range::non_negative),
+            PARAM_IF("antiroll_rear", "N/m", rear_corner.antiroll_rate, param_use::unsprung, param_range::non_negative),
             // drive and brakes
             PARAM("max_drive_torque", "N m", drive_brake.max_drive_torque, param_range::non_negative),
             PARAM("max_drive_power", "W", drive_brake.max_drive_power, param_range::positive),

@@ -121,6 +121,18 @@ int main()
         check_true("car: unsprung settles with the spring and damper keys",
                    errors_of(kMinimal + "[car]\nvertical = unsprung\nspring_front = 40 kN/m\n").empty());
     }
+    {
+        const four_wheel_run bars = load(kMinimal + "[car]\nvertical = unsprung\nantiroll_front = 20 kN/m\nantiroll_rear = 10000\n");
+        check_near("car: anti-roll front", bars.params.front_corner.antiroll_rate, 20000, 0);
+        check_near("car: anti-roll rear", bars.params.rear_corner.antiroll_rate, 10000, 0);
+    }
+    check_one_error("unused: a front bar on the springs car", kMinimal + "[car]\nantiroll_front = 20000\n", "t.ini:4:",
+                    "antiroll_front: only used with vertical = unsprung");
+    check_one_error("unused: a rear bar on the springs car", kMinimal + "[car]\nantiroll_rear = 10000\n", "t.ini:4:",
+                    "antiroll_rear: only used with vertical = unsprung");
+    check_one_error("range: a negative bar", kMinimal + "[car]\nvertical = unsprung\nantiroll_front = -1\n", "t.ini:5:",
+                    "antiroll_front: must be 0 or more");
+    check_true("range: a bar of 0 loads", errors_of(kMinimal + "[car]\nvertical = unsprung\nantiroll_front = 0\n").empty());
     check_one_error("unused: a wheel mass on the springs car", kMinimal + "[car]\nunsprung_mass_front = 30\n", "t.ini:4:",
                     "unsprung_mass_front: only used with vertical = unsprung");
     check_one_error("unused: a tyre rate on the planar car", kMinimal + "[car]\nvertical = planar\ntyre_rate_rear = 2e5\n",

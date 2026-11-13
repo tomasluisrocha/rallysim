@@ -117,26 +117,27 @@ Every number `rallysim params` lists, in the unit it shows: `mass`, `lf`, `cg_he
 stiffness or a nominal load refits the tyres to the new loads.
 
 A number the car does not use is an error, because it would change nothing: the springs and dampers only with
-`vertical = springs` or `unsprung`, the wheel's `unsprung_mass_*`, `tyre_rate_*`, `tyre_damping_*`, `droop_*`, `rebound_ratio_*`, `bump_travel_*`, `bump_stop_length_*`, `bump_stop_rate_*` and `droop_stop_rate_*` only
+`vertical = springs` or `unsprung`, the wheel's `unsprung_mass_*`, `tyre_rate_*`, `tyre_damping_*`, `droop_*`, `rebound_ratio_*`, `bump_travel_*`, `bump_stop_length_*`, `bump_stop_rate_*`, `droop_stop_rate_*` and `antiroll_*` only
 with `vertical = unsprung` (whose four wheel masses must add up to less than `mass`), `front_transfer_share` only with `vertical = planar`, and a tyre's `peak_slip`, `sliding_slip`
 and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after the words below are read, wherever
 they are in the file; `rallysim params <scenario>` marks what a car does not use.
 
-An unsprung car is refused when a corner's step number reaches 2 at the run's `dt` (a light wheel, a stiff tyre or
-stop, or strong damping for the step); the message gives the largest `dt`. The number screens step stability only, not
-accuracy.
+An unsprung car is refused when a corner's step number reaches 2 at the run's `dt` (a light wheel, a stiff tyre, stop or
+anti-roll bar, or strong damping for the step); the message gives the largest `dt`. The number screens step
+stability only, not accuracy.
 
 `rebound_ratio_*` multiplies `damper_*` while the strut extends (1: the same in both directions). `bump_travel_*` is the
 compression past rest where the bump stop starts, and its stiffness rises to `bump_stop_rate_*` over
 `bump_stop_length_*`; `droop_stop_rate_*` is the droop stop's stiffness. The bump-stop defaults are placeholders that no
-shipped scenario reaches, not measured values for the car.
+shipped scenario reaches, not measured values for the car. `antiroll_*` is an anti-roll bar per axle: the force at
+each wheel per metre of difference in strut travel between the two wheels of the axle; 0 (the default) is no bar.
 
 A number outside its range is an error too; nothing is clamped:
 
 | Range | Keys |
 |---|---|
 | above 0 | `mass`, `inertia_x/y/z`, `lf`, `lr`, `track_front/rear`, `cg_height`, `max_steer`, `wheel_radius`, `wheel_inertia`, `fz0_*`, `cx_*`, `calpha_*`, `relaxation_*`, `spring_*`, `unsprung_mass_*`, `tyre_rate_*`, `droop_*`, `rebound_ratio_*`, `bump_travel_*`, `bump_stop_length_*`, `bump_stop_rate_*`, `droop_stop_rate_*`, `sliding_slip_*`, `max_drive_power` |
-| 0 or more | `mu_*`, `k_*`, `damper_*`, `tyre_damping_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
+| 0 or more | `mu_*`, `k_*`, `damper_*`, `tyre_damping_*`, `antiroll_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
 | 0 to 1 | `front_transfer_share`, `drive_split_front`, `brake_bias_front`, `sliding_ratio_*` |
 | 1.5 to 3 | `peak_slip_*` |
 
