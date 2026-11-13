@@ -221,8 +221,16 @@ int main()
         const four_wheel_input in{0.05, 0.2, 0.1, 0.3};
         const energy_books books(s, p); // no work done yet: the residual is zero
         const std::vector<Real> row = four_wheel_row(7, dt, s, p, in, books);
-        check_true("telemetry: 26 + 4 x 16 + 11 energy columns, units and values",
-                   names.size() == 101 && units.size() == 101 && row.size() == 101);
+        check_true("telemetry: 26 + 4 x 16 + 11 energy + 4 anti-roll columns, units and values",
+                   names.size() == 105 && units.size() == 105 && row.size() == 105);
+        check_true("telemetry: the energy block still ends at column 101", names[100] == "energy.residual");
+        const char *arb[4] = {"wheel.FL.arbF", "wheel.FR.arbF", "wheel.RL.arbF", "wheel.RR.arbF"};
+        for (int k = 0; k < 4; ++k)
+        {
+            check_true("telemetry: the anti-roll columns come last, in wheel order", names[101 + k] == arb[k]);
+            check_true("telemetry: the anti-roll columns are in N", units[101 + k] == "N");
+            check_column(names, row, arb[k], 0.0);
+        }
         for (std::size_t i = 0; i < names.size(); ++i)
             for (std::size_t j = i + 1; j < names.size(); ++j)
                 check_true("telemetry: column names are unique", names[i] != names[j]);

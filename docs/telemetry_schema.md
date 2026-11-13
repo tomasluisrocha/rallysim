@@ -140,7 +140,8 @@ so moving load between the two wheels of an axle lowers the axle's grip. `axle.f
 `axle.front.grip`; `axle.rear.Fy` by what `axle.rear.Fx` leaves of `axle.rear.grip` (friction circle).
 
 Schema 6 inserted `tyreDefl`, `wheelZ` and `stopF` after `damperF` in each wheel's block, and line 1 of the four-wheel
-files gained `vertical`.
+files gained `vertical`. The four `arbF` columns were later appended after `energy.residual`, so the schema number
+did not change.
 
 Schema 5 inserted `net.Fx`, `net.Fy` and `yaw_moment` after `a_lat`, and `grip` after `Fy` in each wheel's block,
 and line 1 of the four-wheel files lists every parameter.
@@ -201,6 +202,10 @@ the pedals replace `drive_force`.
 | 59-74 | `wheel.RL.*` | | Rear-left wheel |
 | 75-90 | `wheel.RR.*` | | Rear-right wheel |
 | 91-101 | `energy.*`, `work.*` | J | The energy books, below |
+| 102 | `wheel.FL.arbF` | N | Anti-roll bar force at the front-left corner: positive pushes the body up; the two wheels of an axle carry opposite values; 0 except in the unsprung model with a bar |
+| 103 | `wheel.FR.arbF` | N | Front right |
+| 104 | `wheel.RL.arbF` | N | Rear left |
+| 105 | `wheel.RR.arbF` | N | Rear right |
 
 Columns 13-18 are the six ISO vehicle velocities (`body_velocity`), in the body's axes, so they tilt with the body;
 the position, the angles and `vel.z` are in the world frame. So a rate is its angle's slope only while the car is

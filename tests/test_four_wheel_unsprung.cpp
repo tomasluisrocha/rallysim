@@ -530,6 +530,40 @@ int main()
         }
     }
 
+    // the anti-roll force columns: the bar rate times the compression difference, opposite on an axle, negative at
+    // the front left in a left turn; zero without a bar
+    {
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        four_wheel_params p = unsprung_car();
+        p.front_corner.antiroll_rate = 20000;
+        p.rear_corner.antiroll_rate = 10000;
+        four_wheel_run r;
+        r.params = p;
+        r.initial = four_wheel_initial(p, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{0.0277, 0.0, 0.0, 0.0}}};
+        r.steps = 2000;
+        const four_wheel_state s = run(r);
+        const std::vector<Real> row = four_wheel_row(r.steps, r.dt, s, p, driver_input(r, s, r.steps * r.dt),
+                                                     energy_books(s, p));
+        auto col = [&](const char *name) { return row[static_cast<std::size_t>(index_of(names, name))]; };
+        const Real front = 20000 * (col("wheel.FL.deflection") - col("wheel.FR.deflection"));
+        const Real rear = 10000 * (col("wheel.RL.deflection") - col("wheel.RR.deflection"));
+        check_near("anti-roll column: FL", col("wheel.FL.arbF"), front, 1e-9);
+        check_near("anti-roll column: FR is the opposite", col("wheel.FR.arbF"), -front, 1e-9);
+        check_near("anti-roll column: RL", col("wheel.RL.arbF"), rear, 1e-9);
+        check_near("anti-roll column: RR is the opposite", col("wheel.RR.arbF"), -rear, 1e-9);
+        check_true("anti-roll column: FL is negative in a left turn", col("wheel.FL.arbF") < 0);
+        check_true("anti-roll column: the force is not zero", std::fabs(front) > 1.0 && std::fabs(rear) > 1.0);
+
+        four_wheel_params o;
+        o.vertical = vertical_model::springs;
+        const four_wheel_state so = four_wheel_initial(o, 10.0);
+        const std::vector<Real> ro = four_wheel_row(0, dt, so, o, none, energy_books(so, o));
+        for (const char *name : {"wheel.FL.arbF", "wheel.FR.arbF", "wheel.RL.arbF", "wheel.RR.arbF"})
+            check_column(names, ro, name, 0.0);
+    }
+
     // the step number against hand values (default car, 1 ms and 2 ms), then each term on its own
     {
         const four_wheel_params p = unsprung_car();

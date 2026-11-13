@@ -37,9 +37,18 @@ namespace rallysim
         return c;
     }
 
+    // The anti-roll bar's force at each corner, after the energy books, in wheel order. N.
+    inline std::vector<telemetry_column> antiroll_columns()
+    {
+        std::vector<telemetry_column> c;
+        for (std::size_t i = 0; i < kWheels; ++i)
+            c.push_back({std::string("wheel.") + wheel_label(i) + ".arbF", "N"});
+        return c;
+    }
+
     // The body columns come in groups: time, the driver's inputs, where the car is (world position, then roll, pitch
     // and yaw), how it moves (body_velocity's u, v, w, p, q, r, in that order), then values worked out from those and
-    // from the tyre forces. Then each wheel's block and the energy books.
+    // from the tyre forces. Then each wheel's block, the energy books and the anti-roll forces.
     inline std::vector<telemetry_column> four_wheel_columns()
     {
         std::vector<telemetry_column> c{{"step", "count"}, {"time", "s"},
@@ -56,6 +65,8 @@ namespace rallysim
                 c.push_back({std::string("wheel.") + wheel_label(i) + "." + f.name, f.unit});
         for (const telemetry_column &e : energy_columns())
             c.push_back(e);
+        for (const telemetry_column &a : antiroll_columns())
+            c.push_back(a);
         return c;
     }
 
@@ -161,6 +172,8 @@ namespace rallysim
         const energy_work &w = books.work();
         row.insert(row.end(), {e.translation, e.rotation, e.gravity, e.springs, e.wheels, e.total(), w.drive, w.brake,
                                w.damper, w.tyre, books.residual(e)});
+        for (std::size_t i = 0; i < kWheels; ++i)
+            row.push_back(f.corner[i].antiroll);
         return row;
     }
 }
