@@ -91,6 +91,25 @@ flight. It prints the peak load of each tyre and:
 Overshoot and settling are measured against the window's end, so a window shorter than the body's bounce
 misreads them. Use one long enough for the body to come back down.
 
+### stepsize
+
+```
+rallysim scenarios/fw_lane.ini out/scratch/a.csv
+rallysim scenarios/fw_lane.ini out/scratch/b.csv --set run.dt=0.5ms
+rallysim scenarios/fw_lane.ini out/scratch/c.csv --set run.dt=0.25ms
+python tools/rally.py stepsize out/scratch/a.csv out/scratch/b.csv out/scratch/c.csv
+```
+
+Compares one scenario run at dt, dt/2 and dt/4, in that order (the steps are read from line 1 and must halve
+exactly). For each column, d1 is the largest difference between the first two runs, d2 between the last two, and
+the ratio is d2 / d1: 0.5 means first order, 0.25 second order. A column reads "equal" when both differences are
+within 1e-9, "converging" when the ratio is 0.6 or less, and "not converging" otherwise (also for a NaN in one
+run). Those columns are listed first; `--all` lists the rest. Exit 0 when no column is "not converging", 1
+otherwise, 2 on an error.
+
+A run with an event whose instant moves with the step (a wheel locking) can read "not converging" on a correct
+model: compare such runs against a much finer step instead.
+
 ## Tests
 
 ```

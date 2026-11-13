@@ -9,6 +9,7 @@ from .compare import Tolerance, diff
 from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
+from .stepsize import report as stepsize_report, text as stepsize_text
 from .suspension import table as suspension_table
 
 
@@ -74,6 +75,13 @@ def main(argv=None):
     command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
     command.add_argument("--window", type=float, default=2.0, metavar="S",
                          help="seconds after touchdown to measure over (default 2)")
+    command = subparsers.add_parser("stepsize", help="compare one scenario run at dt, dt/2 and dt/4",
+                                    description="Compare runs of one scenario at dt, dt/2 and dt/4. Exit 0 when "
+                                                "no column is not converging, 1 otherwise, 2 on an error.")
+    command.add_argument("a", metavar="A", help="run at dt (CSV)")
+    command.add_argument("b", metavar="B", help="run at dt/2 (CSV)")
+    command.add_argument("c", metavar="C", help="run at dt/4 (CSV)")
+    command.add_argument("--all", action="store_true", help="also list the converging and equal columns")
     command = subparsers.add_parser("suspension", help="table and chart of body motion and suspension travel",
                                     description="Print a table of the body's motion and the suspension, "
                                                 "and optionally draw the twelve-panel chart.")
@@ -97,6 +105,12 @@ def main(argv=None):
             for path in args.runs:
                 print(landing_text(load(path), args.window))
             return 0
+        if args.command == "stepsize":
+            rows = stepsize_report(load(args.a), load(args.b), load(args.c))
+            for label, path in (("A", args.a), ("B", args.b), ("C", args.c)):
+                print(f"{label}: {Path(path)}")
+            print(stepsize_text(rows, args.all))
+            return 1 if any(row.verdict == "not converging" for row in rows) else 0
         if args.command == "suspension":
             runs = [load(path) for path in args.runs]
             print(suspension_table(runs, args.start, args.end))
