@@ -106,6 +106,35 @@ int main()
         check_near("anti-roll: no-bar wrench torque", four_wheel_wrench(s, p, no_bar).torque.x, 750, 1e-6);
     }
 
+    // the bar's stored energy is the integral of its force: the slope of the springs energy with a wheel's height
+    // is that wheel's bar force (the same car without bars is the reference), a slack strut included.
+    {
+        four_wheel_params bars = unsprung_car();
+        bars.front_corner.antiroll_rate = 20000;
+        bars.rear_corner.antiroll_rate = 10000;
+        four_wheel_params plain = bars;
+        plain.front_corner.antiroll_rate = plain.rear_corner.antiroll_rate = 0;
+        four_wheel_state s = four_wheel_initial(bars, 0.0);
+        s.corners[FL].z += 0.013;
+        s.corners[RR].z -= 0.07; // past its static compression: the RR strut is slack
+        const four_wheel_forces f = evaluate(s, bars, none);
+        auto stored = [&](const four_wheel_state &q)
+        { return energy_of(q, bars).springs - energy_of(q, plain).springs; };
+        const Real h = 1e-6;
+        Real slope[kWheels];
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            four_wheel_state up = s, down = s;
+            up.corners[i].z += h;
+            down.corners[i].z -= h;
+            slope[i] = (stored(up) - stored(down)) / (2 * h);
+            check_near("anti-roll energy: slope is the force", slope[i], f.corner[i].antiroll, 1e-3);
+        }
+        std::printf("anti-roll energy slopes: %.4f %.4f %.4f %.4f N\n", slope[FL], slope[FR], slope[RL], slope[RR]);
+        check_near("anti-roll energy: FL slope", slope[FL], 260, 1e-3);
+        check_near("anti-roll energy: RL slope", slope[RL], 700, 1e-3);
+    }
+
     // a car with its CG midway between the axles, moving only up and down, is four quarter-cars: the body's
     // quarter of the sprung mass (260 kg) on a 40 kg wheel, the standalone model's defaults. Body lifted 10 mm,
     // then wheels lifted 5 mm: the car's body and wheels must follow vehicle/quarter_car.hpp stepped alongside.

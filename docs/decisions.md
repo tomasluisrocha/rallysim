@@ -145,8 +145,10 @@ What the tests establish, within the model's own assumptions:
   series;
 - with anti-roll bars, the steady roll is within 1.5% of the closed form and
   the front share of the lateral load transfer within 0.002 of the share set
-  by the axles' roll stiffnesses (spring, bar and tyre), and the bars change
-  nothing in heave or pitch;
+  by the axles' roll stiffnesses (spring, bar and tyre; that is the share of
+  the transfer moment, equal to the share of the transfer when the two tracks
+  are equal, as on the tested car), and the bars change nothing in heave or
+  pitch;
 - a light wheel on a stiff tyre (2 kg on 5 MN/m) reproduces the `springs`
   model to within millimetres, run at a 0.1 ms step (such a stiff corner
   needs a small step);

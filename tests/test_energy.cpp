@@ -295,6 +295,33 @@ int main()
         check_halves("lift, droop stop engaged", r);
     }
 
+    // the bar on a lifted wheel: its force follows the strut compressions, negative ones included, so it still
+    // acts (and its energy still counts) while the inner front wheel hangs off the ground with a slack strut
+    {
+        four_wheel_run r = lift_run();
+        r.params.front_corner.antiroll_rate = 20000;
+        four_wheel_state s = r.initial;
+        long slack = 0;
+        Real smallest = 1e9;
+        for (long i = 0; i < r.steps; ++i)
+        {
+            const four_wheel_forces f = evaluate(s, r.params, driver_input(r, s, i * r.dt));
+            if (f.fz[FL] == 0 && f.corner[FL].deflection < 0)
+            {
+                ++slack;
+                smallest = std::min(smallest, f.corner[FL].deflection);
+                check_near("lift, bar: force from the strut compressions", f.corner[FL].antiroll,
+                           20000 * (f.corner[FL].deflection - f.corner[FR].deflection), 1e-9);
+            }
+            step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+        }
+        std::printf("lift, bar: FL off the ground with a slack strut for %ld steps, deflection down to %.4f m\n",
+                    slack, smallest);
+        check_true("lift, bar: over 1000 steps off the ground with a slack strut", slack > 1000);
+        check_run("lift, anti-roll bar", r, 0.005);
+        check_halves("lift, anti-roll bar", r);
+    }
+
     // tyre damping: a landing from 0.2 m (tyre compression speeds of metres per second) with a nonzero coefficient.
     // The dampers' book takes more out than with none, and the residual still obeys the bound and halves with dt.
     {

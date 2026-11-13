@@ -248,7 +248,7 @@ work columns add up every step before it, from the start of the run:
 | `energy.translation` | Body: ½ m \|v\|². Unsprung model: ½ m (vx² + vy²) + ½ m_s vz² + each wheel's ½ m_u vz² |
 | `energy.rotation` | Body: ½ (Ix ωx² + Iy ωy² + Iz ωz²), body frame |
 | `energy.gravity` | Body: m g z (springs model; 0 in the planar model, which cancels gravity). Unsprung model: m_s g (height of the sprung body's CG) + each wheel's m_u g z |
-| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model). Unsprung model: the strut spring, the tyre spring (while on the ground), the droop stop and the bump stop (each while engaged) |
+| `energy.springs` | Corner springs: ½ k x² for each compressed one (springs model). Unsprung model: the strut spring, the tyre spring (while on the ground), the droop stop and the bump stop (each while engaged), and each axle's anti-roll bar, ½ kb (x_L − x_R)² |
 | `energy.wheels` | Wheel spin: ½ I ω² for each wheel |
 | `energy.total` | The sum of the five above |
 | `work.drive` | Put in by the drive: drive torque × spin |
