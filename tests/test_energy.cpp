@@ -265,7 +265,7 @@ int main()
     }
 
     // The shipped unsprung scenarios with bars: the force must be the derivative of the stored bar energy.
-    for (const char *name : {"fw_lane", "fw_circle"})
+    for (const char *name : {"fw_lane", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_brake", "fw_launch"})
     {
         four_wheel_run r = four_wheel_scenario(name);
         r.params.vertical = vertical_model::unsprung;
@@ -273,8 +273,7 @@ int main()
         r.params.rear_corner.antiroll_rate = 10000;
         r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
         check_run((std::string(name) + ", unsprung, anti-roll").c_str(), r, 0.005);
-        if (std::string(name) == "fw_lane")
-            check_halves("fw_lane, unsprung, anti-roll", r);
+        check_halves((std::string(name) + ", unsprung, anti-roll").c_str(), r);
     }
 
     // the droop stop: the lifted inner front wheel hangs on it for seconds, so its energy is in the books

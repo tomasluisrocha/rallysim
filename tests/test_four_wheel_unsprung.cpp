@@ -288,6 +288,70 @@ int main()
         check_true("reduction: the roll is 0 to 3% more than the springs model's", roll_u > roll_s && roll_u < 1.03 * roll_s);
     }
 
+    // the bars on scenarios loaded from a file, from the scenario's own car
+    {
+        four_wheel_params plain = four_wheel_scenario("fw_circle").params;
+        plain.vertical = vertical_model::unsprung;
+        four_wheel_params barred = plain;
+        barred.front_corner.antiroll_rate = 20000;
+        barred.rear_corner.antiroll_rate = 10000;
+        const Real speed = four_wheel_scenario("fw_circle").initial.body.vel.x;
+
+        // final roll and the front share of the load transfer
+        auto end_of = [&](const four_wheel_params &car, Real &roll, Real &share) {
+            const four_wheel_run r = in_mode("fw_circle", car, speed, four_wheel_scenario("fw_circle").dt);
+            const four_wheel_state s = run(r);
+            const four_wheel_forces f = evaluate(s, car, driver_input(r, s, r.steps * r.dt));
+            const Real tf = (f.fz[FR] - f.fz[FL]) / 2, tr = (f.fz[RR] - f.fz[RL]) / 2;
+            roll = roll_angle(s.body.q);
+            share = tf / (tf + tr);
+        };
+        Real roll_b, share_b, roll_p, share_p;
+        end_of(barred, roll_b, share_b);
+        end_of(plain, roll_p, share_p);
+        std::printf("fw_circle bars: roll %.6f rad, front share %.5f; without %.6f, %.5f\n", roll_b, share_b, roll_p, share_p);
+        check_near("bars on fw_circle: the final roll", roll_b, 0.013128, 0.02 * 0.013128);
+        check_near("bars on fw_circle: the front share of the load transfer", share_b, 0.54753, 0.002);
+        check_near("no bars on fw_circle: the final roll", roll_p, 0.019379, 0.02 * 0.019379);
+        check_near("no bars on fw_circle: the load transfer is shared evenly", share_p, 0.5, 0.002);
+
+        // largest |roll| over fw_lane
+        const Real lane_speed = four_wheel_scenario("fw_lane").initial.body.vel.x;
+        auto lane_peak = [&](const four_wheel_params &car) {
+            const four_wheel_run r = in_mode("fw_lane", car, lane_speed, four_wheel_scenario("fw_lane").dt);
+            four_wheel_state s = r.initial;
+            Real most = 0;
+            for (long i = 0; i < r.steps; ++i)
+            {
+                step(s, r.params, driver_input(r, s, i * r.dt), r.dt);
+                most = std::max(most, std::fabs(roll_angle(s.body.q)));
+            }
+            return most;
+        };
+        four_wheel_params lane_plain = four_wheel_scenario("fw_lane").params;
+        lane_plain.vertical = vertical_model::unsprung;
+        four_wheel_params lane_bars = lane_plain;
+        lane_bars.front_corner.antiroll_rate = 20000;
+        lane_bars.rear_corner.antiroll_rate = 10000;
+        const Real peak_p = lane_peak(lane_plain), peak_b = lane_peak(lane_bars);
+        std::printf("fw_lane bars: largest |roll| %.5f rad against %.5f without (ratio %.3f)\n", peak_b, peak_p, peak_b / peak_p);
+        check_true("bars on fw_lane: the largest roll is 0.60 to 0.76 of the one without",
+                   peak_b > 0.60 * peak_p && peak_b < 0.76 * peak_p);
+
+        // a very stiff front bar
+        four_wheel_params stiff = lane_plain;
+        stiff.front_corner.antiroll_rate = 2e6;
+        const Real number = corner_step_number(stiff, FL, 0.001);
+        const four_wheel_state coarse = run(in_mode("fw_lane", stiff, lane_speed, 0.001));
+        const four_wheel_state fine = run(in_mode("fw_lane", stiff, lane_speed, 0.0001));
+        const Real apart = std::hypot(coarse.body.pos.x - fine.body.pos.x, coarse.body.pos.y - fine.body.pos.y);
+        const Real z_apart = std::fabs(coarse.body.pos.z - fine.body.pos.z);
+        std::printf("stiff front bar on fw_lane: step number %.4f; 1 ms and 0.1 ms end %.3g m apart (height %.3g m)\n", number,
+                    apart, z_apart);
+        check_near("stiff bar: the front step number at 1 ms", number, 0.3502, 0.001);
+        check_true("stiff bar: the run at 1 ms ends within 1 mm of the run at 0.1 ms", apart < 1e-3 && z_apart < 1e-3);
+    }
+
     // a free drop does not reach the droop stop: body and wheel fall together
     {
         const four_wheel_params p = unsprung_car();
