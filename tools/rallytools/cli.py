@@ -6,11 +6,13 @@ from pathlib import Path
 import sys
 
 from .compare import Tolerance, diff
+from .paths import RIG, TYRES
 from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
 from .stepsize import report as stepsize_report, text as stepsize_text
 from .suspension import table as suspension_table
+from .tyre import check_against_rig, tyre_from_meta
 
 
 def _rules(values):
@@ -49,6 +51,35 @@ def _print_result(path_a, path_b, result, show_all):
         print("column\tlargest\tt_largest\tt_first")
     for column in columns:
         print(f"{column.name}\t{column.largest!r}\t{column.t_largest!r}\t{column.t_first!r}")
+
+
+def _tyre_points(args):
+    from .charts.tyre_points import figure
+    run = load(args.run)
+    if run.kind == "four_wheel":
+        missing = tyre_from_meta(run.meta, "front")["missing"]
+        if missing:
+            print(f"note: {args.run} has no tyre keys on line 1 ({', '.join(missing)}); using the defaults",
+                  file=sys.stderr)
+        error = check_against_rig(RIG / "tyre_rig.csv")
+        if error is not None and error > 1.0:
+            print(f"warning: rallytools/tyre.py differs from the C++ rig by up to {error:.1f} N; update it",
+                  file=sys.stderr)
+    if args.save is not None:
+        import matplotlib
+        matplotlib.use("Agg")
+    if args.save is None:
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        import matplotlib.pyplot as plt
+        figure(run, args.min_speed, fig=plt.figure())
+        plt.show()
+        return 0
+    chart = figure(run, args.min_speed)
+    output = Path(args.save) if args.save else TYRES / f"{Path(args.run).stem}.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    chart.savefig(output, dpi=110)
+    print(f"wrote {output}")
+    return 0
 
 
 def main(argv=None):
@@ -94,8 +125,18 @@ def main(argv=None):
     command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     command.add_argument("--events", action="store_true",
                          help="mark the first run's events and landings on the chart (needs --save or --show)")
+    command = subparsers.add_parser("tyre-points", help="chart of a four-wheel run's tyres on their force curve",
+                                    description="Draw every tyre of a four-wheel run as a point on its force "
+                                                "curve. Without --save the chart is shown.")
+    command.add_argument("run", metavar="RUN", help="a four-wheel run (CSV)")
+    command.add_argument("--save", nargs="?", const="", metavar="PNG",
+                         help="write the chart (default name: out/plots/tyres/<run>.png)")
+    command.add_argument("--min-speed", type=float, default=1.0, metavar="M/S",
+                         help="leave out slower moments (default 1)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "tyre-points":
+            return _tyre_points(args)
         if args.command == "suspension" and args.events and args.save is None and not args.show:
             print("suspension: --events needs --save or --show", file=sys.stderr)
             return 2
