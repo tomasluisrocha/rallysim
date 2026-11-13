@@ -110,7 +110,11 @@ The four-wheel car finds its vertical loads in one of three ways, chosen with
   rebound rates (`rebound_ratio_*` times `damper_*`), a progressive bump stop
   and a droop stop that limits how far the wheel can hang. The tyre only
   pushes; the strut may also pull, through its damper and the droop stop. The
-  bump stop only pushes.
+  bump stop only pushes. An anti-roll bar per axle (`antiroll_*`, 0 by
+  default) puts equal and opposite forces on the axle's two wheels in
+  proportion to the difference of their strut travel. It resists roll and
+  moves lateral load transfer towards its axle, without changing heave or
+  pitch.
 
 All three are kept, so each can be compared with the one before it.
 
@@ -139,6 +143,10 @@ What the tests establish, within the model's own assumptions:
   are within 1% of their closed forms;
 - steady roll is within 3% of the closed form with the spring and tyre in
   series;
+- with anti-roll bars, the steady roll is within 1.5% of the closed form and
+  the front share of the lateral load transfer within 0.002 of the share set
+  by the axles' roll stiffnesses (spring, bar and tyre), and the bars change
+  nothing in heave or pitch;
 - a light wheel on a stiff tyre (2 kg on 5 MN/m) reproduces the `springs`
   model to within millimetres, run at a 0.1 ms step (such a stiff corner
   needs a small step);
