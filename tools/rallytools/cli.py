@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from .compare import Tolerance, diff
-from .paths import RIG, TYRES
+from .paths import COMPARE, RIG, TYRES
 from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
@@ -119,6 +119,30 @@ def _columns(args):
     return 0
 
 
+def _overlay(args):
+    from .charts.overlay import figure, table
+    runs = [load(path) for path in args.runs]
+    print(table(runs, args.channels, args.labels, paths=args.runs))
+    if args.save is None:
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        import matplotlib.pyplot as plt
+        figure(runs, args.channels, args.labels, fig=plt.figure())
+        plt.show()
+        return 0
+    import matplotlib
+    matplotlib.use("Agg")
+    chart = figure(runs, args.channels, args.labels)
+    if args.save:
+        output = Path(args.save)
+    else:
+        names = args.labels or [run.name for run in runs]
+        output = COMPARE / f"{runs[-1].name}__{'_vs_'.join(names)}.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    chart.savefig(output, dpi=100)
+    print(f"wrote {output}")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -189,8 +213,21 @@ def main(argv=None):
     command.add_argument("y", nargs="+", metavar="Y", help="one or more columns to plot")
     command.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
     command.add_argument("--wrapped", action="store_true", help="draw yaw as written, between -pi and pi")
+    command = subparsers.add_parser("overlay", help="overlay of two or more runs and each minus the first",
+                                    description="Draw the paths and chosen channels of the runs, and under each "
+                                                "channel every later run minus the first. Prints the largest "
+                                                "differences. Without --save the figure is shown.")
+    command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV), at least two")
+    command.add_argument("--channels", nargs="+", metavar="COL", help="channels to plot (default: by kind of run)")
+    command.add_argument("--labels", nargs="+", metavar="NAME", help="a name for each run")
+    command.add_argument("--save", nargs="?", const="", metavar="PNG",
+                         help="write the figure (default name: out/plots/compare/<run>__<A>_vs_<B>.png)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "overlay":
+            if len(args.runs) < 2:
+                parser.error("overlay needs at least two runs")
+            return _overlay(args)
         if args.command == "columns":
             return _columns(args)
         if args.command == "tyre-rig":
