@@ -100,6 +100,25 @@ def _tyre_rig(args):
     return 0
 
 
+def _columns(args):
+    from .charts.columns import figure
+    run = load(args.file)
+    if args.save is not None:
+        import matplotlib
+        matplotlib.use("Agg")
+        chart = figure(run, args.x, args.y, args.wrapped)
+        output = Path(args.save)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        chart.savefig(output, dpi=120, bbox_inches="tight")
+        print(f"wrote {output}")
+        return 0
+    # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+    import matplotlib.pyplot as plt
+    figure(run, args.x, args.y, args.wrapped, fig=plt.figure())
+    plt.show()
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -162,8 +181,18 @@ def main(argv=None):
     command.add_argument("--combined", metavar="NAME",
                          help="curve for the combined panels (default: the first --curve, else tmeasy)")
     command.add_argument("--save", metavar="PNG", help="save the chart to this file instead of showing it")
+    command = subparsers.add_parser("columns", help="chart of chosen columns of a run against one column",
+                                    description="Plot each Y column against X. Yaw is drawn unwrapped unless "
+                                                "--wrapped. Without --save the chart is shown.")
+    command.add_argument("file", metavar="FILE", help="telemetry CSV file")
+    command.add_argument("x", metavar="X", help="column for the x axis, e.g. time")
+    command.add_argument("y", nargs="+", metavar="Y", help="one or more columns to plot")
+    command.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
+    command.add_argument("--wrapped", action="store_true", help="draw yaw as written, between -pi and pi")
     args = parser.parse_args(argv)
     try:
+        if args.command == "columns":
+            return _columns(args)
         if args.command == "tyre-rig":
             return _tyre_rig(args)
         if args.command == "tyre-points":
