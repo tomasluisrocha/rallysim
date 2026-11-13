@@ -10,6 +10,8 @@ NAMES = {
     "transfer.front": "N",
     "transfer.rear": "N",
     "transfer.front_share": "-",
+    "antiroll.front": "N",
+    "antiroll.rear": "N",
     "load.total": "N",
     **{f"wheel.{wheel}.gripUse": "-" for wheel in WHEELS},
     "yaw.unwrapped": "rad",
@@ -30,6 +32,12 @@ def derived(run: Run, name: str) -> np.ndarray:
         return (run.column("wheel.FR.Fz") - run.column("wheel.FL.Fz")) / 2.0
     if name == "transfer.rear":
         return (run.column("wheel.RR.Fz") - run.column("wheel.RL.Fz")) / 2.0
+    if name == "antiroll.front":
+        left = run.column("wheel.FL.arbF")
+        return (run.column("wheel.FR.arbF") - left) / 2.0
+    if name == "antiroll.rear":
+        left = run.column("wheel.RL.arbF")
+        return (run.column("wheel.RR.arbF") - left) / 2.0
     if name == "transfer.front_share":
         front = derived(run, "transfer.front")
         total = front + derived(run, "transfer.rear")

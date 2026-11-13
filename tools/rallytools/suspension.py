@@ -49,6 +49,14 @@ def steady(run: Run, start=None, end=None) -> dict:
     deflection = np.concatenate(
         [run.column(f"wheel.{wheel}.deflection") for wheel in WHEELS]
     )
+    antiroll_front = antiroll_rear = antiroll_share = None
+    if all(run.has(f"wheel.{wheel}.arbF") for wheel in WHEELS):
+        antiroll_front = float(np.mean(derived(run, "antiroll.front")[selected]))
+        antiroll_rear = float(np.mean(derived(run, "antiroll.rear")[selected]))
+        if abs(transfer_front) < 1.0:
+            antiroll_share = np.nan
+        else:
+            antiroll_share = antiroll_front / transfer_front
     return {
         "roll_deg": float(np.degrees(mean_roll)),
         "a_lat": mean_a_lat,
@@ -56,6 +64,9 @@ def steady(run: Run, start=None, end=None) -> dict:
         "transfer_front": transfer_front,
         "transfer_rear": transfer_rear,
         "front_share": front_share,
+        "antiroll_front": antiroll_front,
+        "antiroll_rear": antiroll_rear,
+        "antiroll_share_front": antiroll_share,
         "is_steady": bool(is_steady),
         "max_abs_roll_deg": float(np.max(np.abs(np.degrees(roll)))),
         "min_fz": float(np.min(fz)),
@@ -71,6 +82,9 @@ _WINDOW = (
     "transfer_front",
     "transfer_rear",
     "front_share",
+    "antiroll_front",
+    "antiroll_rear",
+    "antiroll_share_front",
 )
 # Over the whole run: always shown.
 _WHOLE_RUN = (
@@ -88,6 +102,11 @@ def table(runs, start=None, end=None) -> str:
         values = []
         for metric in metrics:
             hidden = quantity in _WINDOW and not metric["is_steady"]
-            values.append("not steady" if hidden else str(metric[quantity]))
+            if hidden:
+                values.append("not steady")
+            elif metric[quantity] is None:
+                values.append("n/a")
+            else:
+                values.append(str(metric[quantity]))
         lines.append(quantity + "\t" + "\t".join(values))
     return "\n".join(lines)

@@ -78,6 +78,49 @@ class TestChannels(unittest.TestCase):
         self.assertEqual(float(lines["min_fz"]), 2000.0)
         self.assertEqual(float(lines["max_deflection"]), 0.1)
 
+    def arb_run(self):
+        return four(**{"wheel.FL.arbF": -400.0, "wheel.FR.arbF": 400.0,
+                       "wheel.RL.arbF": -100.0, "wheel.RR.arbF": 100.0})
+
+    def test_antiroll_force_and_share(self):
+        run = self.arb_run()
+        self.assertTrue(np.all(derived(run, "antiroll.front") == 400))
+        self.assertTrue(np.all(derived(run, "antiroll.rear") == 100))
+        got = steady(run)
+        self.assertAlmostEqual(got["antiroll_front"], 400.0, places=12)
+        self.assertAlmostEqual(got["antiroll_rear"], 100.0, places=12)
+        self.assertAlmostEqual(got["antiroll_share_front"], 0.4, places=12)
+
+    def test_antiroll_absent_columns(self):
+        run = four()
+        got = steady(run)
+        for key in ("antiroll_front", "antiroll_rear", "antiroll_share_front"):
+            self.assertIsNone(got[key])
+        lines = dict(line.split("	", 1) for line in table([run]).splitlines()[1:])
+        for key in ("antiroll_front", "antiroll_rear", "antiroll_share_front"):
+            self.assertEqual(lines[key], "n/a")
+        for key in ("roll_deg", "transfer_front", "front_share", "min_fz"):
+            float(lines[key])
+        with self.assertRaisesRegex(ValueError, r"wheel\.FL\.arbF"):
+            derived(run, "antiroll.front")
+
+    def test_antiroll_rows_order_and_small_transfer(self):
+        rows = [line.split("\t", 1)[0] for line in table([self.arb_run()]).splitlines()[1:]]
+        at = rows.index("front_share")
+        self.assertEqual(rows[at + 1:at + 4], ["antiroll_front", "antiroll_rear", "antiroll_share_front"])
+        # a front transfer under 1 N gives no share
+        run = self.arb_run()
+        run.data["wheel.FL.Fz"] = 2999.5
+        run.data["wheel.FR.Fz"] = 3000.5
+        self.assertTrue(np.isnan(steady(run)["antiroll_share_front"]))
+
+    def test_antiroll_unsteady_window(self):
+        run = self.arb_run()
+        run.data["roll"] = np.linspace(0.01, 0.02, 3)
+        lines = dict(line.split("	", 1) for line in table([run]).splitlines()[1:])
+        for key in ("antiroll_front", "antiroll_rear", "antiroll_share_front"):
+            self.assertEqual(lines[key], "not steady")
+
     def stepped(self):
         """3001 rows: one set of values before 2.0 s, the usual ones from 2.0 s on (the default window)."""
         early = np.arange(3001) < 2000
