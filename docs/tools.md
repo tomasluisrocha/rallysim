@@ -64,7 +64,8 @@ python tools/rally.py suspension out/runs/fw_circle.csv --save out/plots/suspens
 A table with one column per run, over the last 1 s of the run, or `--from S` to `--to S` (`--to` alone: the 1 s
 before it). The window means (roll, lateral acceleration, roll gradient, load transfer) read "not steady" when the
 window is not steady; the peak roll, the lowest tyre load and the largest suspension deflection are always shown.
-`--save PNG` also draws the twelve-panel chart without a window; `--show` opens it. Not both.
+`--save PNG` also draws the twelve-panel chart without a window; `--show` opens it. Not both. `--events` (with either)
+marks the first run's events and landings as vertical lines on the panels over time.
 
 ### landing
 

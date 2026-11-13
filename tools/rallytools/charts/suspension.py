@@ -5,8 +5,10 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from ..channels import derived
+from ..events import events, landings
 from ..run import Run, WHEELS
 from ..suspension import window
+from .marks import KINDS, mark
 
 
 def _shade(ax, run: Run, start, end) -> None:
@@ -16,9 +18,10 @@ def _shade(ax, run: Run, start, end) -> None:
         ax.axvspan(float(time[selected][0]), float(time[selected][-1]), color="0.85", zorder=0)
 
 
-def figure(runs, start=None, end=None, fig=None) -> Figure:
+def figure(runs, start=None, end=None, fig=None, marks=False) -> Figure:
     """Build the twelve-panel suspension chart without showing or saving it. Draws into fig when given
-    (an empty figure, such as one from pyplot for a window), else into a new Figure."""
+    (an empty figure, such as one from pyplot for a window), else into a new Figure. With marks, the first run's
+    events and landings are drawn as vertical lines on the panels over time (none without wheel_radius)."""
     runs = list(runs)
     if fig is None:
         fig = Figure(figsize=(15, 10))
@@ -83,6 +86,18 @@ def figure(runs, start=None, end=None, fig=None) -> Figure:
     left[2].set_ylabel("transfer (N)")
     left[3].set_xlabel("time (s)")
     left[3].set_ylabel("front share")
+
+    if marks and runs and "wheel_radius" in runs[0].meta:
+        times = {}
+        for event in events(runs[0]):
+            times.setdefault(event.kind, []).append(event.t_start)
+        touchdowns = [landing.t_touchdown for landing in landings(runs[0])]
+        if touchdowns:
+            times["touchdown"] = touchdowns
+        time_axes = [left[0], left[2], left[3]] + axes[4:]
+        for kind in KINDS:
+            if kind in times:
+                mark(time_axes, times[kind], KINDS[kind], label=kind)
     left[0].legend()
 
     for axis in axes[4:]:

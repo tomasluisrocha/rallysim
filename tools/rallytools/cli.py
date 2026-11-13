@@ -92,8 +92,13 @@ def main(argv=None):
                          help="end of the window in seconds (default: the end of the run)")
     command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
     command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
+    command.add_argument("--events", action="store_true",
+                         help="mark the first run's events and landings on the chart (needs --save or --show)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "suspension" and args.events and args.save is None and not args.show:
+            print("suspension: --events needs --save or --show", file=sys.stderr)
+            return 2
         if args.command == "suspension" and args.save is not None and args.show:
             print("suspension: --save and --show are mutually exclusive", file=sys.stderr)
             return 2
@@ -119,8 +124,11 @@ def main(argv=None):
                     import matplotlib
                     matplotlib.use("Agg")
                 from .charts.suspension import figure
+                if args.events and "wheel_radius" not in runs[0].meta:
+                    print(f"suspension: run '{runs[0].name}' has no wheel_radius on line 1; no marks drawn",
+                          file=sys.stderr)
                 if args.save is not None:
-                    chart = figure(runs, args.start, args.end)
+                    chart = figure(runs, args.start, args.end, marks=args.events)
                     output = Path(args.save)
                     output.parent.mkdir(parents=True, exist_ok=True)
                     chart.savefig(output, dpi=110)
@@ -128,7 +136,7 @@ def main(argv=None):
                 if args.show:
                     # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
                     import matplotlib.pyplot as plt
-                    figure(runs, args.start, args.end, fig=plt.figure())
+                    figure(runs, args.start, args.end, fig=plt.figure(), marks=args.events)
                     plt.show()
             return 0
         rules = _rules(args.tol)
