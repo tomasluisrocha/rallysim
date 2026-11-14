@@ -14,10 +14,10 @@ the CG; the whole run; the g-g diagram of the car's acceleration; the load on ea
 bars (the pedals upright, the steer across); sideslip, yaw rate and speed over time.
 
 Usage:
-  py tools/topdown.py out/runs/fw_handbrake.csv                dashboard: play, pause, scrub
-  py tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png one dashboard frame
-  py tools/topdown.py out/runs/fw_handbrake.csv --static --save out/plots/views/fw_handbrake.png the path with snapshots
-  py tools/topdown.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake.gif --start 2 --end 5 the dashboard as a GIF
+  python tools/topdown.py out/runs/fw_handbrake.csv                dashboard: play, pause, scrub
+  python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png one dashboard frame
+  python tools/topdown.py out/runs/fw_handbrake.csv --static --save out/plots/views/fw_handbrake.png the path with snapshots
+  python tools/topdown.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake.gif --start 2 --end 5 the dashboard as a GIF
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed x2 / /2, home/end.
 """

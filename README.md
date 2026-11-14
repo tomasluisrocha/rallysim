@@ -57,7 +57,8 @@ python tools/topdown.py out/runs/fw_hairpin.csv     the interactive dashboard
 `python tools/run_all.py --gif` also makes the animated dashboards and 3D views.
 Output is written under `out/`, which is ignored by git.
 
-`python tools/rally.py --help` lists the analysis commands (diff, setup, suspension, landing), described in
+`python tools/rally.py --help` lists the analysis and chart commands (diff, setup, suspension, landing, stepsize,
+handling, energy, characteristics, columns, overlay, sweep, path, tyre-points, tyre-rig, run-all), described in
 [`docs/tools.md`](docs/tools.md#rallypy).
 
 ## A few outputs

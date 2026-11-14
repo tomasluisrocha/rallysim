@@ -1,10 +1,10 @@
 """Compare two runs: the paths side by side, chosen channels overlaid, and their difference underneath.
 
 Usage:
-  py tools/compare.py out/snapshots/linear/runs/fw_brake.csv out/runs/fw_brake.csv          two files
-  py tools/compare.py A.csv B.csv speed beta wheel.FL.slipRatio                             pick the channels
-  py tools/compare.py --against linear fw_brake fw_launch --save                            a snapshot vs out/runs
-  py tools/compare.py --against linear --all --save                                         every run in both
+  python tools/compare.py out/snapshots/linear/runs/fw_brake.csv out/runs/fw_brake.csv          two files
+  python tools/compare.py A.csv B.csv speed beta wheel.FL.slipRatio                             pick the channels
+  python tools/compare.py --against linear fw_brake fw_launch --save                            a snapshot vs out/runs
+  python tools/compare.py --against linear --all --save                                         every run in both
 
 A is drawn dashed, B solid; the small plot under each channel is B - A. B is interpolated onto A's times, over the
 time both runs cover. It also prints, for each channel, the largest difference and both final values, and the
@@ -44,7 +44,7 @@ def main():
     if args.against:
         base = SNAPSHOTS / args.against / "runs"
         if not base.is_dir():
-            sys.exit(f"no snapshot {base}; make one with: py tools/run_all.py --snapshot {args.against}")
+            sys.exit(f"no snapshot {base}; make one with: python tools/run_all.py --snapshot {args.against}")
         names = sorted(p.stem for p in base.glob("*.csv") if (RUNS / p.name).exists()) if args.all else args.items
         if not names:
             sys.exit("name the runs to compare, or pass --all")

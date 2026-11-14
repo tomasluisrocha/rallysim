@@ -15,14 +15,24 @@ python -m pip install -r tools/requirements.txt
 
 ```
 cmake --build build --config Release      # build rallysim first; the tools only run what is built
-python tools/run_all.py                   # every scenario + the tyre rig, and all the pictures (about 10 s)
+python tools/run_all.py                   # every scenario + the tyre rig, and all the pictures (about 20 s)
 python tools/topdown.py out/runs/fw_handbrake.csv
 ```
 
 ## rally.py
 
-Numbers rather than pictures: four commands that read runs from `out/runs/`. `python tools/rally.py --help` lists
-them; each has `--help`. Run `rallysim <scenario>` (or `run_all.py`) first.
+One entry point for the analysis and the charts: `diff`, `setup`, `suspension`, `landing`, `stepsize`, `handling`,
+`energy`, `characteristics`, `columns`, `overlay`, `sweep`, `path`, `tyre-points`, `tyre-rig` and `run-all`.
+`python tools/rally.py --help` lists them; each has `--help`. Run `rallysim <scenario>` (or `run_all.py`) first.
+The older scripts still work as short forms of some of them:
+
+| Short form | Same as |
+|---|---|
+| `python tools/plot_run.py` | `python tools/rally.py columns` |
+| `python tools/run_all.py` | `python tools/rally.py run-all` |
+| `python tools/sweep.py` | `python tools/rally.py sweep` |
+| `python tools/tyre_plot.py` | `python tools/rally.py tyre-rig` |
+| `python tools/tyre_points.py` | `python tools/rally.py tyre-points` |
 
 ### diff
 
@@ -110,12 +120,12 @@ stored against net work with the residual); `--show` opens it. Not both.
 
 ```
 python tools/rally.py landing out/runs/fw_showcase.csv
-python tools/rally.py landing out/runs/fw_showcase.csv --window 4
+python tools/rally.py landing out/runs/fw_showcase.csv --window 2
 rallysim fw_showcase --set vertical=unsprung      # with wheel mass and stops: margins are shown
 python tools/rally.py landing out/runs/fw_showcase.csv
 ```
 
-A landing starts when all four tyre loads have been zero (the car in the air) and the first one comes back: the
+The first two lines are the same: 2 s is the default, and on `fw_showcase` it shows one rebound. A landing starts when all four tyre loads have been zero (the car in the air) and the first one comes back: the
 touchdown. Each landing is measured over a window of 2 s after touchdown (`--window S`), cut short at the next
 flight. It prints the peak load of each tyre and:
 
@@ -150,6 +160,88 @@ otherwise, 2 on an error.
 A run with an event whose instant moves with the step (a wheel locking) can read "not converging" on a correct
 model: compare such runs against a much finer step instead.
 
+### columns
+
+```
+python tools/rally.py columns out/runs/st_circle.csv time speed yaw_rate
+python tools/rally.py columns out/runs/fw_brake.csv time speed pitch --save out/plots/columns.png
+python tools/rally.py columns out/runs/fw_circle.csv time yaw --wrapped
+```
+
+Any columns of a run against any other: the first name is the x axis, the rest are drawn one panel each. `yaw` is
+drawn unwrapped, or as written with `--wrapped` (see [below](#wrapped-and-unwrapped-yaw)). `--save PNG` writes the
+chart; without it the chart opens in a window. Same as `plot_run.py`.
+
+### overlay
+
+```
+python tools/rally.py overlay out/runs/fw_brake.csv out/runs/fw_launch.csv
+python tools/rally.py overlay out/runs/fw_brake.csv out/runs/fw_launch.csv --channels speed pitch --labels brake launch
+python tools/rally.py overlay out/runs/fw_brake.csv out/runs/fw_launch.csv --save
+```
+
+Two or more runs: the paths side by side and each channel overlaid, with every later run minus the first underneath.
+It prints each channel's largest difference, the line-1 facts that differ and both final values.
+`--channels` picks the channels (default: by kind of run) and `--labels` names the runs. `--save [PNG]` writes
+`out/plots/compare/<run>__<A>_vs_<B>.png` unless given a path. For two runs, `compare.py` also takes snapshots
+(`--against`).
+
+### sweep
+
+```
+python tools/rally.py sweep fw_hairpin max_handbrake_torque 1000 2000 3000
+python tools/rally.py sweep fw_circle spring_front --range 30 80 6 --unit kN/m --trace roll
+python tools/rally.py sweep fw_brake mu_front --range 0.5 1.1 7 --metric final:pos.x maxabs:pitch
+```
+
+One scenario over several values of one setting, its results plotted against the setting; see [sweep.py](#sweeppy)
+below, which is the same command. Options: `--range FROM TO N`, `--unit`, `--metric`, `--trace`, `--set NAME=VALUE`
+(held for every run), `--save PNG`, `--show`, `--exe` (the `rallysim` to use) and `--jobs N` (runs at once).
+
+### path
+
+```
+python tools/rally.py path out/runs/fw_hairpin.csv --save out/plots/path.png
+python tools/rally.py path out/runs/st_circle.csv --every 0.5 --save out/plots/path.png
+```
+
+The path of a run of any kind, coloured by speed, with the car drawn along it: about ten cars, or one every `--every S`
+seconds. `--save PNG` writes it; without it the chart opens.
+
+### tyre-points
+
+```
+python tools/rally.py tyre-points out/runs/fw_brake.csv
+python tools/rally.py tyre-points out/runs/fw_brake.csv --save --min-speed 2
+```
+
+A four-wheel run's tyres on their force curve; see [tyre_points.py](#tyre_pointspy) below, which is the same command.
+`--save [PNG]` writes `out/plots/tyres/<run>.png` unless given a path; without `--save` the chart opens.
+
+### tyre-rig
+
+```
+python tools/rally.py tyre-rig
+python tools/rally.py tyre-rig --save out/plots/tyres/tyre_rig.png
+python tools/rally.py tyre-rig --curve peak_slide tmeasy --combined tmeasy
+```
+
+The tyre rig's force curves, from `out/rig/tyre_rig.csv` or the file given; see [tyre_plot.py](#tyre_plotpy) below,
+which is the same command. `--curve` picks the curves of the pure-slip panels, `--combined` the one of the combined
+panels.
+
+### run-all
+
+```
+python tools/rally.py run-all
+python tools/rally.py run-all --only fw_brake fw_launch --no-plots
+python tools/rally.py run-all --snapshot linear
+```
+
+Every scenario and the tyre rig, then the path of each run, the tyres of each four-wheel run and the rig plot, into
+`out/`; see [run_all.py](#run_allpy) below, which is the same command. `--only`, `--no-plots`, `--snapshot NAME`,
+`--exe` and `--gif` (also the GIFs) as there; `--jobs N` is how many GIFs are made at once.
+
 ## Tests
 
 ```
@@ -165,8 +257,8 @@ are remade, deliberately, from a built `rallysim` with `python tools/tests/make_
 
 | Tool | Does |
 |---|---|
-| `rally.py` | Analysis commands on runs: `diff`, `setup`, `suspension`, `landing` (see [rally.py](#rallypy)) |
-| `run_all.py` | Runs every scenario and the rig, then makes the views, the tyre plots and (with `--gif`) the GIFs |
+| `rally.py` | Analysis and charts: `diff`, `setup`, `suspension`, `landing`, `stepsize`, `handling`, `energy`, `characteristics`, `columns`, `overlay`, `sweep`, `path`, `tyre-points`, `tyre-rig`, `run-all` (see [rally.py](#rallypy)) |
+| `run_all.py` | Short form of `rally.py run-all`: runs every scenario and the rig, then makes the views, the tyre plots and (with `--gif`) the GIFs |
 | `topdown.py` | The car seen from above: interactive dashboard, one frame, the whole path, or a GIF |
 | `view3d.py` | A four-wheel run in 3D (isometric by default): the body's roll, pitch and ride height, and every force where it acts |
 | `tyre_plot.py` | The tyre rig's force curves, every curve and load in one figure |
@@ -199,13 +291,15 @@ The generated GIFs and plots are the quickest way to browse a complete run:
 
 ```
 python tools/topdown.py out/runs/fw_handbrake.csv                      dashboard: play, pause, scrub
-python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save frame.png one dashboard frame
-python tools/topdown.py out/runs/fw_handbrake.csv --static --save path.png  the whole path with the car along it
+python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save frame.png  # one dashboard frame
+python tools/topdown.py out/runs/fw_handbrake.csv --static --save path.png  # the whole path with the car along it
 python tools/topdown.py out/runs/fw_handbrake.csv --gif --start 2 --end 5  to out/gif/fw_handbrake.gif
 ```
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
 It reads every kind of run (rigid body, bicycle, single-track, four-wheel) and draws the car from line 1 of the file.
+Other options: `--every S` (seconds between cars in the static view), `--fps`, `--speed` (GIF playback speed), `--window M` (width
+of the view that follows the car), `--no-follow` (the whole path in the main view).
 
 The dashboard shows the car on its path with each tyre's force, coloured by the grip in use, and at the CG the sum of
 the tyre forces (orange) and their yaw moment (purple arc, longer for a larger moment). Around it: the whole run, the
@@ -232,8 +326,8 @@ coloured by the share in use, so the black arrow reaching the disc's edge is the
 velocity (green), the sum of the tyre forces (orange) and their yaw moment (purple arc, longer for a larger moment).
 Every force uses one scale, printed in the HUD, and is drawn over the body and wheels so none hides behind the car.
 The HUD also shows the driver's inputs as bars. The camera is isometric (a parallel projection, so arrows keep their
-true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel runs only. GIFs
-take about 7 s per second of run.
+true length anywhere in the picture); `p` switches to perspective, `c` to a chase camera. Four-wheel runs only. Other options: `--fps`, `--speed`, `--window M`, `--elev` and `--azim` (the camera angles in degrees). GIFs
+take about 7 to 8 s per second of run.
 
 ![3D replay](img/tool-view3d.gif)
 
@@ -291,13 +385,13 @@ corner is responsible.
 
 ```
 python tools/compare.py A.csv B.csv                           default channels for the kind of run
-python tools/compare.py A.csv B.csv speed beta wheel.FL.slipRatio pick the channels
+python tools/compare.py A.csv B.csv speed beta wheel.FL.slipRatio  # pick the channels
 python tools/compare.py A.csv B.csv --labels old new --save out/plots/compare/brake.png
 python tools/compare.py --against linear fw_brake             out/snapshots/linear/runs/fw_brake.csv vs out/runs
 python tools/compare.py --against linear --all                every run in both, into out/plots/compare/
 ```
 
-A dashed, B solid, B - A underneath each channel. It prints the largest difference of each channel, both final
+A dashed, B solid, B - A underneath each channel (`--channels` picks them, `--labels` names the runs). It prints the largest difference of each channel, both final
 values, and which line-1 facts (car parameters) differ between the files, so you can see what changed.
 
 ![Run comparison](img/tool-compare.png)
@@ -328,8 +422,8 @@ The handbrake flick against the handbrake's torque (`python tools/sweep.py fw_ha
 ### plot_run.py
 
 ```
-python tools/plot_run.py out/runs/st_circle.csv time pos.z vel.z
-python tools/plot_run.py out/runs/st_circle.csv time pos.z --save pos_z.png
+python tools/plot_run.py out/runs/st_circle.csv time speed yaw_rate
+python tools/plot_run.py out/runs/st_circle.csv time speed --save speed.png
 python tools/plot_run.py out/runs/fw_brake.csv time energy.residual      the energy books' residual
 python tools/plot_run.py out/runs/fw_launch.csv time work.drive work.tyre energy.total   where the energy went
 ```
