@@ -81,16 +81,18 @@ namespace rallysim
     }
 
     // Relaxation of the slips towards their steady values over the relaxation lengths:
-    //   sigma_x d(sx)/dt + V sx = omega R - vx        sigma_y d(sy)/dt + V sy = -vy        (V = rolling speed)
-    // so the slip builds over a rolling distance, not a time. At standstill (V = 0) they integrate the patch
+    //   sigma_x d(sx)/dt + V sx = omega R - vx        sigma_y d(sy)/dt + V sy = -vy + V camber_slip
+    // (V = rolling speed; camber_slip is the lateral slip the wheel's lean adds, zero at rest) so the slip builds
+    // over a rolling distance, not a time. At standstill (V = 0) they integrate the patch
     // creep instead of dividing by zero: the tyre acts as a spring. Backward Euler, stable for any dt and V;
     // then capped at what the grip at load fz can hold.
-    inline void relax_slips(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v, Real fz, Real dt)
+    inline void relax_slips(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v, Real fz, Real dt,
+                            Real camber_slip = 0)
     {
         const Real V = rolling_speed(w, s.omega, v.vx);
         s.slip_ratio = (s.slip_ratio + dt / t.relaxation_length_x * (s.omega * w.radius - v.vx)) /
                        (1 + dt * V / t.relaxation_length_x);
-        s.lateral_slip = (s.lateral_slip + dt / t.relaxation_length_y * (-v.vy)) /
+        s.lateral_slip = (s.lateral_slip + dt / t.relaxation_length_y * (-v.vy + V * camber_slip)) /
                          (1 + dt * V / t.relaxation_length_y);
         cap_slips(s, t, fz, V);
     }
@@ -143,7 +145,7 @@ namespace rallysim
     // the whole step: the body barely moves in it. Returns the average tyre force over the step, so the impulse the
     // body gets is the one the wheel felt.
     inline tyre_force step_wheel(wheel_state &s, const wheel_params &w, const tyre_params &t, const patch_velocity &v,
-                                 Real fz, Real drive_torque, Real brake_torque, Real dt)
+                                 Real fz, Real drive_torque, Real brake_torque, Real dt, Real camber_slip = 0)
     {
         assert(w.substeps >= 1);
         const Real h = dt / w.substeps;
@@ -152,7 +154,7 @@ namespace rallysim
         {
             const tyre_force f = wheel_force(s, w, t, v, fz);
             spin_wheel(s, w, f.fx, drive_torque, brake_torque, h);
-            relax_slips(s, w, t, v, fz, h);
+            relax_slips(s, w, t, v, fz, h, camber_slip);
             sum.fx += f.fx;
             sum.fy += f.fy;
         }

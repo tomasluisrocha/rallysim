@@ -147,6 +147,47 @@ int main()
         check_near("relaxation: settled after ten lengths", relax(10.0, 10.0, true, dt).got, 1.0, 1e-4);
     }
 
+    // camber thrust: a lateral slip added to the relaxation's steady value (camber_slip, here 0.1 x 0.05) settles
+    // at C camber_slip, through the tyre curve, and builds over the relaxation length
+    {
+        const Real camber_slip = 0.1 * 0.05, load = 3000.0;
+        const patch_velocity along{20.0, 0.0};
+        auto settle = [&](const tyre_params &p, int steps, Real slip)
+        {
+            wheel_state s = rolling_wheel(w, 20.0);
+            for (int i = 0; i < steps; ++i)
+                step_wheel(s, w, p, along, load, 0.0, 0.0, dt, slip);
+            return s;
+        };
+        const wheel_state lin = settle(t, 2000, camber_slip);
+        check_near("camber: linear tyre settles at C x camber_slip = 150 N", wheel_force(lin, w, t, along, load).fy,
+                   t.cornering_stiffness * camber_slip, 1e-6);
+        tyre_params tm = t;
+        tm.curve = tyre_curve::tmeasy;
+        const wheel_state tms = settle(tm, 2000, camber_slip);
+        check_near("camber: tmeasy tyre gives the curve's force at that slip (149.144 N)",
+                   wheel_force(tms, w, tm, along, load).fy, tyre_forces(tm, 0, camber_slip, load).fy, 1e-6);
+
+        const wheel_state early = settle(t, 20, camber_slip);
+        check_near("camber: after one relaxation length the force is 0.630 of its settled value",
+                   wheel_force(early, w, t, along, load).fy / (t.cornering_stiffness * camber_slip), 0.630, 0.01);
+
+        wheel_state rest;
+        for (int i = 0; i < 2000; ++i)
+            step_wheel(rest, w, t, patch_velocity{0, 0}, load, 0.0, 0.0, dt, camber_slip);
+        check_true("camber: at standstill there is no force", wheel_force(rest, w, t, patch_velocity{0, 0}, load).fy == 0.0);
+
+        const wheel_state neg = settle(t, 2000, -camber_slip);
+        check_near("camber: the opposite lean gives -150 N", wheel_force(neg, w, t, along, load).fy,
+                   -t.cornering_stiffness * camber_slip, 1e-6);
+        const wheel_state zero = settle(t, 500, 0.0);
+        wheel_state plain = rolling_wheel(w, 20.0);
+        for (int i = 0; i < 500; ++i)
+            step_wheel(plain, w, t, along, load, 0.0, 0.0, dt);
+        check_true("camber: zero, or no argument, changes nothing", zero.omega == plain.omega &&
+                   zero.slip_ratio == plain.slip_ratio && zero.lateral_slip == plain.lateral_slip);
+    }
+
     // standstill: a loaded wheel at rest with no input stays exactly at rest (no creep, no jitter)
     {
         rig r = rolling_rig(0.0);

@@ -51,6 +51,7 @@ namespace rallysim
         Real damping_x = 18000;              // N s/m, low-speed damping of the contact patch along the wheel
         Real damping_y = 9500;               // N s/m, low-speed damping of the contact patch across the wheel
         Real damping_fade_speed = 2.5;       // m/s, the damping fades out linearly by this rolling speed
+        Real camber_thrust = 0;              // lateral slip per rad of the wheel's lean to the road
 
         tyre_curve curve = tyre_curve::linear;
 
