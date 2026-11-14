@@ -22,12 +22,12 @@ Reads the telemetry only (like topdown.py); it never touches the physics.
 Forces are drawn over the body and wheels wherever the camera is, so none hides behind the car.
 
 Usage:
-  python tools/view3d.py out/runs/fw_handbrake.csv                       play, pause, scrub, turn the view
+  python tools/view3d.py out/runs/fw_handbrake.csv  # play, pause, scrub, turn the view
   python tools/view3d.py out/runs/fw_brake.csv --at 1.5 --save out/scratch/brake3d.png
   python tools/view3d.py out/runs/fw_circle.csv --gif out/gif/fw_circle_3d.gif --start 1 --end 6
-  python tools/view3d.py out/runs/fw_lane.csv --chase                    camera behind the car, turning with it
-  python tools/view3d.py out/runs/fw_brake.csv --exaggerate 1             true-scale body motion
-  python tools/view3d.py out/runs/fw_lane.csv --perspective               a perspective camera instead of isometric
+  python tools/view3d.py out/runs/fw_lane.csv --chase  # camera behind the car, turning with it
+  python tools/view3d.py out/runs/fw_brake.csv --exaggerate 1  # true-scale body motion
+  python tools/view3d.py out/runs/fw_lane.csv --perspective  # a perspective camera instead of isometric
 
 The default camera is isometric: a parallel (orthographic) projection from 35.26 deg up, 45 deg round, so every
 arrow and wheel is drawn at its true length wherever it sits in the picture.

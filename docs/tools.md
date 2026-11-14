@@ -176,7 +176,7 @@ python tools/rally.py columns out/runs/fw_brake.csv time speed pitch --save out/
 python tools/rally.py columns out/runs/fw_circle.csv time yaw --wrapped
 ```
 
-Any columns of a run against any other: the first name is the x axis, the rest are drawn one panel each. `yaw` is
+Any columns of a run against any other: the first name is the x axis, the rest are drawn on one axes, one line each. `yaw` is
 drawn unwrapped, or as written with `--wrapped` (see [below](#wrapped-and-unwrapped-yaw)). `--save PNG` writes the
 chart; without it the chart opens in a window. Same as `plot_run.py`.
 
@@ -274,17 +274,17 @@ are remade, deliberately, from a built `rallysim` with `python tools/tests/make_
 | `compare.py` | Two runs overlaid channel by channel, with their difference |
 | `sweep.py` | One scenario over a range of one setting, its results plotted against the setting |
 | `plot_run.py` | Any columns of a run against any other |
-| `simdata.py` | Not a standalone tool: shared paths, file readers, running `rallysim`, and tyre curves used by the other tools |
+| `simdata.py` | Not a standalone tool: shared paths, file readers, running `rallysim`, and the car and tyre defaults used by the other tools |
 | `input_bars.py` | Not a standalone tool: the driver's inputs as bar charts, for `topdown.py` and `view3d.py` |
 
 ### run_all.py
 
 ```
-python tools/run_all.py                     every scenario + the rig, then the plots (no GIFs)
-python tools/run_all.py --gif               also the GIFs: each dashboard, and each four-wheel run in 3D (slow)
+python tools/run_all.py  # every scenario + the rig, then the plots (no GIFs)
+python tools/run_all.py --gif  # also the GIFs: each dashboard, and each four-wheel run in 3D (slow)
 python tools/run_all.py --only fw_brake fw_launch
-python tools/run_all.py --snapshot linear   afterwards, keep a copy in out/snapshots/linear
-python tools/run_all.py --no-plots          just the CSVs
+python tools/run_all.py --snapshot linear  # afterwards, keep a copy in out/snapshots/linear
+python tools/run_all.py --no-plots  # just the CSVs
 ```
 
 It asks `rallysim list` for the scenario names, so a new scenario file in `scenarios/` (or a built-in one added to `apps/main.cpp`) is picked up on its own.
@@ -298,10 +298,10 @@ The generated GIFs and plots are the quickest way to browse a complete run:
 ### topdown.py
 
 ```
-python tools/topdown.py out/runs/fw_handbrake.csv                      dashboard: play, pause, scrub
+python tools/topdown.py out/runs/fw_handbrake.csv  # dashboard: play, pause, scrub
 python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save frame.png  # one dashboard frame
 python tools/topdown.py out/runs/fw_handbrake.csv --static --save path.png  # the whole path with the car along it
-python tools/topdown.py out/runs/fw_handbrake.csv --gif --start 2 --end 5  to out/gif/fw_handbrake.gif
+python tools/topdown.py out/runs/fw_handbrake.csv --gif --start 2 --end 5  # to out/gif/fw_handbrake.gif
 ```
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed, home/end.
@@ -320,10 +320,10 @@ over time. The static view (`--static`) draws only the tyre forces.
 ### view3d.py
 
 ```
-python tools/view3d.py out/runs/fw_handbrake.csv                       play, pause, scrub, drag to turn the view
-python tools/view3d.py out/runs/fw_brake.csv --at 1.6 --save brake3d.png    one frame
-python tools/view3d.py out/runs/fw_handbrake.csv --gif --start 2.3 --end 4.3   to out/gif/fw_handbrake_3d.gif
-python tools/view3d.py out/runs/fw_circle.csv --chase --perspective    behind the car, perspective
+python tools/view3d.py out/runs/fw_handbrake.csv  # play, pause, scrub, drag to turn the view
+python tools/view3d.py out/runs/fw_brake.csv --at 1.6 --save brake3d.png  # one frame
+python tools/view3d.py out/runs/fw_handbrake.csv --gif --start 2.3 --end 4.3  # to out/gif/fw_handbrake_3d.gif
+python tools/view3d.py out/runs/fw_circle.csv --chase --perspective  # behind the car, perspective
 ```
 
 The vertical side of a run, which `topdown.py` cannot show: the body at its real pose (roll, pitch and ride height,
@@ -342,9 +342,9 @@ take about 7 to 8 s per second of run.
 ### tyre_plot.py
 
 ```
-python tools/tyre_plot.py                              reads out/rig/tyre_rig.csv
+python tools/tyre_plot.py  # reads out/rig/tyre_rig.csv
 python tools/tyre_plot.py --save out/plots/tyres/tyre_rig.png
-python tools/tyre_plot.py --curve peak_slide                  every panel on peak_slide
+python tools/tyre_plot.py --curve peak_slide  # every panel on peak_slide
 python tools/tyre_plot.py --curve peak_slide tmeasy --combined peak_slide
 ```
 
@@ -368,7 +368,7 @@ force envelope; every trace should remain inside the grey `mu Fz` grip circle.
 
 ```
 python tools/tyre_points.py out/runs/fw_brake.csv
-python tools/tyre_points.py out/runs/fw_brake.csv --save    to out/plots/tyres/fw_brake.png
+python tools/tyre_points.py out/runs/fw_brake.csv --save  # to out/plots/tyres/fw_brake.png
 ```
 
 Every tyre at every moment as a point on its curve: across, the normalised slip; up, the grip used, |F| / mu(Fz) Fz.
@@ -392,11 +392,11 @@ corner is responsible.
 ### compare.py
 
 ```
-python tools/compare.py A.csv B.csv                           default channels for the kind of run
+python tools/compare.py A.csv B.csv  # default channels for the kind of run
 python tools/compare.py A.csv B.csv speed beta wheel.FL.slipRatio  # pick the channels
 python tools/compare.py A.csv B.csv --labels old new --save out/plots/compare/brake.png
-python tools/compare.py --against linear fw_brake             out/snapshots/linear/runs/fw_brake.csv vs out/runs
-python tools/compare.py --against linear --all                every run in both, into out/plots/compare/
+python tools/compare.py --against linear fw_brake  # out/snapshots/linear/runs/fw_brake.csv vs out/runs
+python tools/compare.py --against linear --all  # every run in both, into out/plots/compare/
 ```
 
 A dashed, B solid, B - A underneath each channel (`--channels` picks them, `--labels` names the runs). It prints the largest difference of each channel, both final
@@ -408,7 +408,7 @@ values, and which line-1 facts (car parameters) differ between the files, so you
 
 ```
 python tools/sweep.py fw_hairpin max_handbrake_torque 1000 2000 3000 4000
-python tools/sweep.py fw_hairpin max_handbrake_torque --range 1000 4000 7   7 values from 1000 to 4000
+python tools/sweep.py fw_hairpin max_handbrake_torque --range 1000 4000 7  # 7 values from 1000 to 4000
 python tools/sweep.py fw_circle spring_front --range 30 80 6 --unit kN/m --metric maxabs:roll --trace roll
 python tools/sweep.py fw_showcase driver.max_yaw_rate 40deg/s 60deg/s 80deg/s --set mu_rear=0.85
 ```
@@ -432,8 +432,8 @@ The handbrake flick against the handbrake's torque (`python tools/sweep.py fw_ha
 ```
 python tools/plot_run.py out/runs/st_circle.csv time speed yaw_rate
 python tools/plot_run.py out/runs/st_circle.csv time speed --save speed.png
-python tools/plot_run.py out/runs/fw_brake.csv time energy.residual      the energy books' residual
-python tools/plot_run.py out/runs/fw_launch.csv time work.drive work.tyre energy.total   where the energy went
+python tools/plot_run.py out/runs/fw_brake.csv time energy.residual  # the residual of the energy books
+python tools/plot_run.py out/runs/fw_launch.csv time work.drive work.tyre energy.total  # where the energy went
 ```
 
 Every four-wheel run carries its energy books (`energy.*`, `work.*`, `energy.residual`; `telemetry_schema.md`).
@@ -448,15 +448,15 @@ After a physics change, a residual that grows with time and does not halve when 
 
 | Folder | Holds | Written by |
 |---|---|---|
-| `out/runs/` | One telemetry CSV per scenario (`telemetry_schema.md`) | `rallysim <scenario>` |
-| `out/rig/` | `tyre_rig.csv`: force against slip for each tyre curve, no car | `rallysim tyre_rig` |
-| `out/plots/views/` | A top-down picture of each run | `topdown.py --static` |
-| `out/plots/tyres/` | `tyre_rig.png`, and each four-wheel run's tyres on their curve | `tyre_plot.py`, `tyre_points.py` |
-| `out/plots/compare/` | Two runs overlaid, with their difference | `compare.py --save` |
+| `out/runs/` | One telemetry CSV per scenario (`telemetry_schema.md`) | `rallysim <scenario>`, `rally.py run-all` |
+| `out/rig/` | `tyre_rig.csv`: force against slip for each tyre curve, no car | `rallysim tyre_rig`, `rally.py run-all` |
+| `out/plots/views/` | A top-down picture of each run | `topdown.py --static`, `rally.py path --save`, `rally.py run-all` |
+| `out/plots/tyres/` | `tyre_rig.png`, and each four-wheel run's tyres on their curve | `tyre_plot.py`, `tyre_points.py`, `rally.py run-all` |
+| `out/plots/compare/` | Two runs overlaid, with their difference | `compare.py --save`, `rally.py overlay --save` |
 | `out/plots/sweeps/` | One picture per sweep | `sweep.py` |
 | `out/sweeps/<scenario>__<setting>/` | A sweep's runs and its `summary.csv` | `sweep.py` |
 | `out/gif/` | Each run's dashboard (`<run>.gif`) and each four-wheel run in 3D (`<run>_3d.gif`) | `topdown.py --gif`, `view3d.py --gif` |
-| `out/snapshots/<name>/` | Saved copies of `runs/` and `rig/`, to compare later runs against | `run_all.py --snapshot <name>` |
+| `out/snapshots/<name>/` | Saved copies of `runs/` and `rig/`, to compare later runs against | `rally.py run-all --snapshot <name>` |
 
 `rallysim <scenario> [path]` writes to `out/runs/<scenario>.csv` (the rig to `out/rig/`) unless given a path;
 `rallysim list` prints the scenario names. A four-wheel scenario's car can be changed without rebuilding:
@@ -470,7 +470,7 @@ file (to `out/runs/<file name>.csv`); there `--set` also reaches the other secti
 
 ```
 python tools/run_all.py --snapshot before      # before the change: keep the old results
-(make the change, rebuild)
+# (make the change, rebuild)
 python tools/run_all.py                        # the new results and pictures
 python tools/compare.py --against before --all # what moved, run by run, into out/plots/compare/
 ```
@@ -478,12 +478,12 @@ python tools/compare.py --against before --all # what moved, run by run, into ou
 ## Keeping the tools in step with the C++
 
 - Look columns up by name, never by position (`telemetry_schema.md`).
-- `simdata.py` repeats the tyre of `vehicle/tyre.hpp` (`grip`, `tyre_forces` for every curve, `tmeasy_at`,
+- `rallytools/tyre.py` repeats the tyre of `vehicle/tyre.hpp` (`grip`, `tyre_forces` for every curve, `tmeasy_at`,
   `tmeasy_combine`, `pure_slip_curve`) so `tyre_points.py` can put the tyres on their curves. If the C++ tyre changes,
   change it there too: `tyre_points.py` warns when the two differ by more than 1 N on any row of
   `out/rig/tyre_rig.csv` (every curve, sweep and load).
 - A new tyre parameter the tools need goes on line 1 of the four-wheel files (`four_wheel_meta`) and into
-  `simdata.TYRE_DEFAULTS`.
+  `TYRE_DEFAULTS` in `rallytools/tyre.py`.
 
 ## Wrapped and unwrapped yaw
 
@@ -510,6 +510,6 @@ keeps counting, like an odometer, and plots as one continuous line whose slope i
 | Two runs compared | unwrapped: no false spikes when one run crosses +-pi a moment before the other |
 
 The CSV keeps the wrapped value, the usual convention for a stored heading; only the plots unwrap it
-(`simdata.unwrap_headings`). `compare.py` also wraps the difference B - A back into -pi to pi, so two runs a whole
+(`np.unwrap`). `compare.py` also wraps the difference B - A back into -pi to pi, so two runs a whole
 lap apart do not show a 2 pi difference. `topdown.py` only uses yaw to turn the car drawing, where it makes no
 difference.

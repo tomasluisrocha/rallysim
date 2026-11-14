@@ -14,10 +14,10 @@ the CG; the whole run; the g-g diagram of the car's acceleration; the load on ea
 bars (the pedals upright, the steer across); sideslip, yaw rate and speed over time.
 
 Usage:
-  python tools/topdown.py out/runs/fw_handbrake.csv                dashboard: play, pause, scrub
-  python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png one dashboard frame
-  python tools/topdown.py out/runs/fw_handbrake.csv --static --save out/plots/views/fw_handbrake.png the path with snapshots
-  python tools/topdown.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake.gif --start 2 --end 5 the dashboard as a GIF
+  python tools/topdown.py out/runs/fw_handbrake.csv  # dashboard: play, pause, scrub
+  python tools/topdown.py out/runs/fw_handbrake.csv --at 3.0 --save out/scratch/frame.png  # one dashboard frame
+  python tools/topdown.py out/runs/fw_handbrake.csv --static --save out/plots/views/fw_handbrake.png  # the path with snapshots
+  python tools/topdown.py out/runs/fw_handbrake.csv --gif out/gif/fw_handbrake.gif --start 2 --end 5  # the dashboard as a GIF
 
 Dashboard keys: space play/pause, left/right 0.1 s (shift: 1 s), up/down playback speed x2 / /2, home/end.
 """
@@ -323,11 +323,14 @@ def main():
 
     run = load(args.file)
     if args.static:
-        fig = path_chart.figure(run_module.load(args.file, name=args.file), args.every)
+        static = run_module.load(args.file, name=args.file)
         if args.save:
+            fig = path_chart.figure(static, args.every)
             fig.savefig(args.save, dpi=110, bbox_inches="tight")
             print(f"wrote {args.save}")
             return
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        path_chart.figure(static, args.every, fig=plt.figure())
         plt.show()
         return
 

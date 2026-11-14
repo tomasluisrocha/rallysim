@@ -33,12 +33,12 @@ ctest --test-dir build -C Release --output-on-failure
 ## Run a scenario
 
 ```text
-rallysim list                                   every scenario
-rallysim fw_hairpin                             telemetry to out/runs/fw_hairpin.csv
+rallysim list  # every scenario
+rallysim fw_hairpin  # telemetry to out/runs/fw_hairpin.csv
 rallysim fw_hairpin --set mu_rear=0.7 --set spring_front=45kN/m
-rallysim params fw_hairpin                      every parameter --set takes
-rallysim params fw_lane --set vertical=unsprung the same, for the car with those settings
-rallysim my_run.ini                             a scenario file of your own
+rallysim params fw_hairpin  # every parameter --set takes
+rallysim params fw_lane --set vertical=unsprung  # the same, for the car with those settings
+rallysim my_run.ini  # a scenario file of your own
 ```
 
 The four-wheel scenarios are files in [`scenarios/`](scenarios/); the format is
@@ -52,7 +52,7 @@ every picture:
 ```text
 python -m pip install -r tools/requirements.txt
 python tools/run_all.py
-python tools/topdown.py out/runs/fw_hairpin.csv     the interactive dashboard
+python tools/topdown.py out/runs/fw_hairpin.csv  # the interactive dashboard
 ```
 
 `python tools/run_all.py --gif` also makes the animated dashboards and 3D views.
