@@ -61,7 +61,7 @@ namespace rallysim
                 cs = cs - p.corner(i).unsprung_mass * p.wheel_position(i);
             cs = (1.0 / ms) * cs;
             e.gravity = ms * kGravity * (s.body.pos.z + to_world(s.body.q, cs).z);
-            std::array<Real, kWheels> strut_compression{};
+            std::array<Real, kWheels> travel{};
             for (std::size_t i = 0; i < kWheels; ++i)
             {
                 const corner_params &c = p.corner(i);
@@ -70,8 +70,9 @@ namespace rallysim
                 e.gravity += c.unsprung_mass * kGravity * wc.z;
 
                 const Real mount = p.static_deflection(i) - contact_of(p, s.body, i, 0.0).deflection;
-                const Real x = p.strut_static_deflection(i) - mount + (wc.z - p.wheel_rest_height(i));
-                strut_compression[i] = x;
+                const corner_kinematics k = kinematics_of(p, i, mount, 0.0, wc);
+                const Real x = k.strut; // the strut's compression
+                travel[i] = k.travel;
                 const Real d = p.wheel.radius - wc.z;
                 const Real stop = x - (p.strut_static_deflection(i) - c.droop); // the stop's travel, negative when engaged
                 if (x > 0)
@@ -86,7 +87,7 @@ namespace rallysim
             for (std::size_t l : {FL, RL})
             {
                 const std::size_t r = l + 1;
-                const Real dx = strut_compression[l] - strut_compression[r];
+                const Real dx = travel[l] - travel[r]; // the bar acts on the wheel travel
                 e.springs += 0.5 * p.corner(l).antiroll_rate * dx * dx;
             }
         }

@@ -497,5 +497,35 @@ int main()
                    peak_travel < 0.125);
     }
 
+    // a motion ratio of 0.7 with a gain of 2 /m: the strut's energy is taken at its own compression, which moves
+    // by the ratio times the wheel travel. The largest residual during a 0.3 m drop shrinks with dt.
+    {
+        const four_wheel_run drop = unsprung_drop(0.3, [](corner_params &c)
+                                                  {
+                                                      c.motion_ratio = 0.7;
+                                                      c.motion_ratio_gain = 2;
+                                                  });
+        const four_wheel_input none{};
+        auto largest_residual = [&](Real dt)
+        {
+            four_wheel_state s = drop.initial;
+            energy_books books(s, drop.params);
+            Real worst = 0;
+            const long steps = std::lround(3.0 / dt);
+            for (long i = 0; i < steps; ++i)
+            {
+                books.add(rates_of(s, drop.params, evaluate(s, drop.params, none)), dt);
+                step(s, drop.params, none, dt);
+                worst = std::max(worst, std::fabs(books.residual(energy_of(s, drop.params))));
+            }
+            return worst;
+        };
+        const Real r2 = largest_residual(0.002), r1 = largest_residual(0.001), r05 = largest_residual(0.0005);
+        std::printf("motion ratio 0.7, gain 2, 0.3 m drop: largest residual %.1f J at 2 ms, %.1f at 1 ms, %.1f at 0.5 ms\n",
+                    r2, r1, r05);
+        check_true("motion ratio drop: each halving of dt leaves under 0.6 of the largest residual",
+                   r1 < 0.6 * r2 && r05 < 0.6 * r1);
+    }
+
     return finish("energy");
 }

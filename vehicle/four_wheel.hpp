@@ -136,7 +136,7 @@ namespace rallysim
         Real wheel_rest_height(std::size_t i) const { return wheel.radius - static_load(i) / corner(i).tyre_rate; }
         Real strut_static_deflection(std::size_t i) const
         {
-            return (static_load(i) - corner(i).unsprung_mass * kGravity) / corner(i).spring_rate;
+            return (static_load(i) - corner(i).unsprung_mass * kGravity) / (corner(i).spring_rate * corner(i).motion_ratio);
         }
     };
 
@@ -193,6 +193,33 @@ namespace rallysim
         Real z = 0;  // m, the wheel centre's height above the ground
         Real vz = 0; // m/s, + up
     };
+
+    // A corner's geometry at its wheel travel (unsprung model). The wheel travel is the corner's coordinate; the
+    // strut moves by the motion ratio times it, and the ratio changes linearly with the travel, so the strut's
+    // compression is x0 + MR s + gain s^2 / 2 and its force acts at the wheel times the ratio.
+    struct corner_kinematics
+    {
+        Real travel = 0, travel_rate = 0; // m, m/s: the wheel against the body, + bump, 0 at rest
+        Real strut = 0, strut_rate = 0;   // m, m/s: the strut's compression
+        Real ratio = 1;                   // motion ratio at this travel
+    };
+
+    // mount, mount_rate: the mount's height above its rest height and its vertical speed. Written so that with a
+    // ratio of 1 and no gain the strut is exactly x0 - mount + (z - wheel_rest_height).
+    inline corner_kinematics kinematics_of(const four_wheel_params &p, std::size_t i, Real mount, Real mount_rate,
+                                           const corner_state &wheel)
+    {
+        const corner_params &c = p.corner(i);
+        const Real x0 = p.strut_static_deflection(i);
+        const Real today = x0 - mount + (wheel.z - p.wheel_rest_height(i));
+        corner_kinematics k;
+        k.travel = today - x0;
+        k.travel_rate = wheel.vz - mount_rate;
+        k.ratio = c.motion_ratio + c.motion_ratio_gain * k.travel;
+        k.strut = today + (c.motion_ratio - 1) * k.travel + 0.5 * c.motion_ratio_gain * k.travel * k.travel;
+        k.strut_rate = k.ratio * k.travel_rate;
+        return k;
+    }
 
     struct four_wheel_state
     {
@@ -442,6 +469,7 @@ namespace rallysim
         Real a_x = 0, a_y = 0;                     // planar model: accelerations used for the load transfer (m/s^2)
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
         std::array<corner_load, kWheels> corner;   // springs, unsprung: each corner's spring, damper, stops, anti-roll bar and tyre
+        std::array<corner_kinematics, kWheels> kin; // unsprung: each corner's wheel travel, strut and motion ratio
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
@@ -473,10 +501,11 @@ namespace rallysim
                 // the mount's height above its rest height, and its vertical speed, from the springs geometry
                 const Real mount = p.static_deflection(i) - c.deflection, mount_rate = -c.deflection_rate;
                 const corner_state &wheel = s.corners[i];
-                const Real strut = p.strut_static_deflection(i) - mount + (wheel.z - p.wheel_rest_height(i));
-                f.corner[i] = unsprung_corner_force(p.corner(i), strut, wheel.vz - mount_rate, p.strut_static_deflection(i),
-                                                    p.wheel.radius - wheel.z, -wheel.vz);
-                f.fz[i] = f.corner[i].fz; // the tyre spring's force
+                f.kin[i] = kinematics_of(p, i, mount, mount_rate, wheel);
+                f.corner[i] = unsprung_corner_force(p.corner(i), f.kin[i].strut, f.kin[i].strut_rate,
+                                                    p.strut_static_deflection(i), p.wheel.radius - wheel.z, -wheel.vz);
+                f.corner[i].strut *= f.kin[i].ratio; // the force at the wheel; spring, damper and stop stay the strut's
+                f.fz[i] = f.corner[i].fz;            // the tyre spring's force
             }
             f.patch[i] = c.velocity;
             f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
@@ -485,7 +514,7 @@ namespace rallysim
             for (std::size_t l : {FL, RL})
             {
                 const std::size_t r = l + 1;
-                const Real bar = p.corner(l).antiroll_rate * (f.corner[l].deflection - f.corner[r].deflection);
+                const Real bar = p.corner(l).antiroll_rate * (f.kin[l].travel - f.kin[r].travel);
                 f.corner[l].antiroll = bar;
                 f.corner[r].antiroll = -bar;
                 f.corner[l].strut += bar;
