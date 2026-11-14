@@ -69,6 +69,19 @@ largest suspension deflection are always shown.
 `--save PNG` also draws the twelve-panel chart without a window; `--show` opens it. Not both. `--events` (with either)
 marks the first run's events and landings as vertical lines on the panels over time.
 
+### handling
+
+```
+python tools/rally.py handling out/runs/fw_lane.csv
+python tools/rally.py handling out/runs/fw_lane.csv --from 1 --to 5 --save out/plots/handling.png
+```
+
+For each four-wheel run, the understeer gradient: the least-squares slope of the extra steer,
+`steer - (lf + lr) * yaw_rate / speed`, against `a_lat`, in rad and in deg per m/s^2 (positive: understeer, negative:
+oversteer). It uses the rows of the window (the whole run by default) at 1 m/s or faster, and is refused when
+`a_lat` varies by less than 0.5 m/s^2 there. `--save PNG` also draws the two-panel diagram (extra steer and the
+axle slip angles against `a_lat`); `--show` opens it. Not both.
+
 ### landing
 
 ```

@@ -7,6 +7,7 @@ import sys
 
 from .compare import Tolerance, diff
 from .paths import COMPARE, OUT, RIG, ROOT, TYRES, find_exe
+from .handling import understeer
 from .landing import text as landing_text
 from .run import load
 from .setup_sheet import text as setup_text
@@ -232,6 +233,17 @@ def main(argv=None):
                                     description="Show every parameter on line 1 of each run side by side.")
     command.add_argument("runs", nargs="+", metavar="RUN", help="run (CSV)")
     command.add_argument("--changed", action="store_true", help="show only the parameters that differ")
+    command = subparsers.add_parser("handling", help="understeer gradient and handling diagram of four-wheel runs",
+                                    description="Print the understeer gradient of each run (the slope of the "
+                                                "steer beyond the low-speed angle against a_lat), and optionally "
+                                                "draw the handling diagram.")
+    command.add_argument("runs", nargs="+", metavar="RUN", help="four-wheel run (CSV)")
+    command.add_argument("--from", dest="start", type=float, metavar="S",
+                         help="start of the window in seconds (default: the start of the run)")
+    command.add_argument("--to", dest="end", type=float, metavar="S",
+                         help="end of the window in seconds (default: the end of the run)")
+    command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
+    command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     command = subparsers.add_parser("landing", help="settling, rebound and suspension travel after each landing",
                                     description="Measure each landing of a run: settling time, rebound, "
                                                 "overshoot, travel and margin.")
@@ -365,6 +377,32 @@ def main(argv=None):
         if args.command == "suspension" and args.save is not None and args.show:
             print("suspension: --save and --show are mutually exclusive", file=sys.stderr)
             return 2
+        if args.command == "handling" and args.save is not None and args.show:
+            print("handling: --save and --show are mutually exclusive", file=sys.stderr)
+            return 2
+        if args.command == "handling":
+            runs = [load(path) for path in args.runs]
+            for run in runs:
+                result = understeer(run, args.start, args.end)
+                print(f"{run.name}: understeer gradient {result['gradient']:.6g} rad per m/s^2 "
+                      f"({result['gradient_deg']:.6g} deg per m/s^2)")
+            if args.save is not None or args.show:
+                if args.save is not None:
+                    import matplotlib
+                    matplotlib.use("Agg")
+                from .charts.handling import figure
+                if args.save is not None:
+                    chart = figure(runs, args.start, args.end)
+                    output = Path(args.save)
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    chart.savefig(output, dpi=110)
+                    print(f"wrote {output}")
+                if args.show:
+                    # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+                    import matplotlib.pyplot as plt
+                    figure(runs, args.start, args.end, fig=plt.figure())
+                    plt.show()
+            return 0
         if args.command == "setup":
             runs = [load(path) for path in args.runs]
             print(setup_text(runs, args.changed))
