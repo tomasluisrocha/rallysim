@@ -121,16 +121,42 @@ class TestStepsize(unittest.TestCase):
             self.assertEqual(lines[3], "column\td1\td2\tratio\tverdict")
             self.assertTrue(lines[4].startswith("r\t"))
 
-    def test_tolerance_scales_with_the_unit(self):
-        # a difference of 1e-5 that does not shrink, next to a column of size 100 in the same unit: 1e-5 < 1e-6 x 100
-        a, b, c = runs(units={"big": "N m", "small": "N m"}, big=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t)
+    def test_negligible_excuses_only_what_does_not_converge(self):
+        # unit "N m": a column of size 100 that converges (first order, differences about 2e-6 and 1e-6, well below
+        # 1e-6 x 100), and a small one with a difference of 1e-5 that does not shrink
+        a, b, c = runs(units={"big": "N m", "small": "N m"}, big=lambda t, dt: 100 + 1e-3 * dt, small=lambda t, dt: 0 * t)
         b.data["small"] = b.data["small"] + 1e-5
-        small = row(stepsize.report(a, b, c), "small")
-        self.assertEqual((small.verdict, small.ratio), ("equal", None))
-        # the old rule, only the absolute floor: the same column does not converge
-        small = row(stepsize.report(a, b, c, rel_tol=0), "small")
-        self.assertEqual(small.verdict, "not converging")
+        rows = stepsize.report(a, b, c)
+        big, small = row(rows, "big"), row(rows, "small")
+        self.assertEqual(big.verdict, "converging")  # the tolerance does not turn it into "equal"
+        self.assertAlmostEqual(big.ratio, 0.5, delta=1e-6)
+        self.assertEqual(small.verdict, "negligible")
         self.assertAlmostEqual(small.ratio, 1.0, delta=1e-9)
+        # the strict rule: the same column does not converge
+        strict = stepsize.report(a, b, c, rel_tol=0)
+        self.assertEqual(row(strict, "small").verdict, "not converging")
+        self.assertEqual(row(strict, "big").verdict, "converging")
+
+    def test_cli_negligible_does_not_fail(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = frames(big=lambda t, dt: 100 + 1e-3 * dt, small=lambda t, dt: 0 * t)
+            data[1]["small"] += 1e-5
+            paths = write_all(folder, data, "u", units={"big": "N m", "small": "N m"})
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["stepsize", *paths]), 0)
+                self.assertEqual(cli.main(["stepsize", *paths, "--all"]), 0)
+            self.assertRegex(out.getvalue(), r"(?m)^small\t.*\tnegligible\s*$")
+            self.assertRegex(out.getvalue(), r"(?m)^big\t.*\tconverging\s*$")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "0"]), 1)
+                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "1e-9"]), 1)
+
+    def test_converging_below_the_unit_tolerance_stays_converging(self):
+        a, b, c = runs(units={"small": "m", "big": "m"}, small=lambda t, dt: t + 1e-3 * dt, big=lambda t, dt: 1e4 + 0 * t)
+        small = row(stepsize.report(a, b, c), "small")
+        self.assertEqual(small.verdict, "converging")
+        self.assertAlmostEqual(small.ratio, 0.5, delta=1e-6)
 
     def test_scale_is_the_largest_over_the_unit_and_the_runs(self):
         # the large column is only large in the finest run, and a column of another unit does not count
@@ -138,39 +164,27 @@ class TestStepsize(unittest.TestCase):
                        small=lambda t, dt: 0 * t, other=lambda t, dt: 1e6 + 0 * t)
         c.data["big"] = c.data["big"] + 100
         b.data["small"] = b.data["small"] + 1e-5
-        rows = stepsize.report(a, b, c)
-        self.assertEqual(row(rows, "small").verdict, "equal")
-        # the same difference next to a column of another unit only is measured against its own unit
+        self.assertEqual(row(stepsize.report(a, b, c), "small").verdict, "negligible")
+        # next to a column of another unit only, it is measured against its own unit
         a, b, c = runs(units={"small": "N m", "other": "N"}, small=lambda t, dt: 0 * t, other=lambda t, dt: 1e6 + 0 * t)
         b.data["small"] = b.data["small"] + 1e-5
         self.assertEqual(row(stepsize.report(a, b, c), "small").verdict, "not converging")
 
     def test_column_without_a_unit_uses_its_own_size(self):
         a, b, c = runs(own=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t, other=lambda t, dt: 100 + 0 * t)
-        for frame in (b.data,):
-            frame["own"] = frame["own"] + 1e-5
-            frame["small"] = frame["small"] + 1e-5
+        b.data["own"] = b.data["own"] + 1e-5
+        b.data["small"] = b.data["small"] + 1e-5
         rows = stepsize.report(a, b, c)
-        self.assertEqual(row(rows, "own").verdict, "equal")  # 1e-5 < 1e-6 x its own 100
+        self.assertEqual(row(rows, "own").verdict, "negligible")  # 1e-5 < 1e-6 x its own 100
         # no unit means no sharing: the small column is not measured against the others' size
         self.assertEqual(row(rows, "small").verdict, "not converging")
 
-    def test_absolute_floor_is_kept(self):
-        # a column of size 1e-6: 1e-6 x its scale is 1e-12, below the 1e-9 floor, so 1e-10 is still zero
+    def test_absolute_floor_gives_equal(self):
+        # a column of size 1e-6 in a unit of its own: a difference of 1e-10 is under the 1e-9 floor, so "equal"
         a, b, c = runs(units={"tiny": "m"}, tiny=lambda t, dt: 1e-6 + 0 * t)
         b.data["tiny"] = b.data["tiny"] + 1e-10
         self.assertEqual(row(stepsize.report(a, b, c), "tiny").verdict, "equal")
-        self.assertEqual(row(stepsize.report(a, b, c, abs_tol=0, rel_tol=1e-6), "tiny").verdict, "not converging")
-
-    def test_cli_rel(self):
-        with tempfile.TemporaryDirectory() as folder:
-            data = frames(big=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t)
-            data[1]["small"] += 1e-5
-            paths = write_all(folder, data, "u", units={"big": "N m", "small": "N m"})
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(cli.main(["stepsize", *paths]), 0)
-                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "0"]), 1)
-                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "1e-9"]), 1)
+        self.assertEqual(row(stepsize.report(a, b, c, abs_tol=0), "tiny").verdict, "not converging")
 
     def test_fresh_runs(self):
         support.need(self, EXE and os.path.isfile(EXE), "RALLYSIM_EXE must name an existing rallysim executable")
@@ -184,15 +198,16 @@ class TestStepsize(unittest.TestCase):
                 return str(path)
             lane = [at("fw_lane", "a"), at("fw_lane", "b", "--set", "run.dt=0.5ms"),
                     at("fw_lane", "c", "--set", "run.dt=0.25ms")]
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                self.assertEqual(cli.main(["stepsize", *lane]), 0, out.getvalue())
-                # the wheel torque blip is what the old absolute rule read as not converging
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(cli.main(["stepsize", *lane, "--all"]), 0, out.getvalue())
+            text = out.getvalue()
+            for corner in ("FL", "FR", "RL", "RR"):
+                self.assertRegex(text, rf"(?m)^wheel\.{corner}\.brakeTorque\t.*\tnegligible\s*$")
+            self.assertRegex(text, r"(?m)^roll\t.*\tconverging\s*$")
+            self.assertRegex(text, r"(?m)^wheel\.FL\.deflection\t.*\tconverging\s*$")
+            # the strict rule shows the blip as not converging
+            with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.main(["stepsize", *lane, "--rel", "0"]), 1)
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                self.assertEqual(cli.main(["stepsize", *lane, "--all"]), 0)
-            self.assertRegex(out.getvalue(), r"(?m)^roll\t.*\tconverging\s*$")
 
     def test_no_matplotlib(self):
         root = Path(__file__).resolve().parents[2]

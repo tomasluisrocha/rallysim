@@ -153,15 +153,17 @@ python tools/rally.py stepsize out/scratch/a.csv out/scratch/b.csv out/scratch/c
 Compares one scenario run at dt, dt/2 and dt/4, in that order (the steps are read from line 1 and must halve
 exactly). For each column, d1 is the largest difference between the first two runs, d2 between the last two, and
 the ratio is d2 / d1: 0.5 means first order, 0.25 second order. A column reads "equal" when both differences are
-within the tolerance, "converging" when the ratio is 0.6 or less, and "not converging" otherwise (also for a NaN in one
-run). Those columns are listed first; `--all` lists the rest. Exit 0 when no column is "not converging", 1
-otherwise, 2 on an error.
+within 1e-9, "converging" when the ratio is 0.6 or less, and otherwise "not converging" (also for a NaN in one
+run) or, if both differences are tiny next to the unit, "negligible". "Not converging" columns are listed first;
+`--all` lists the rest. Exit 0 when no column is "not converging" ("negligible" does not fail), 1 otherwise, 2 on an
+error.
 
-The tolerance is `max(1e-9, R * scale)`, where the scale is the largest absolute value, over the three runs, of all
-the columns with the same unit as this one (a column with no unit uses its own largest value) and `R` is `--rel`
-(default 1e-6). So a torque blip of 3e-6 N m next to torques of several N m reads "equal". The limit: a real
-step-size error in a small column of a unit that also has a large column can read "equal" too; `--rel 0` keeps
-only the 1e-9 floor and shows it.
+"Negligible" means both differences are within `R * scale`, where the scale is the largest absolute value, over the
+three runs, of all the columns with the same unit (a column with no unit uses its own largest value) and `R` is
+`--rel` (default 1e-6). So a torque blip of 3e-6 N m next to torques of several N m reads "negligible". It only
+excuses a column that does not converge; it never changes a "converging" or "equal" one. The limit: a real
+step-size error in a small column of a unit that also has a large column can read "negligible" too; `--rel 0`
+turns it off and shows it.
 
 A run with an event whose instant moves with the step (a wheel locking) can read "not converging" on a correct
 model: compare such runs against a much finer step instead.

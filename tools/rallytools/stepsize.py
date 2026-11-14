@@ -53,17 +53,21 @@ def _scales(runs, names, units):
     return {name: by_unit[units[name]] if units.get(name) else own[name] for name in names}
 
 
-def _verdict(d1, d2, ratio, tol):
+def _verdict(d1, d2, ratio, abs_tol, negligible):
     if math.isinf(d1) or math.isinf(d2):
         return "not converging"
-    if d1 <= tol and d2 <= tol:
+    if d1 <= abs_tol and d2 <= abs_tol:
         return "equal"
-    return "converging" if ratio is not None and ratio <= _HALVING else "not converging"
+    if ratio is not None and ratio <= _HALVING:
+        return "converging"
+    return "negligible" if d1 <= negligible and d2 <= negligible else "not converging"
 
 
 def report(a: Run, b: Run, c: Run, abs_tol: float = 1e-9, rel_tol: float = 1e-6) -> list[Row]:
-    """A difference counts as zero below max(abs_tol, rel_tol * the scale of the column's unit); rel_tol 0 keeps
-    only the absolute floor."""
+    """The verdicts: "equal" (both differences within abs_tol), "converging" (ratio 0.6 or less), "negligible"
+    (would read "not converging", but both differences are within rel_tol times the scale of the column's unit)
+    and "not converging". The tolerance only excuses non-convergence, it never changes a converging column;
+    rel_tol 0 makes "negligible" impossible."""
     _check_steps(a, b, c)
     first = {column.name: column for column in diff(a, b, _EXACT).columns}
     second = {column.name: column for column in diff(b, c, _EXACT).columns}
@@ -73,9 +77,8 @@ def report(a: Run, b: Run, c: Run, abs_tol: float = 1e-9, rel_tol: float = 1e-6)
     for name in names:
         one = first[name]
         d1, d2 = one.largest, second[name].largest
-        tol = max(abs_tol, rel_tol * scale[name])
-        ratio = None if d1 <= tol else d2 / d1
-        rows.append(Row(name, one.unit, d1, d2, ratio, _verdict(d1, d2, ratio, tol)))
+        ratio = None if d1 <= abs_tol else d2 / d1
+        rows.append(Row(name, one.unit, d1, d2, ratio, _verdict(d1, d2, ratio, abs_tol, rel_tol * scale[name])))
     return rows
 
 
