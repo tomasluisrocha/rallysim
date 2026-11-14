@@ -137,6 +137,14 @@ class TestText(unittest.TestCase):
         self.assertIn(f"t = {data['time'][7]:.6g}", out)
         self.assertIn("largest residual", energy.text(run))
 
+    def test_residual_printed_is_the_last_rows(self):
+        # the residual ramps from 0.25 to -1 over the run
+        data = built().data.copy()
+        data["energy.residual"] = np.linspace(0.25, -1.0, len(data))
+        lines = energy.text(from_frame(data, kind="four_wheel", name="built")).splitlines()
+        self.assertIn("  residual\t-1", lines)
+        self.assertNotIn("  residual\t0.25", lines)
+
 
 if __name__ == "__main__":
     unittest.main()

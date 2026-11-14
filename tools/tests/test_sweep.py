@@ -1,3 +1,5 @@
+import contextlib
+import io
 import math
 import os
 import tempfile
@@ -136,6 +138,22 @@ class SweepTest(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_held_settings_reach_every_run(self):
+        # read back from line 1 of each run: the default mass is 1200 and mu_front 1
+        with tempfile.TemporaryDirectory() as work:
+            with patch("rallytools.cli.OUT", Path(work) / "out"), contextlib.redirect_stdout(io.StringIO()):
+                code = cli.main(["sweep", "fw_circle", "spring_front", "40kN/m", "50kN/m", "60kN/m",
+                                 "--set", "mass=1234", "--set", "mu_front=0.8", "--exe", EXE,
+                                 "--save", str(Path(work) / "held.png")])
+            self.assertEqual(code, 0)
+            files = sorted((Path(work) / "out" / "sweeps" / "fw_circle__spring_front").glob("0*.csv"))
+            self.assertEqual(len(files), 3)
+            for path, spring in zip(files, (40000.0, 50000.0, 60000.0)):
+                meta = load(path).meta
+                self.assertEqual(meta["spring_front"], spring, path.name)
+                self.assertEqual(meta["mass"], 1234.0, path.name)
+                self.assertEqual(meta["mu_front"], 0.8, path.name)
+
     def test_show_draws_into_a_pyplot_figure(self):
         plt.close("all")
         pyplot_figure = plt.figure
@@ -180,6 +198,17 @@ class FigureWidthTest(unittest.TestCase):
         # more metrics keep 4.2 in each
         five = ("max:yaw_rate", "min:yaw_rate", "maxabs:yaw_rate", "mean:yaw_rate", "final:yaw_rate")
         self.assertAlmostEqual(figure(_synthetic(3, five)).get_size_inches()[0], 21.0)
+
+    def test_x_label_carries_the_unit_the_values_share(self):
+        for chart in (figure(_synthetic(3)), figure(_synthetic(3), fig=Figure())):
+            self.assertEqual(chart.axes[0].get_xlabel(), "spring_front (kN/m)")
+        # values with different units, or none, leave the label bare
+        mixed = _synthetic(2)
+        mixed.values[1] = "50N/m"
+        self.assertEqual(figure(mixed).axes[0].get_xlabel(), "spring_front")
+        plain = _synthetic(2)
+        plain.values[:] = ["40", "50"]
+        self.assertEqual(figure(plain).axes[0].get_xlabel(), "spring_front")
 
     def test_the_width_holds_in_a_given_figure(self):
         target = Figure()

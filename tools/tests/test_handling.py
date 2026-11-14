@@ -143,6 +143,29 @@ class TestHandlingCommand(unittest.TestCase):
         self.assertIn("0.002", out.getvalue())
         self.assertIn("0.114592", out.getvalue())
 
+    def test_window_picks_the_gradient_of_its_part_of_the_run(self):
+        # the first half of the run has gradient 0.002, the second half 0.006
+        time = np.arange(ROWS) * 0.001
+        halves = frame(np.where(time < 0.5, 0.002, 0.006))
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write("# schema=6 lf=1.3 lr=1.2\n")
+            halves.to_csv(f, index=False, lineterminator="\n")
+
+        def gradient(*window):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["handling", self.path, *window]), 0)
+            return float(out.getvalue().split("understeer gradient ")[1].split()[0])
+
+        self.assertAlmostEqual(gradient("--from", "0.5"), 0.006, delta=1e-9)
+        self.assertAlmostEqual(gradient("--to", "0.4"), 0.002, delta=1e-9)
+        self.assertAlmostEqual(gradient("--from", "0.1", "--to", "0.3"), 0.002, delta=1e-9)
+        self.assertAlmostEqual(gradient("--from", "0.6", "--to", "0.9"), 0.006, delta=1e-9)
+        # the whole run is neither half's gradient
+        whole = gradient()
+        self.assertGreater(abs(whole - 0.002), 1e-4)
+        self.assertGreater(abs(whole - 0.006), 1e-4)
+
     def test_matplotlib_is_not_imported_without_save_or_show(self):
         code = (
             "import sys; from rallytools import cli; "

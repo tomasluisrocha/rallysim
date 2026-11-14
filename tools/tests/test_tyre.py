@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -45,6 +47,31 @@ class TestRig(unittest.TestCase):
             result = subprocess.run([executable, "tyre_rig", str(rig)], cwd=root, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertLess(tyre.check_against_rig(rig), 1.0)
+
+
+class TestTyrePointsRigCheck(unittest.TestCase):
+    def points(self, fx):
+        """Run tyre-points on a four-wheel fixture against a one-row rig file (linear tyre at slip ratio 0.01 and
+        3000 N, where the copy gives 900 N) whose fx is `fx`; the stderr text."""
+        with tempfile.TemporaryDirectory() as directory:
+            rig = Path(directory) / "tyre_rig.csv"
+            rig.write_text("# tyre_rig\ncurve,sweep,fz,slip_ratio,slip_angle_deg,fx,fy\n"
+                           f"linear,x,3000,0.01,0.0,{fx},0\n", encoding="utf-8")
+            err, out = io.StringIO(), io.StringIO()
+            with patch("rallytools.cli.RIG", Path(directory)), contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(out):
+                code = cli.main(["tyre-points", str(FIXTURES / "four_wheel_springs.csv"),
+                                 "--save", str(Path(directory) / "points.png")])
+            self.assertEqual(code, 0)
+        plt.close("all")
+        return err.getvalue()
+
+    def test_a_rig_that_differs_by_more_than_one_newton_warns(self):
+        text = self.points(910.0)
+        self.assertIn("warning: rallytools/tyre.py differs from the C++ rig by up to 10.0 N", text)
+
+    def test_a_rig_within_one_newton_is_silent(self):
+        self.assertNotIn("warning", self.points(900.5))
 
 
 class TestTyrePointsChart(unittest.TestCase):

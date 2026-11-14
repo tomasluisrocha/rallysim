@@ -149,6 +149,22 @@ class TestOverlayData(unittest.TestCase):
         self.assertTrue(np.isnan(y[:100]).all())
         self.assertTrue(np.isfinite(y[100:]).all())
 
+    def test_the_second_table_block_is_the_third_run_against_the_first(self):
+        t = np.round(np.arange(0.0, 1.0001, 0.05), 6)
+        runs = [_run(name, t, speed=10.0 + offset) for name, offset in (("a", 0.0), ("b", 0.5), ("c", 1.0))]
+        first, second = table(runs, ["speed"]).split("\n\n")
+        self.assertEqual(first.splitlines()[:2], ["A = a", "B = b"])
+        self.assertEqual(second.splitlines()[:2], ["A = a", "C = c"])
+
+        def speed_row(block):
+            return next(line for line in block.splitlines() if line.startswith("speed")).split()
+
+        # largest |difference|, then both final values
+        row = speed_row(first)
+        self.assertEqual([float(v) for v in (row[1], row[3], row[4])], [0.5, 10.0, 10.5])
+        row = speed_row(second)
+        self.assertEqual([float(v) for v in (row[1], row[3], row[4])], [1.0, 10.0, 11.0])
+
     def test_first_run_is_dashed_and_the_others_solid(self):
         t = np.round(np.arange(0.0, 1.0001, 0.05), 6)
         runs = [_run(name, t, speed=10.0 + i) for i, name in enumerate("abc")]
