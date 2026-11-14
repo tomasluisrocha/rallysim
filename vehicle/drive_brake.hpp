@@ -6,9 +6,9 @@
 
 namespace rallysim
 {
-    // Placeholder drivetrain and brakes (phase 4, step 4): turns pedal positions into a drive torque and a brake
-    // torque on each wheel, from a few car characteristics. Phase 7 replaces the drive side with an engine,
-    // clutch, gearbox and differentials, and the brake side with a hydraulic model; the pedals stay the same.
+    // Placeholder drivetrain and brakes: turns pedal positions into a drive torque and a brake
+    // torque on each wheel, from a few car characteristics. A fuller model would replace the drive side with an
+    // engine, clutch, gearbox and differentials, and the brake side with a hydraulic model; the pedals stay the same.
     //
     // Wheel order as everywhere: front-left, front-right, rear-left, rear-right. Torques are at the wheel.
     struct drive_brake_params

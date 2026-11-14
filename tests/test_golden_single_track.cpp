@@ -50,7 +50,7 @@ static void test_circle()
     check_true("circle: determinism: two runs give identical state", identical(s, run(single_track_circle())));
     check_near("circle: the car stays on the ground plane", s.pos.z, 0.0, 1e-9);
 
-    // Golden values, recorded at the phase 3 gate after checking them against the closed form below.
+    // Golden values, recorded after checking them against the closed form below.
     const planar golden{9.7586736908645921, 24.46252723414435, 2.7423215384616051,
                         5.9922881162235777, 0.42009771085295244, 0.47746727005745487};
     const int before_circle = failures;
@@ -77,7 +77,7 @@ static void test_lane_change()
 
     check_true("lane: determinism: two runs give identical state", identical(s, run(single_track_lane_change())));
 
-    // Golden values, recorded at the phase 3 gate after checking them against the closed form below.
+    // Golden values, recorded after checking them against the closed form below.
     const planar golden{104.85479678495533, 3.3857424771665237, -4.9245689912291985e-08,
                         14.99999999999959, -6.6316534746647845e-09, 5.2403996387340423e-10};
     const int before_lane = failures;

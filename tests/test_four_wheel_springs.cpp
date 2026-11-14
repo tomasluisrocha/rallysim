@@ -6,7 +6,7 @@
 
 using namespace rallysim;
 
-// Phase 4, step 6: the four-wheel car on springs. Gravity acts, each corner sits on a spring and damper, the tyre
+// The four-wheel car on springs. Gravity acts, each corner sits on a spring and damper, the tyre
 // forces act on the ground, so the body heaves, rolls and pitches and the load transfer comes out of the springs.
 // Each check is against a closed form for this car: 1200 kg, h 0.5 m, lf 1.3, lr 1.2, tracks 1.5, 50 kN/m and
 // 3800 N s/m at every corner.
@@ -178,7 +178,7 @@ int main()
     // front tyres run out of grip first (the car understeers) before the turn gets any harder. The steer is ramped
     // in; a sudden step of steer on this car overshoots, lifts the inner rear too and rolls it over.
     // On the linear tyre: this tests the springs, and the turn has to reach about 5 m/s^2, so it should not hang on
-    // which tyre with a fall-off the car has. On peak_slide (phase 5, measured) the understeering front slides down
+    // which tyre with a fall-off the car has. On peak_slide (measured) the understeering front slides down
     // to its sliding share of the grip, and the turn tops out just short of lifting the wheel (lowest load about
     // 100 N).
     {

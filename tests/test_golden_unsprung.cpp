@@ -7,7 +7,7 @@
 
 using namespace rallysim;
 
-// Golden runs for the unsprung mode (task 6.2f): fw_lane, fw_brake and fw_circle with wheel masses on tyre springs,
+// Golden runs for the unsprung mode: fw_lane, fw_brake and fw_circle with wheel masses on tyre springs,
 // and two drops. Each case is first checked against something that does not share its code (the springs model, a
 // closed form), then its recorded values are compared at 1e-9. The timestep check comes last.
 

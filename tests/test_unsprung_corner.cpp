@@ -5,7 +5,7 @@
 
 using namespace rallysim;
 
-// Task 6.2a: the force law of a corner with a wheel mass, a tyre spring and a droop stop.
+// The force law of a corner with a wheel mass, a tyre spring and a droop stop.
 // Default corner_params; every expected value is the formula worked by hand.
 
 int main()

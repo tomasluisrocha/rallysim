@@ -6,10 +6,10 @@
 
 using namespace rallysim;
 
-// Phase 4, step 4: pedals, drive layouts, brakes and handbrake. The straight-line tests use load sensitivity off,
+// Pedals, drive layouts, brakes and handbrake. The straight-line tests use load sensitivity off,
 // so the closed forms (braking v^2 / 2 mu g, acceleration at the traction limit) are exact.
-// Those forms are for a tyre that holds mu Fz while it slides, so flat_grip() is on the linear tyre; the phase 5
-// tests at the end run the same experiments on the tyres that lose grip past their peak: peak_slide, and tmeasy, the
+// Those forms are for a tyre that holds mu Fz while it slides, so flat_grip() is on the linear tyre; the tests
+// at the end run the same experiments on the tyres that lose grip past their peak: peak_slide, and tmeasy, the
 // car's own.
 
 static four_wheel_params flat_grip(Real split_front = 0, tyre_curve curve = tyre_curve::linear)
@@ -152,7 +152,7 @@ int main()
 
         // 50/50 puts too much torque on the front, which unloads when accelerating: the fronts spin, and with open
         // differentials the spinning wheels take the engine's speed up and its torque down. Still more than RWD,
-        // but well short of mu g (limited-slip differentials, in phase 7, fix that).
+        // but well short of mu g (limited-slip differentials, not modelled yet, would fix that).
         const Real even = full_throttle_acceleration(flat_grip(0.5));
         std::printf("full throttle AWD 50/50: %.3f m/s^2\n", even);
         check_true("acceleration: AWD 50/50 beats RWD but not the 30/70 split", even > full_throttle_acceleration(flat_grip(0.0)) &&
@@ -300,7 +300,7 @@ int main()
                    std::fabs(std::atan2(v.v, v.u)) < 2 * kPi / 180 && v.u > 10);
     }
 
-    // standstill (phase 4, step 5): the car stops and stays stopped, a parked car does not creep, and letting
+    // standstill: the car stops and stays stopped, a parked car does not creep, and letting
     // go of the brake leaves it where it is
     {
         const four_wheel_params p; // load sensitivity on, as the car is normally run
@@ -421,7 +421,7 @@ int main()
         check_near("speed hold: settles at the target", velocity_in_body(run(r).body).u, 15.0, 0.05);
     }
 
-    // Phase 5: the same straight-line experiments on the tyres with a peak, peak_slide and tmeasy (the car's own),
+    // Curves with a peak: the same straight-line experiments on the tyres with a peak, peak_slide and tmeasy (the car's own),
     // which give their most force at a small slip (the peak) and only their sliding share of it when the wheel is
     // locked or spinning freely (along the wheel: 0.8 for peak_slide, 0.75 for tmeasy).
     for (tyre_curve curve : {tyre_curve::peak_slide, tyre_curve::tmeasy})

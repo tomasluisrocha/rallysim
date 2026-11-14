@@ -11,10 +11,9 @@
 
 using namespace rallysim;
 
-// Golden runs for the four-wheel scenarios (phase 4, step 7), on springs, on the car's own tyre (tmeasy since
-// phase 5). Each scenario is first checked against something that does not share its code (a closed form, or the
+// Golden runs for the four-wheel scenarios, on springs, on the car's own tyre (tmeasy). Each scenario is first checked against something that does not share its code (a closed form, or the
 // single-track model), so a wrong result cannot be frozen in as golden; then its final state is compared with the
-// recorded values (re-recorded in phase 5, when the car moved to the tmeasy tyre). Last, the timestep: halving
+// recorded values (re-recorded when the car moved to the tmeasy tyre). Last, the timestep: halving
 // dt must change the results less each time.
 
 // Golden values must match to this tolerance. It is far below any real change in the model,

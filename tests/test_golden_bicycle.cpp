@@ -35,7 +35,7 @@ static void test_circle()
 
     check_true("circle: determinism: two runs give identical state", identical(s, run(bicycle_circle())));
 
-    // Golden values, recorded at the phase 2 gate after checking them against the closed form below.
+    // Golden values, recorded after checking them against the closed form below.
     const bicycle_state golden{0.00023200083662525822, 2.2576072430488319e-05, 6.2832041187559344, 6.0};
     check_state("circle golden", s, golden, golden_tol);
 

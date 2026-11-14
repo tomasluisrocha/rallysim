@@ -10,7 +10,7 @@ using namespace rallysim;
 // The four-wheel car piece by piece, with the planar vertical model (the car flat on the ground plane, loads
 // from the quasi-static transfer): where the wheels are, how fast each contact patch moves, the loads, how the
 // tyre forces reach the body, and simple runs with closed-form answers. The springs model is tested in
-// test_four_wheel_springs.cpp, the comparison with the single-track (the phase 4 gate) in
+// test_four_wheel_springs.cpp, the comparison with the single-track in
 // test_four_wheel_behaviour.cpp.
 
 static four_wheel_params planar_car()

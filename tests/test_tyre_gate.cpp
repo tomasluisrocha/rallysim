@@ -9,7 +9,7 @@
 
 using namespace rallysim;
 
-// The phase 5 gate: before a tyre curve goes on the car, its force curves must show zero force at
+// The tyre gate: before a tyre curve goes on the car, its force curves must show zero force at
 // zero slip, force that opposes slip, force bounded by mu Fz, the right symmetry, and a recognisable peak and
 // fall-off. The gate also asks for a smooth curve (no jump in slope after the peak) and zero force at zero load.
 //

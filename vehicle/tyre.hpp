@@ -6,7 +6,7 @@
 namespace rallysim
 {
     // One tyre (the tyre model ladder). Rungs 1 to 3: linear in slip, capped by load-sensitive
-    // friction, with combined slip shared on a friction circle (the linear curve). Phase 5 adds curves with a peak
+    // friction, with combined slip shared on a friction circle (the linear curve). Two more curves have a peak
     // and a fall-off: peak_slide (rung 4, a brush/Fiala-style curve with one shape for both directions) and tmeasy
     // (rung 5, its own curve for each direction, given at two loads). The rest of the car only calls tyre_forces()
     // and the slip cap, whichever curve is chosen.

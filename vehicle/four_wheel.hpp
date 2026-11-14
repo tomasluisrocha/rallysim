@@ -13,14 +13,14 @@
 
 namespace rallysim
 {
-    // Four-wheel car (phase 4): four contact patches, each with its own wheel spin and tyre,
+    // Four-wheel car: four contact patches, each with its own wheel spin and tyre,
     // driven by pedals through vehicle/drive_brake.hpp. Two ways to get the vertical loads:
     //   springs (step 6, the default): gravity acts, each corner of the body sits on a spring and damper
     //     (vehicle/corner.hpp) and the tyre forces act on the ground, below the CG, so the body heaves, rolls and
     //     pitches and the load transfer comes out of the springs;
     //   planar (steps 3 to 5): gravity is cancelled and the tyre forces act at CG height, so the body stays flat
     //     on the ground plane, as the single-track; the loads come from the quasi-static load transfer.
-    //   unsprung (phase 6): as springs, but each wheel has its own mass on a tyre spring below the strut, with stops
+    //   unsprung: as springs, but each wheel has its own mass on a tyre spring below the strut, with stops
     //     and an optional anti-roll bar, so the tyre load is the tyre spring's and the wheel can hop and hang (see
     //     "the corner with a wheel" below).
     // The planar model stays so the four-wheel car can still be compared one to one with the single-track, and
@@ -45,7 +45,7 @@ namespace rallysim
     inline bool is_front(std::size_t i) { return i == FL || i == FR; }
     inline bool is_left(std::size_t i) { return i == FL || i == RL; }
 
-    // The car's tyre (phase 5): the tmeasy curve, with its own peak and fall-off along and across the wheel, given
+    // The car's tyre: the tmeasy curve, with its own peak and fall-off along and across the wheel, given
     // at two loads. Its tables are tyre_params' defaults with the stiffnesses scaled so that at `static_load`, the
     // load the wheel carries with the car at rest, they are the given ones; the defaults' growth with load is kept.
     // A tmeasy tyre's stiffness depends on its load, the linear and peak_slide tyres' does not. Scaled at the
@@ -201,8 +201,8 @@ namespace rallysim
         std::array<corner_state, kWheels> corners{};
     };
 
-    // What the driver does: the steering wheel and three pedals. The clutch comes with the
-    // gearbox in phase 7.
+    // What the driver does: the steering wheel and three pedals. The clutch pedal would come with a
+    // gearbox model.
     struct four_wheel_input
     {
         Real steer = 0;     // front wheel angle, rad (+left); both front wheels turn by it (no Ackermann yet)

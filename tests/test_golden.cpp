@@ -29,7 +29,7 @@ static void test_thrown_body()
     // The same scenario must give identical bits.
     check_true("thrown: determinism: two runs give identical state", identical(a, run(thrown_body())));
 
-    // Golden values, recorded from run(thrown_body()) at the phase 1 gate after checking them against
+    // Golden values, recorded from run(thrown_body()) after checking them against
     // the closed form below. If a change moves them on purpose, re-check the new numbers by hand
     // and update them here.
     const rigid_body_state golden{{30.00000000000189, 0.0, -3.6298099999999605},
@@ -61,7 +61,7 @@ static void test_driven_body()
 
     check_true("driven: determinism: two runs give identical state", identical(d, run(driven_body())));
 
-    // Golden values, recorded at the phase 1 gate after checking them against the closed form below.
+    // Golden values, recorded after checking them against the closed form below.
     const rigid_body_state golden{{45.000000000004569, 11.250000000000245, -4.8942183639151091e-17},
                                   {5.0, 8.4637459089604693e-16, -5.3290705182007515e-18},
                                   {1.0, 0.0, 0.0, 0.0},
