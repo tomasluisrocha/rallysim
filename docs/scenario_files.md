@@ -8,6 +8,7 @@ rallysim fw_brake                         scenarios/fw_brake.ini
 rallysim my_run.ini [out.csv]             any file, by path
 rallysim fw_brake --set spring_front=50kN/m --set run.dt=0.5ms
 rallysim params fw_hairpin                the car a file sets up
+rallysim params fw_lane --set vertical=unsprung   the same with --set applied, as in a run
 rallysim list                             every scenario, built-in and scenarios/*.ini
 ```
 

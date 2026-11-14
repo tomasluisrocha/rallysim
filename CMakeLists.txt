@@ -98,3 +98,10 @@ add_test(NAME cli_set_not_four_wheel COMMAND rallysim st_circle ${CMAKE_BINARY_D
 add_test(NAME cli_set_out_of_range COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set mass=0)
 set_tests_properties(cli_set_unknown cli_set_no_value cli_set_not_four_wheel cli_set_out_of_range
                      PROPERTIES WILL_FAIL TRUE)
+
+# params takes --set too: the listing is of the car with the settings (tyre_rate_front is used with vertical = unsprung,
+# and its line then has no "not used" note), and a bad setting fails.
+add_test(NAME cli_params_set COMMAND rallysim params fw_lane --set vertical=unsprung)
+set_tests_properties(cli_params_set PROPERTIES PASS_REGULAR_EXPRESSION "tyre_rate_front +[0-9]+ +N/m +\n")
+add_test(NAME cli_params_set_bad COMMAND rallysim params fw_lane --set vertical=unsprun)
+set_tests_properties(cli_params_set_bad PROPERTIES WILL_FAIL TRUE)

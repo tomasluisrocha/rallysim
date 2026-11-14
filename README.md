@@ -37,6 +37,7 @@ rallysim list                                   every scenario
 rallysim fw_hairpin                             telemetry to out/runs/fw_hairpin.csv
 rallysim fw_hairpin --set mu_rear=0.7 --set spring_front=45kN/m
 rallysim params fw_hairpin                      every parameter --set takes
+rallysim params fw_lane --set vertical=unsprung the same, for the car with those settings
 rallysim my_run.ini                             a scenario file of your own
 ```
 

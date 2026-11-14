@@ -118,7 +118,9 @@ static void usage()
     std::fprintf(stderr,
                  "usage: rallysim <scenario | file.ini> [output.csv] [--set name=value]...\n"
                  "       rallysim list                         every scenario name, built-in and scenarios/*.ini\n"
-                 "       rallysim params [scenario | file.ini] what --set takes, with the car's values\n"
+                 "       rallysim params [scenario | file.ini [--set name=value]...]\n"
+                 "                                             what --set takes, with the car's values (and the\n"
+                 "                                             --set applied, as in a run)\n"
                  "  output defaults to out/runs/<scenario or file name>.csv (out/rig/ for tyre_rig)\n"
                  "  --set changes a four-wheel car: --set spring_front=50kN/m; in a file, also any key of\n"
                  "        another section: --set run.dt=0.5ms\n"
@@ -128,6 +130,23 @@ static void usage()
     for (const std::string &n : scenario_files())
         std::fprintf(stderr, " %s", n.c_str());
     std::fprintf(stderr, "\n");
+}
+
+// The --set at argv[k]: adds its name=value to `set` and moves k to the value. Prints why and returns false if the
+// value is missing or has no '='.
+static bool take_set(int argc, char **argv, int &k, settings &set)
+{
+    const char *pair = (k + 1 < argc) ? argv[k + 1] : nullptr;
+    const char *eq = pair ? std::strchr(pair, '=') : nullptr;
+    if (!eq)
+    {
+        std::fprintf(stderr, "rallysim: --set needs name=value\n");
+        usage();
+        return false;
+    }
+    set.emplace_back(std::string(pair, eq), std::string(eq + 1));
+    ++k;
+    return true;
 }
 
 // Every registry entry with its value in `p`, and when it is used if this car does not use it.
@@ -178,14 +197,28 @@ int main(int argc, char **argv)
     }
     if (name == "params")
     {
-        // the default car, or the car a four-wheel scenario or a file sets up
+        // the default car, or the car a four-wheel scenario or a file sets up, with any --set applied as in a run
         if (argc < 3)
         {
             print_params(four_wheel_params{});
             return 0;
         }
+        settings set;
+        for (int k = 3; k < argc; ++k)
+        {
+            if (std::string(argv[k]) == "--set")
+            {
+                if (!take_set(argc, argv, k, set))
+                    return 1;
+            }
+            else
+            {
+                std::fprintf(stderr, "rallysim: params takes a scenario and --set name=value, not %s\n", argv[k]);
+                return 1;
+            }
+        }
         four_wheel_run r;
-        if (!four_wheel_of(argv[2], {}, r))
+        if (!four_wheel_of(argv[2], set, r))
             return 1;
         print_params(r.params);
         return 0;
@@ -208,16 +241,8 @@ int main(int argc, char **argv)
         const std::string arg = argv[k];
         if (arg == "--set")
         {
-            const char *pair = (k + 1 < argc) ? argv[k + 1] : nullptr;
-            const char *eq = pair ? std::strchr(pair, '=') : nullptr;
-            if (!eq)
-            {
-                std::fprintf(stderr, "rallysim: --set needs name=value\n");
-                usage();
+            if (!take_set(argc, argv, k, set))
                 return 1;
-            }
-            set.emplace_back(std::string(pair, eq), std::string(eq + 1));
-            ++k;
         }
         else if (arg.rfind("--", 0) == 0)
         {
