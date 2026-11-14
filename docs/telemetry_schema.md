@@ -38,7 +38,7 @@ ignore them, and adding keys needs no schema change.
 | `mass` | kg | single-track, four-wheel | Car mass |
 | every `rallysim params` name | its unit | four-wheel | Every parameter of the car, under the name `--set` and scenario files use (`vehicle/four_wheel_registry.hpp`): geometry, inertia, tyres, suspension, drive and brakes. So a four-wheel file records the whole car that made it, settings included |
 | `gravity` | m/s^2 | four-wheel | The gravity the run used |
-| `rest_deflection_front`, `rest_deflection_rear` | m | four-wheel on springs or unsprung | The `deflection` of that axle's corners with the car at rest, so travel is `deflection` minus it; in the unsprung model the bump stop engages `bump_travel_*` past it and the droop stop `droop_*` before it |
+| `rest_deflection_front`, `rest_deflection_rear` | m | four-wheel on springs or unsprung | The `deflection` of that axle's corners with the car at rest, so strut travel is `deflection` minus it (wheel travel is the `travel` column, the same with a motion ratio of 1); in the unsprung model the bump stop engages `bump_travel_*` past it and the droop stop `droop_*` before it |
 | `vertical` | - | four-wheel | The vertical model: 0 planar, 1 springs, 2 unsprung (`vertical_model` in `vehicle/four_wheel.hpp`) |
 | `springs` | - | four-wheel | 1 if the car is on springs (the springs and unsprung models), 0 for the flat (planar) model |
 | `curve_front`, `curve_rear` | - | four-wheel | Each tyre's curve: 0 linear, 1 peak_slide, 2 tmeasy (`tyre_curve` in `vehicle/tyre.hpp`) |
@@ -141,7 +141,7 @@ so moving load between the two wheels of an axle lowers the axle's grip. `axle.f
 
 Schema 6 inserted `tyreDefl`, `wheelZ` and `stopF` after `damperF` in each wheel's block, and line 1 of the four-wheel
 files gained `vertical`. The four `arbF` columns were later appended after `energy.residual`, so the schema number
-did not change.
+did not change. The 28 geometry columns and two roll centres were appended after them in the same way.
 
 Schema 5 inserted `net.Fx`, `net.Fy` and `yaw_moment` after `a_lat`, and `grip` after `Fy` in each wheel's block,
 and line 1 of the four-wheel files lists every parameter.
@@ -202,10 +202,16 @@ the pedals replace `drive_force`.
 | 59-74 | `wheel.RL.*` | | Rear-left wheel |
 | 75-90 | `wheel.RR.*` | | Rear-right wheel |
 | 91-101 | `energy.*`, `work.*` | J | The energy books, below |
-| 102 | `wheel.FL.arbF` | N | Anti-roll bar force at the front-left corner: positive pushes the body up; the two wheels of an axle carry opposite values; 0 except in the unsprung model with a bar |
+| 102 | `wheel.FL.arbF` | N | Anti-roll bar force at the front-left corner: positive pushes the body up; the two wheels of an axle carry opposite values; the force is `antiroll` times the difference in wheel travel (`travel` left minus right); 0 except in the unsprung model with a bar |
 | 103 | `wheel.FR.arbF` | N | Front right |
 | 104 | `wheel.RL.arbF` | N | Rear left |
 | 105 | `wheel.RR.arbF` | N | Rear right |
+| 106-112 | `wheel.FL.*` | | Front-left suspension geometry, the seven fields below |
+| 113-119 | `wheel.FR.*` | | Front right |
+| 120-126 | `wheel.RL.*` | | Rear left |
+| 127-133 | `wheel.RR.*` | | Rear right |
+| 134 | `rollCentre.front` | m | Height of the front roll centre: the mean over the two wheels of `roll_centre + roll_centre_gain * travel` |
+| 135 | `rollCentre.rear` | m | Rear |
 
 Columns 13-18 are the six ISO vehicle velocities (`body_velocity`), in the body's axes, so they tilt with the body;
 the position, the angles and `vel.z` are in the world frame. So a rate is its angle's slope only while the car is
@@ -232,6 +238,24 @@ Each wheel block, in this order:
 | `tyreDefl` | m | The tyre's compression; zero or less means it is off the ground. 0 except in the unsprung model |
 | `wheelZ` | m | Height of the wheel centre above the ground. 0 except in the unsprung model |
 | `stopF` | N | The stops' force: negative from the droop stop (it pulls the wheel up), positive from the bump stop (it pushes the body up); never both. 0 except in the unsprung model |
+
+The geometry fields, which follow the anti-roll columns (columns 106-133) and are 0 outside the unsprung model, except
+`motionRatio`, which is 1, and `wheelSteer`, which on the front wheels is the steer:
+
+| Field | Unit | Meaning |
+|---|---|---|
+| `travel` | m | The wheel against the body, positive in bump, 0 at rest |
+| `wheelSteer` | rad | This wheel's angle to the body, positive left: the steer shared by Ackermann, less toe-in on the left and plus it on the right |
+| `toe` | rad | Toe, positive toe-in |
+| `camber` | rad | Lean to the road (the body's roll included), positive with the top outboard |
+| `trackChange` | m | How far the contact patch has moved from its rest track, positive outboard |
+| `motionRatio` | - | Strut travel per metre of wheel travel, at this travel |
+| `jackF` | N | Vertical force from the linkage, positive when it lifts the body and presses the wheel down |
+
+The strut's total at the wheel is `motionRatio` x (`springF` + `damperF` + `stopF`) + `arbF`, and the vertical force
+between the wheel and the body is that plus `jackF`. Like the other force columns, these are worked out from the
+state at the start of the step. The body gets jacking from the tyre forces averaged over the wheel's sub-steps, so
+`jackF` is not exactly the force applied.
 
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own

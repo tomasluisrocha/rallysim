@@ -1,9 +1,12 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
+#include <string>
 #include "tests/check.hpp"
+#include "tests/telemetry_helpers.hpp"
 #include "runner/run_four_wheel.hpp"
 #include "vehicle/four_wheel.hpp"
+#include "vehicle/four_wheel_telemetry.hpp"
 
 using namespace rallysim;
 
@@ -395,6 +398,28 @@ int main()
             check_near("steady turn: rear transfer moment K roll + G", Mr, Kr * roll + Gr, 0.5);
             check_near("steady turn: front jacking difference is h F", (f.corner[FR].jacking - f.corner[FL].jacking) *
                        p.track_front / 2, front * F[0], 1e-6);
+            // the same from the telemetry row: jackF's difference against the axle force, taken from the row's own
+            // tyre forces along the body's left (Fy cos(wheelSteer) + Fx sin(wheelSteer))
+            {
+                const std::vector<std::string> names = column_names(four_wheel_columns());
+                const std::vector<Real> row = four_wheel_row(r.steps, r.dt, s, p, driver_input(r, s, r.steps * r.dt),
+                                                             energy_books(s, p));
+                auto col = [&](const std::string &name) { return row[static_cast<std::size_t>(index_of(names, name))]; };
+                auto left = [&](const char *w)
+                {
+                    const std::string b = std::string("wheel.") + w + ".";
+                    return col(b + "Fy") * std::cos(col(b + "wheelSteer")) + col(b + "Fx") * std::sin(col(b + "wheelSteer"));
+                };
+                check_near("steady turn: row's jackF difference is h F (from the contact geometry)",
+                           (col("wheel.FR.jackF") - col("wheel.FL.jackF")) * p.track_front / 2, front * F[0], 1e-6);
+                check_near("steady turn: row's rear jackF difference is h F (from the contact geometry)",
+                           (col("wheel.RR.jackF") - col("wheel.RL.jackF")) * p.track_rear / 2, rear * F[1], 1e-6);
+                check_near("steady turn: row's jackF difference is h F (from Fx, Fy, wheelSteer)",
+                           (col("wheel.FR.jackF") - col("wheel.FL.jackF")) * p.track_front / 2,
+                           front * (left("FL") + left("FR")), 1e-3);
+                check_near("steady turn: rollCentre.front", col("rollCentre.front"), front, 1e-12);
+                check_near("steady turn: rollCentre.rear", col("rollCentre.rear"), rear, 1e-12);
+            }
             check_near("steady turn: the loads add up to the weight", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
                        p.chassis.mass * g, 1e-6);
             return turn{roll, expected, Mf / (Mf + Mr), ef / (ef + er)};
@@ -406,6 +431,69 @@ int main()
         check_near("steady turn, 0.25 and 0: front share", b.share, b.expected_share, 1e-4);
         check_near("steady turn, 0.25 and 0: front share value", b.share, 0.59560, 1e-4);
         steady(0.10, 0.15, 0.8);
+    }
+
+    // roll centre column with a gain: 0.10 - 0.5 x the mean of the two front travels, with FL raised 0.02 m and FR
+    // lowered 0.005 m. Catches the roll centre taken from one wheel.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.roll_centre = 0.10;
+        p.front_corner.roll_centre_gain = -0.5;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[FL].z += 0.02;
+        s.corners[FR].z -= 0.005;
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const std::vector<Real> row = four_wheel_row(0, 0.001, s, p, none, energy_books(s, p));
+        auto col = [&](const std::string &name) { return row[static_cast<std::size_t>(index_of(names, name))]; };
+        const Real mean = 0.5 * (col("wheel.FL.travel") + col("wheel.FR.travel"));
+        check_near("roll centre column: the travels are what was set", col("wheel.FL.travel") - col("wheel.FR.travel"),
+                   0.025, 1e-12);
+        check_near("roll centre column: front is 0.10 - 0.5 x the mean travel", col("rollCentre.front"), 0.10 - 0.5 * mean,
+                   1e-12);
+        check_near("roll centre column: rear is 0", col("rollCentre.rear"), 0.0, 1e-12);
+    }
+
+    // wheelSteer in the row: toe 0.004 on the front and Ackermann 1 at steer 0.125. Toe-in turns FL right and FR left.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.ackermann = 1;
+        p.front_corner.toe = 0.004;
+        const four_wheel_state s = four_wheel_initial(p, 0.0);
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const std::vector<Real> row = four_wheel_row(0, 0.001, s, p, four_wheel_input{0.125, 0.0, 0.0, 0.0},
+                                                     energy_books(s, p));
+        check_column(names, row, "wheel.FL.wheelSteer", 0.129842820 - 0.004, 1e-9);
+        check_column(names, row, "wheel.FR.wheelSteer", 0.120503753 + 0.004, 1e-9);
+        check_column(names, row, "wheel.RL.wheelSteer", 0.0, 1e-12);
+    }
+
+    // every per-wheel geometry column of FL against its source, in a state where all seven differ and none is 0.
+    // Catches two values swapped in the row (toe and camber, say), which the rows with 0 in both cannot show.
+    {
+        four_wheel_params p = geometry_car(0.8, 1);
+        p.front_corner.toe = 0.004;
+        p.front_corner.camber = -0.02;
+        p.front_corner.roll_centre = 0.10;
+        four_wheel_state s = four_wheel_initial(p, 10.0); // moving, so the tyres push and FL has jacking
+        s.body.pos.z -= 0.02; // every wheel is 0.02 m up against the body, and the tyres stay loaded
+        s.wheels[FL].lateral_slip = 0.05; // the tyre is twisted, so it pushes sideways
+        const four_wheel_input in{0.1, 0.0, 0.0, 0.0};
+        const four_wheel_forces f = evaluate(s, p, in);
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const std::vector<Real> row = four_wheel_row(0, 0.001, s, p, in, energy_books(s, p));
+        check_column(names, row, "wheel.FL.travel", 0.02, 1e-12);
+        check_column(names, row, "wheel.FL.toe", 0.004, 1e-12);
+        check_column(names, row, "wheel.FL.motionRatio", 0.82, 1e-12);
+        check_column(names, row, "wheel.FL.travel", f.kin[FL].travel, 1e-12);
+        check_column(names, row, "wheel.FL.wheelSteer", f.kin[FL].steer, 1e-12);
+        check_column(names, row, "wheel.FL.toe", f.kin[FL].toe, 1e-12);
+        check_column(names, row, "wheel.FL.camber", f.camber[FL], 1e-12);
+        check_column(names, row, "wheel.FL.trackChange", f.kin[FL].offset, 1e-12);
+        check_column(names, row, "wheel.FL.motionRatio", f.kin[FL].ratio, 1e-12);
+        check_column(names, row, "wheel.FL.jackF", f.corner[FL].jacking, 1e-12);
+        check_true("geometry row: the seven values are distinct and not 0",
+                   f.kin[FL].steer != 0 && f.camber[FL] != 0 && f.kin[FL].offset != 0 && f.corner[FL].jacking != 0 &&
+                       f.camber[FL] != f.kin[FL].toe);
     }
 
     // the toe-in run with roll centres 0.15 on both axles: each tyre's 120 N inboard gives slope x 120 = 24 N of

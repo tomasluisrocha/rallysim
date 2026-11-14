@@ -46,6 +46,22 @@ namespace rallysim
         return c;
     }
 
+    // The suspension geometry, after the anti-roll forces: for each wheel in wheel order travel (m), wheelSteer, toe,
+    // camber (rad), trackChange (m), motionRatio (-) and jackF (N), then the two axles' roll centre heights (m).
+    inline std::vector<telemetry_column> geometry_columns()
+    {
+        std::vector<telemetry_column> c;
+        for (std::size_t i = 0; i < kWheels; ++i)
+            for (const telemetry_column &g : std::vector<telemetry_column>{{"travel", "m"}, {"wheelSteer", "rad"},
+                                                                           {"toe", "rad"}, {"camber", "rad"},
+                                                                           {"trackChange", "m"}, {"motionRatio", "-"},
+                                                                           {"jackF", "N"}})
+                c.push_back({std::string("wheel.") + wheel_label(i) + "." + g.name, g.unit});
+        c.push_back({"rollCentre.front", "m"});
+        c.push_back({"rollCentre.rear", "m"});
+        return c;
+    }
+
     // The body columns come in groups: time, the driver's inputs, where the car is (world position, then roll, pitch
     // and yaw), how it moves (body_velocity's u, v, w, p, q, r, in that order), then values worked out from those and
     // from the tyre forces. Then each wheel's block, the energy books and the anti-roll forces.
@@ -67,6 +83,8 @@ namespace rallysim
             c.push_back(e);
         for (const telemetry_column &a : antiroll_columns())
             c.push_back(a);
+        for (const telemetry_column &g : geometry_columns())
+            c.push_back(g);
         return c;
     }
 
@@ -174,6 +192,15 @@ namespace rallysim
                                w.damper, w.tyre, books.residual(e)});
         for (std::size_t i = 0; i < kWheels; ++i)
             row.push_back(f.corner[i].antiroll);
+        const bool unsprung = p.vertical == vertical_model::unsprung;
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            const corner_kinematics &k = f.kin[i];
+            row.insert(row.end(), {k.travel, unsprung ? k.steer : (is_front(i) ? f.steer : 0.0), k.toe, f.camber[i],
+                                   k.offset, k.ratio, f.corner[i].jacking});
+        }
+        for (std::size_t l : {FL, RL})
+            row.push_back(0.5 * (f.kin[l].slope + f.kin[l + 1].slope) * 0.5 * (is_front(l) ? p.track_front : p.track_rear));
         return row;
     }
 }

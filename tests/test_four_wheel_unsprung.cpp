@@ -657,6 +657,39 @@ int main()
             check_column(names, ro, name, 0.0);
     }
 
+    // the geometry columns: 135 in all, the first 105 as before, the last two the roll centres; the default car at
+    // rest has 0 in each but the four motion ratios, which are 1
+    {
+        const std::vector<telemetry_column> cols = four_wheel_columns();
+        const std::vector<std::string> names = column_names(cols);
+        std::vector<std::string> before{"step", "time", "steer", "throttle", "brake", "handbrake", "pos.x", "pos.y",
+                                        "pos.z", "roll", "pitch", "yaw", "u", "v", "w", "roll_rate", "pitch_rate",
+                                        "yaw_rate", "speed", "beta", "vel.z", "a_long", "a_lat", "net.Fx", "net.Fy",
+                                        "yaw_moment"};
+        for (std::size_t i = 0; i < kWheels; ++i)
+            for (const telemetry_column &f : wheel_fields())
+                before.push_back(std::string("wheel.") + wheel_label(i) + "." + f.name);
+        for (const telemetry_column &e : energy_columns())
+            before.push_back(e.name);
+        for (const telemetry_column &a : antiroll_columns())
+            before.push_back(a.name);
+        check_true("geometry columns: 135 columns", names.size() == 135);
+        check_true("geometry columns: the first 105 are unchanged",
+                   before.size() == 105 && std::equal(before.begin(), before.end(), names.begin()));
+        check_true("geometry columns: the last two are the roll centres",
+                   names[133] == "rollCentre.front" && names[134] == "rollCentre.rear");
+        check_true("geometry columns: the first of them is FL's travel", names[105] == "wheel.FL.travel");
+
+        const four_wheel_params p = unsprung_car();
+        const four_wheel_state s = four_wheel_initial(p, 0.0);
+        const std::vector<Real> row = four_wheel_row(0, dt, s, p, none, energy_books(s, p));
+        for (std::size_t k = 105; k < names.size(); ++k)
+        {
+            const bool ratio = names[k].size() > 11 && names[k].compare(names[k].size() - 11, 11, "motionRatio") == 0;
+            check_near(("geometry columns at rest: " + names[k]).c_str(), row[k], ratio ? 1.0 : 0.0, 1e-12);
+        }
+    }
+
     // the step number against hand values (default car, 1 ms and 2 ms), then each term on its own
     {
         const four_wheel_params p = unsprung_car();
