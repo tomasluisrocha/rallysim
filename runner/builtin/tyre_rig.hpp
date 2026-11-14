@@ -38,7 +38,7 @@ namespace rallysim
 
     inline bool write_tyre_rig(const std::string &path)
     {
-        std::ofstream out(path);
+        std::ofstream out(path, std::ios::binary); // binary, like telemetry: lines end in \n on every system
         if (!out)
             return false;
         out << "# tyre_rig\ncurve,sweep,fz,slip_ratio,slip_angle_deg,fx,fy\n";
