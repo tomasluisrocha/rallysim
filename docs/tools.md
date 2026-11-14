@@ -69,6 +69,17 @@ largest suspension deflection are always shown.
 `--save PNG` also draws the twelve-panel chart without a window; `--show` opens it. Not both. `--events` (with either)
 marks the first run's events and landings as vertical lines on the panels over time.
 
+### characteristics
+
+```
+python tools/rally.py characteristics out/runs/fw_showcase.csv --save out/plots/characteristics.png
+```
+
+Three panels from a four-wheel run: spring force against deflection, damper force against deflection speed and stop
+force against deflection, one point per row and wheel (FL, FR, RL, RR). The spring and stop panels mark each axle's
+rest deflection from line 1. The points are the file's own columns, so a force law that is wrong shows as points off
+the expected line. The stop force needs schema 6. `--save PNG` or `--show`, not both.
+
 ### handling
 
 ```

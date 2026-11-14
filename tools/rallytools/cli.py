@@ -121,6 +121,31 @@ def _path(args):
     return 0
 
 
+def _characteristics(args):
+    from .charts.characteristics import figure
+    run = load(args.run)
+    if args.save is not None and args.show:
+        print("characteristics: --save and --show are mutually exclusive", file=sys.stderr)
+        return 2
+    if args.show:
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        import matplotlib.pyplot as plt
+        figure(run, fig=plt.figure())
+        plt.show()
+        return 0
+    import matplotlib
+    matplotlib.use("Agg")
+    chart = figure(run)
+    if args.save is None:
+        print("characteristics: give --save PNG or --show", file=sys.stderr)
+        return 2
+    output = Path(args.save)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    chart.savefig(output, dpi=110)
+    print(f"wrote {output}")
+    return 0
+
+
 def _columns(args):
     from .charts.columns import figure
     run = load(args.file)
@@ -294,6 +319,13 @@ def main(argv=None):
     command.add_argument("--combined", metavar="NAME",
                          help="curve for the combined panels (default: the first --curve, else tmeasy)")
     command.add_argument("--save", metavar="PNG", help="save the chart to this file instead of showing it")
+    command = subparsers.add_parser("characteristics", help="each suspension force against its travel or speed",
+                                    description="Draw spring force and stop force against deflection and damper "
+                                                "force against deflection speed, one point per row and wheel, "
+                                                "from a four-wheel run's own columns.")
+    command.add_argument("run", metavar="RUN", help="four-wheel run (CSV)")
+    command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
+    command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     command = subparsers.add_parser("columns", help="chart of chosen columns of a run against one column",
                                     description="Plot each Y column against X. Yaw is drawn unwrapped unless "
                                                 "--wrapped. Without --save the chart is shown.")
@@ -371,6 +403,8 @@ def main(argv=None):
             return _sweep(args)
         if args.command == "columns":
             return _columns(args)
+        if args.command == "characteristics":
+            return _characteristics(args)
         if args.command == "path":
             return _path(args)
         if args.command == "tyre-rig":
