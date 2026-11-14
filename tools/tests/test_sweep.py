@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from rallytools import cli
 from rallytools.charts.sweep import figure
 from rallytools.run import from_frame, load
-from rallytools.sweep import metric_value, sweep, values_of
+from rallytools.sweep import SweepResult, metric_value, sweep, values_of
 
 from .support import need
 
@@ -157,6 +157,52 @@ class SweepTest(unittest.TestCase):
         self.assertEqual(len(plt.gcf().axes[-1].lines), 2)
         show.assert_called_once_with()
         plt.close("all")
+
+
+def _synthetic(count, metrics=("maxabs:yaw_rate",)):
+    """A sweep result made in memory (no rallysim): one yaw_rate trace per value."""
+    t = np.linspace(0.0, 2.0, 21)
+    values = [f"{40 + 5 * i}kN/m" for i in range(count)]
+    runs = [from_frame(pd.DataFrame({"time": t, "yaw_rate": 0.1 * (i + 1) * np.sin(t)}), kind="bicycle",
+                       units={"yaw_rate": "rad/s"}) for i in range(count)]
+    rows = [{"value": value, **{spec: 1.0 + i for spec in metrics}} for i, value in enumerate(values)]
+    return SweepResult("fw_circle", "spring_front", (), tuple(metrics), Path("."), values, [], runs, rows, [])
+
+
+class FigureWidthTest(unittest.TestCase):
+    def tearDown(self):
+        plt.close("all")
+
+    def test_a_sweep_of_one_or_two_metrics_is_at_least_ten_inches_wide(self):
+        self.assertGreaterEqual(figure(_synthetic(6)).get_size_inches()[0], 10)
+        two = figure(_synthetic(6, ("maxabs:yaw_rate", "final:yaw_rate")))
+        self.assertGreaterEqual(two.get_size_inches()[0], 10)
+        # more metrics keep 4.2 in each
+        five = ("max:yaw_rate", "min:yaw_rate", "maxabs:yaw_rate", "mean:yaw_rate", "final:yaw_rate")
+        self.assertAlmostEqual(figure(_synthetic(3, five)).get_size_inches()[0], 21.0)
+
+    def test_the_width_holds_in_a_given_figure(self):
+        target = Figure()
+        figure(_synthetic(3), fig=target)
+        self.assertGreaterEqual(target.get_size_inches()[0], 10)
+
+    def test_the_trace_legend_lies_inside_the_figure(self):
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        for count in (2, 6, 12):
+            chart = figure(_synthetic(count))
+            FigureCanvasAgg(chart).draw()
+            legend = chart.axes[-1].get_legend()
+            box, page = legend.get_window_extent(), chart.bbox
+            self.assertGreaterEqual(box.x0, page.x0, count)
+            self.assertLessEqual(box.x1, page.x1, count)
+            self.assertGreaterEqual(box.y0, page.y0, count)
+            self.assertLessEqual(box.y1, page.y1, count)
+
+    def test_the_legend_has_no_more_columns_than_values_or_than_fit(self):
+        two = figure(_synthetic(2)).axes[-1].get_legend()
+        self.assertEqual(two._ncols, 2)
+        many = figure(_synthetic(12)).axes[-1].get_legend()
+        self.assertLessEqual(many._ncols, 5)  # about 1.6 in a column in a 10 in figure
 
 
 if __name__ == "__main__":

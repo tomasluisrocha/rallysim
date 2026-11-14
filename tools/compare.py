@@ -8,7 +8,8 @@ Usage:
 
 A is drawn dashed, B solid; the small plot under each channel is B - A. B is interpolated onto A's times, over the
 time both runs cover. It also prints, for each channel, the largest difference and both final values, and the
-line-1 facts (car parameters) that differ between the files, so you can see what changed.
+line-1 facts (car parameters) that differ between the files, so you can see what changed. Without --labels each
+run is named after its origin and the parameters that differ, e.g. "snap: spring_front (50000)".
 With --save the figure goes to out/plots/compare/<run>__<A>_vs_<B>.png unless a path is given.
 For more than two runs use: python tools/rally.py overlay RUN RUN RUN ...
 """
@@ -71,13 +72,14 @@ def main():
             labels = ("A", "B")
         try:
             runs = [load(path_a), load(path_b)]
-            print(table(runs, channels, labels, paths=[path_a, path_b]))
+            describe = not args.labels
+            print(table(runs, channels, labels, paths=[path_a, path_b], describe=describe))
             if args.save is None:
                 import matplotlib.pyplot as plt
-                figure(runs, channels, labels, fig=plt.figure())
+                figure(runs, channels, labels, fig=plt.figure(), describe=describe)
                 plt.show()
                 continue
-            fig = figure(runs, channels, labels)
+            fig = figure(runs, channels, labels, describe=describe)
         except ValueError as error:
             sys.exit(str(error))
         out = Path(args.save) if (args.save and len(pairs) == 1) else COMPARE / f"{run}__{labels[0]}_vs_{labels[1]}.png"

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from rallytools import cli
-from rallytools.charts.overlay import figure, table
+from rallytools.charts.overlay import _prepare, figure, table
 from rallytools.run import from_frame, load
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -156,6 +156,123 @@ class TestOverlayData(unittest.TestCase):
         for axes in (chart.axes[0], chart.axes[1]):
             lines = [line for line in axes.lines if len(line.get_xdata()) > 1]
             self.assertEqual([line.get_linestyle() for line in lines], ["--", "-", "-"])
+
+
+def _with_line1(name, meta, t=None, **columns):
+    t = np.round(np.arange(0.0, 1.0001, 0.05), 6) if t is None else t
+    frame = pd.DataFrame({"time": t, "pos.x": t, "pos.y": 0.0 * t})
+    for key, value in columns.items():
+        frame[key] = value * np.ones(len(t)) if np.isscalar(value) else value
+    return from_frame(frame, kind="bicycle", name=name, meta=meta)
+
+
+class TestLabels(unittest.TestCase):
+    def pair(self):
+        return (_with_line1("x", {"spring_front": 50000.0, "curve_front": 2.0}),
+                _with_line1("y", {"spring_front": 60000.0, "curve_front": 1.0}))
+
+    def test_label_names_what_differs_with_curves_by_name(self):
+        a, b = self.pair()
+        lines = table([a, b], ["pos.x"]).splitlines()
+        self.assertEqual(lines[0], "A = x: spring_front (50000), curve_front (tmeasy)")
+        self.assertEqual(lines[1], "B = y: spring_front (60000), curve_front (peak_slide)")
+        self.assertIn("line-1 facts that differ: curve_front tmeasy -> peak_slide, spring_front 50000 -> 60000", lines)
+        legend = [text.get_text() for text in figure([a, b], ["pos.x"]).axes[0].get_legend().get_texts()]
+        self.assertEqual(legend, ["x: spring_front (50000), curve_front (tmeasy)",
+                                  "y: spring_front (60000), curve_front (peak_slide)"])
+
+    def test_no_more_than_two_then_the_count(self):
+        a, b = self.pair()
+        a.meta["mass"], b.meta["mass"] = 1000.0, 1100.5
+        a.meta["lf"], b.meta["lf"] = 1.1, 1.2
+        lines = table([a, b], ["pos.x"]).splitlines()
+        self.assertEqual(lines[0], "A = x: spring_front (50000), curve_front (tmeasy) +2 more")
+        self.assertEqual(lines[1], "B = y: spring_front (60000), curve_front (peak_slide) +2 more")
+        del a.meta["lf"], b.meta["lf"]
+        self.assertEqual(table([a, b], ["pos.x"]).splitlines()[1],
+                         "B = y: spring_front (60000), curve_front (peak_slide) +1 more")
+
+    def test_identical_line_1_keeps_the_origin(self):
+        a = _with_line1("x", {"spring_front": 50000.0, "curve_front": 2.0})
+        b = _with_line1("y", {"spring_front": 50000.0, "curve_front": 2.0})
+        lines = table([a, b], ["pos.x"]).splitlines()
+        self.assertEqual(lines[:3], ["A = x", "B = y", "line-1 facts: the same"])
+        # only line 1 counts: a run with another column or another speed is not a differing parameter
+        c = _with_line1("z", {"spring_front": 50000.0, "curve_front": 2.0}, speed=3.0)
+        self.assertEqual(table([a, c], ["pos.x"]).splitlines()[1], "B = z")
+
+    def test_later_runs_are_compared_with_the_first(self):
+        a = _with_line1("x", {"spring_front": 50000.0})
+        b = _with_line1("y", {"spring_front": 60000.0})
+        c = _with_line1("z", {"spring_front": 50000.0})
+        _, _, labels = _prepare([a, b, c], ["pos.x"], None)
+        self.assertEqual(labels, ["x: spring_front (50000)", "y: spring_front (60000)", "z"])
+
+    def test_names_that_repeat_become_letters_first(self):
+        a = _with_line1("run", {"mass": 1000.0})
+        b = _with_line1("run", {"mass": 1200.0})
+        _, _, labels = _prepare([a, b], ["pos.x"], None)
+        self.assertEqual(labels, ["A: mass (1000)", "B: mass (1200)"])
+
+    def test_given_labels_are_used_as_they_are(self):
+        a, b = self.pair()
+        lines = table([a, b], ["pos.x"], ["old", "new"]).splitlines()
+        self.assertEqual(lines[:2], ["A = old", "B = new"])
+        legend = [text.get_text() for text in figure([a, b], ["pos.x"], ["old", "new"]).axes[0].get_legend().get_texts()]
+        self.assertEqual(legend, ["old", "new"])
+        # origins that are to be described (what compare.py passes) are described only on request
+        text = table([a, b], ["pos.x"], ["snap", "current"], describe=True).splitlines()
+        self.assertEqual(text[1], "B = current: spring_front (60000), curve_front (peak_slide)")
+        self.assertEqual(table([a, b], ["pos.x"], ["snap", "current"]).splitlines()[:2],
+                         ["A = snap", "B = current"])
+
+    def test_curve_by_name_for_every_curve_key(self):
+        a = _with_line1("x", {"curve": 0.0, "curve_rear": 1.0})
+        b = _with_line1("y", {"curve": 2.0, "curve_rear": 2.0})
+        self.assertEqual(table([a, b], ["pos.x"]).splitlines()[0], "A = x: curve (linear), curve_rear (peak_slide)")
+
+
+class TestInputsNote(unittest.TestCase):
+    def runs(self, **second):
+        t = np.round(np.arange(0.0, 1.0001, 0.05), 6)
+        first = {"steer": 0.0, "throttle": 0.5, "brake": 0.0, "handbrake": 0.0}
+        other = dict(first)
+        for key, value in second.items():
+            other[key] = np.where(t >= value[0], value[1], first[key])
+        return _with_line1("a", {}, speed=10.0, **first), _with_line1("b", {}, speed=10.0, **other)
+
+    def lines(self, a, b):
+        return table([a, b], ["speed"]).splitlines()
+
+    def test_the_earliest_differing_column_and_time(self):
+        a, b = self.runs(steer=(0.3, 0.1))
+        lines = self.lines(a, b)
+        self.assertIn("inputs differ (closed loop): steer from 0.3 s", lines)
+        # after the line-1 facts, before the channel table
+        self.assertLess(lines.index("line-1 facts: the same"), lines.index("inputs differ (closed loop): steer from 0.3 s"))
+        a, b = self.runs(steer=(0.3, 0.1), brake=(0.2, 0.4))
+        self.assertIn("inputs differ (closed loop): brake from 0.2 s", self.lines(a, b))
+        self.assertEqual(sum(line.startswith("inputs differ") for line in self.lines(a, b)), 1)
+
+    def test_the_second_run_is_the_one_read_as_b(self):
+        a, b = self.runs(steer=(0.3, 0.1))
+        self.assertTrue(any(line.startswith("inputs differ") for line in self.lines(a, b)))
+        # a run compared with itself agrees; the first run's column is not read twice
+        self.assertFalse(any(line.startswith("inputs differ") for line in self.lines(a, a)))
+        self.assertFalse(any(line.startswith("inputs differ") for line in self.lines(b, b)))
+
+    def test_equal_inputs_and_a_tiny_difference_give_no_line(self):
+        a, b = self.runs()
+        self.assertFalse(any(line.startswith("inputs differ") for line in self.lines(a, b)))
+        b.data["steer"] = b.data["steer"] + 1e-12
+        self.assertFalse(any(line.startswith("inputs differ") for line in self.lines(a, b)))
+
+    def test_runs_without_input_columns_are_fine(self):
+        a, b = _built(0.5)
+        self.assertFalse(any(line.startswith("inputs differ") for line in table([a, b], ["speed"]).splitlines()))
+        # one run with them and one without is the same
+        c, d = self.runs(steer=(0.3, 0.1))
+        self.assertFalse(any(line.startswith("inputs differ") for line in table([c, b], ["speed"]).splitlines()))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from matplotlib.figure import Figure
 
 from ..compare import align
 from ..run import Run
+from ..tyre import CURVES
 
 DEFAULTS = {
     "four_wheel": ["speed", "yaw_rate", "beta", "a_lat", "pitch"],
@@ -17,6 +18,10 @@ DEFAULTS = {
 }
 ANGLES = {"yaw", "beta"}  # differences wrapped to [-pi, pi)
 STILL_SPEED = 0.3         # m/s: below this beta is not compared
+INPUTS = ("steer", "throttle", "brake", "handbrake")  # the driver's columns
+INPUT_TOL = 1e-9          # inputs closer than this are the same
+SHOWN = 2                 # differing line-1 parameters named in a label
+CURVE_KEYS = ("curve", "curve_front", "curve_rear")  # line-1 values that are tyre curve codes
 COLOURS = ["tab:blue", "tab:red", "tab:green", "tab:orange", "tab:purple", "tab:brown", "tab:pink", "tab:olive"]
 
 
@@ -24,7 +29,35 @@ def _letter(index):
     return chr(ord("A") + index) if index < 26 else str(index)
 
 
-def _prepare(runs, channels, labels):
+def _value(key, value):
+    """A line-1 value as printed: tyre curves by name, other numbers with :g."""
+    if key in CURVE_KEYS:
+        return CURVES.get(int(value), "?")
+    return f"{value:g}"
+
+
+def _described(runs, origins):
+    """Each origin followed by the line-1 parameters that differ from the first run, as "origin: key (value)", at
+    most SHOWN of them and then " +N more"; a run with none differing keeps its origin. For a later run these
+    are the keys whose value differs from the first run's; the first run shows the values of the keys that
+    differ in any later run. Keys are in the first run's line-1 order; only keys on both lines count."""
+    first = runs[0].meta
+    differing = [[k for k in first if k in run.meta and run.meta[k] != first[k]] for run in runs]
+    differing[0] = [k for k in first if any(k in keys for keys in differing[1:])]
+    labels = []
+    for run, origin, keys in zip(runs, origins, differing):
+        if not keys:
+            labels.append(origin)
+            continue
+        text = ", ".join(f"{k} ({_value(k, run.meta[k])})" for k in keys[:SHOWN])
+        more = f" +{len(keys) - SHOWN} more" if len(keys) > SHOWN else ""
+        labels.append(f"{origin}: {text}{more}")
+    return labels
+
+
+def _prepare(runs, channels, labels, describe=None):
+    """describe: whether labels (or the run names, when there are none) are origins that get the differing
+    line-1 parameters appended; None means when no labels are given."""
     runs = list(runs)
     if len(runs) < 2:
         raise ValueError("overlay needs at least two runs")
@@ -37,6 +70,8 @@ def _prepare(runs, channels, labels):
     missing = [c for c in channels if not all(run.has(c) for run in runs)]
     if missing:
         raise ValueError(f"not in every run: {', '.join(missing)}")
+    if describe is None:
+        describe = labels is None
     if labels is None:
         labels = [run.name for run in runs]
         if len(set(labels)) < len(labels):
@@ -44,6 +79,8 @@ def _prepare(runs, channels, labels):
     labels = list(labels)
     if len(labels) != len(runs):
         raise ValueError(f"{len(labels)} labels for {len(runs)} runs")
+    if describe:
+        labels = _described(runs, labels)
     # yaw is drawn continuously, not as a sawtooth; differences are still wrapped below
     unwrapped = []
     for run in runs:
@@ -73,10 +110,31 @@ def _pair(first: Run, other: Run, channels):
     return t, rows
 
 
-def table(runs, channels=None, labels=None, paths=None) -> str:
-    """The text table: per later run, the labels, the line-1 facts that differ and, per channel, the largest
-    difference from the first run and both final values. paths (optional) are shown after the labels."""
-    runs, channels, labels = _prepare(runs, channels, labels)
+def _inputs_note(first: Run, other: Run):
+    """The line "inputs differ (closed loop): <column> from <time> s" for the driver column that differs
+    earliest between the runs (compared on the first run's times); None when they agree or a run has no
+    input columns."""
+    names = [name for name in INPUTS if first.has(name) and other.has(name)]
+    if not names:
+        return None
+    t, _, values_a, values_b = align(first, other)
+    best = None
+    for name in names:
+        va, vb = values_a[name], values_b[name]
+        with np.errstate(invalid="ignore"):
+            differs = (np.abs(vb - va) > INPUT_TOL) | (np.isnan(va) != np.isnan(vb))
+        if differs.any():
+            when = float(t[int(np.argmax(differs))])
+            if best is None or when < best[1]:
+                best = (name, when)
+    return None if best is None else f"inputs differ (closed loop): {best[0]} from {best[1]:g} s"
+
+
+def table(runs, channels=None, labels=None, paths=None, describe=None) -> str:
+    """The text table: per later run, the labels, the line-1 facts that differ, a note when the driver inputs
+    differ and, per channel, the largest difference from the first run and both final values. paths (optional)
+    are shown after the labels. describe: see _prepare."""
+    runs, channels, labels = _prepare(runs, channels, labels, describe)
     first = runs[0]
     blocks = []
     for index in range(1, len(runs)):
@@ -89,13 +147,17 @@ def table(runs, channels=None, labels=None, paths=None) -> str:
         changed = sorted(k for k in set(meta_a) & set(meta_b) if meta_a[k] != meta_b[k])
         only_a, only_b = sorted(set(meta_a) - set(meta_b)), sorted(set(meta_b) - set(meta_a))
         if changed:
-            lines.append("line-1 facts that differ: " + ", ".join(f"{k} {meta_a[k]:g} -> {meta_b[k]:g}" for k in changed))
+            lines.append("line-1 facts that differ: "
+                         + ", ".join(f"{k} {_value(k, meta_a[k])} -> {_value(k, meta_b[k])}" for k in changed))
         for keys, name in ((only_a, a), (only_b, b)):
             if keys:  # a newer file has more keys: count them rather than list dozens
                 shown = ", ".join(keys[:4]) + (", ..." if len(keys) > 4 else "")
                 lines.append(f"line-1 facts only in {name}: {len(keys)} ({shown})")
         if not (changed or only_a or only_b):
             lines.append("line-1 facts: the same")
+        note = _inputs_note(first, other)
+        if note:
+            lines.append(note)
         end_a = float(first.data["time"].iloc[-1])
         end_b = float(other.data["time"].iloc[-1])
         if end_a != end_b:
@@ -111,11 +173,11 @@ def table(runs, channels=None, labels=None, paths=None) -> str:
     return "\n\n".join(blocks)
 
 
-def figure(runs, channels=None, labels=None, fig=None) -> Figure:
+def figure(runs, channels=None, labels=None, fig=None, describe=None) -> Figure:
     """Build the overlay without showing or saving it. Draws into fig when given (an empty figure, such as one
     from pyplot for a window), else into a new Figure. The first run is dashed, the others solid; the small
-    plot under each channel is each later run minus the first."""
-    runs, channels, labels = _prepare(runs, channels, labels)
+    plot under each channel is each later run minus the first. describe: see _prepare."""
+    runs, channels, labels = _prepare(runs, channels, labels, describe)
     first = runs[0]
     count = len(runs)
     colours = [COLOURS[i % len(COLOURS)] for i in range(count)]

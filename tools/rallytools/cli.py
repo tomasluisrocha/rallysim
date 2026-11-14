@@ -291,6 +291,10 @@ def main(argv=None):
                          help="a not-converging column whose differences are both below R times the largest "
                               "value of the columns with the same unit reads negligible, and does not fail the "
                               "command (default 1e-6; 0 turns this off)")
+    command.add_argument("--tol", action="append", default=[], metavar="PATTERN=ABS[,REL]",
+                         help="for the columns matching PATTERN (* matches any text), negligible means both "
+                              "differences are within ABS + REL x the column's largest absolute value, in place "
+                              "of --rel; repeatable, the last matching one wins (COL=0 never excuses COL)")
     command.add_argument("--all", action="store_true", help="also list the converging and equal columns")
     command = subparsers.add_parser("suspension", help="table and chart of body motion and suspension travel",
                                     description="Print a table of the body's motion and the suspension, "
@@ -479,7 +483,8 @@ def main(argv=None):
                 print(landing_text(load(path), args.window))
             return 0
         if args.command == "stepsize":
-            rows = stepsize_report(load(args.a), load(args.b), load(args.c), rel_tol=args.rel)
+            rules = _rules(args.tol)
+            rows = stepsize_report(load(args.a), load(args.b), load(args.c), rel_tol=args.rel, rules=rules)
             for label, path in (("A", args.a), ("B", args.b), ("C", args.c)):
                 print(f"{label}: {Path(path)}")
             print(stepsize_text(rows, args.all))

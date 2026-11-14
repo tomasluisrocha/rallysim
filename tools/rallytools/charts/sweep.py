@@ -13,12 +13,13 @@ def figure(result, trace="yaw_rate", fig=None) -> Figure:
     one from pyplot for a window), else into a new Figure."""
     metrics = list(result.metrics)
     count = len(metrics)
+    width = max(4.2 * count, 10)  # a sweep of one or two metrics still needs room for the trace legend
     for run in result.runs:
         run.column(trace)  # a missing column is a ValueError before anything is drawn
     if fig is None:
-        fig = Figure(figsize=(4.2 * count, 7.5))
+        fig = Figure(figsize=(width, 7.5))
     else:
-        fig.set_size_inches(4.2 * count, 7.5)
+        fig.set_size_inches(width, 7.5)
     grid = fig.add_gridspec(2, count)
     numbers = [leading_number(v) for v in result.values]
     numeric = all(n is not None for n in numbers)
@@ -51,7 +52,8 @@ def figure(result, trace="yaw_rate", fig=None) -> Figure:
         axis.plot(run.column("time"), y, color=colour, lw=1.2, label=value)
     axis.set_xlabel("time (s)")
     axis.set_ylabel(f"{trace} ({unit})" if unit else trace)
-    axis.legend(title=result.setting, fontsize=8, ncol=min(len(result.runs), 6))
+    # one column per value, about 1.6 in each, and no more than fit the axes
+    axis.legend(title=result.setting, fontsize=8, ncol=max(1, min(len(result.runs), 6, int(0.85 * width / 1.6))))
     axis.grid(True, alpha=0.3)
     held_text = f"   (also {', '.join(result.held)})" if result.held else ""
     fig.suptitle(f"{result.scenario}: {result.setting} swept{held_text}", fontsize=11)

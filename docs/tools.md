@@ -45,7 +45,8 @@ python tools/rally.py diff out/runs/fw_brake.csv out/runs/fw_launch.csv --ignore
 Compares every column of two runs and prints the ones beyond tolerance, with the largest difference, the time it
 occurs and the first time it passes the tolerance. A value differs when `|b - a| > abs + rel * max(|a|, |b|)`; the
 default is `abs` 1e-9, `rel` 0. `--tol PATTERN=ABS[,REL]` sets it for the columns matching PATTERN, where `*`
-matches any text including dots; the last matching `--tol` wins. `yaw` is compared wrapped, and `beta` is left
+matches any text including dots; the last matching `--tol` wins (`stepsize` takes the same option, with the same
+syntax and the last-wins rule; see [stepsize](#stepsize)). `yaw` is compared wrapped, and `beta` is left
 out where either run is below 0.3 m/s. A value that is NaN or infinite in one run only is beyond any tolerance.
 Runs on different time steps are compared at A's times. Differences on line 1 (the car parameters) are printed
 but never counted.
@@ -165,6 +166,14 @@ excuses a column that does not converge; it never changes a "converging" or "equ
 step-size error in a small column of a unit that also has a large column can read "negligible" too; `--rel 0`
 turns it off and shows it.
 
+`--tol PATTERN=ABS[,REL]` (repeatable, the same syntax as in [diff](#diff), the last matching rule wins) sets the
+limit for the columns matching PATTERN: for them "negligible" means both differences are within `ABS + REL * M`,
+where `M` is the column's largest absolute value over the three runs, in place of `--rel` times the unit's scale
+(`--rel` still applies to the other columns). Nothing else changes: "equal" is still within 1e-9, a ratio of 0.6 or
+less is still "converging" whatever the rule says, and the exit code is 1 only for "not converging". So
+`--tol "wheel.*.deflection=0"` makes the suspension travel strict (never excused), and a rule excuses a column
+only for differences below the size it states: `--tol "wheel.*.brakeTorque=1e-4"` excuses a blip up to 1e-4.
+
 A run with an event whose instant moves with the step (a wheel locking) can read "not converging" on a correct
 model: compare such runs against a much finer step instead.
 
@@ -193,6 +202,17 @@ It prints each channel's largest difference, the line-1 facts that differ and bo
 `--channels` picks the channels (default: by kind of run) and `--labels` names the runs. `--save [PNG]` writes
 `out/plots/compare/<run>__<A>_vs_<B>.png` unless given a path. For two runs, `compare.py` also takes snapshots
 (`--against`).
+
+Without `--labels` each run is named `<origin>: <key> (<value>)`, where the origin is the run's name (or A, B, ...
+when names repeat) and the keys are the line-1 parameters whose values differ from the first run's: at most two,
+then ` +N more`, in the first run's line-1 order. The first run lists the keys that differ in any later run, so it
+shows its own values. Values are printed with `%g`, tyre curves by name (`curve_front (peak_slide)`, not `1`), and a
+run with no differing parameter keeps its origin alone. Only line 1 counts: driver settings and computed values
+are not looked at. With `--labels` the names are used as given, and the file name always uses the origin names.
+When both runs have the driver columns (`steer`, `throttle`, `brake`, `handbrake`) and any of them differs by more
+than 1e-9 at the first run's times, the table says `inputs differ (closed loop): steer from 0.3 s` (the earliest
+column and time) after the line-1 facts: the runs were driven by a controller that reacts to the car, so the
+difference in the channels is partly the difference in what the driver did.
 
 ### sweep
 
@@ -401,6 +421,10 @@ python tools/compare.py --against linear --all  # every run in both, into out/pl
 
 A dashed, B solid, B - A underneath each channel (`--channels` picks them, `--labels` names the runs). It prints the largest difference of each channel, both final
 values, and which line-1 facts (car parameters) differ between the files, so you can see what changed.
+Without `--labels` the runs are named after where they come from (the snapshot name and `current`, or `A` and `B`
+when those are equal) and the parameters that differ, as in [overlay](#overlay), and the table has the same
+`inputs differ (closed loop)` line when the driver's inputs differ. The picture's file name uses the origin
+names only.
 
 ![Run comparison](img/tool-compare.png)
 
@@ -417,7 +441,8 @@ Runs the scenario once per value (`rallysim <scenario> --set <setting>=<value>`,
 anything `--set` takes, units included, and `--set` holds other values for every run. A metric is
 `statistic:column` (`max`, `min`, `maxabs`, `mean`, `final`, `range`), angles shown in degrees; the defaults are
 the peak sideslip and yaw rate and the final heading and speed. The picture has each metric against the value, and
-`--trace` (default `yaw_rate`) over time for every value. A metric that does not change is drawn flat.
+`--trace` (default `yaw_rate`) over time for every value. A metric that does not change is drawn flat. The
+picture is at least 10 in wide, so a sweep of one or two metrics still has room for the legend of its trace.
 
 The runs and `summary.csv` (one row per value) go to `out/sweeps/<scenario>__<setting>/`, the picture to
 `out/plots/sweeps/`.

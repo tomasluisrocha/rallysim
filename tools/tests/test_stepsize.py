@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from rallytools import cli, run, stepsize
+from rallytools.compare import Tolerance
 from . import support
 from .support import write_run
 
@@ -208,6 +209,71 @@ class TestStepsize(unittest.TestCase):
             # the strict rule shows the blip as not converging
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.main(["stepsize", *lane, "--rel", "0"]), 1)
+            # a rule of 0 for the blip turns the automatic excuse off for it alone
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(cli.main(["stepsize", *lane, "--tol", "wheel.*.brakeTorque=0"]), 1)
+            self.assertRegex(out.getvalue(), r"(?m)^wheel\.FL\.brakeTorque\t.*\tnot converging\s*$")
+
+    def blip(self):
+        """Runs of a column "small" that does not shrink (1e-5 between the first two runs, nothing after) and a
+        column "big" that converges, both in N m."""
+        a, b, c = runs(units={"big": "N m", "small": "N m"}, big=lambda t, dt: 100 + 1e-3 * dt, small=lambda t, dt: 0 * t)
+        b.data["small"] = b.data["small"] + 1e-5
+        return a, b, c
+
+    def test_a_rule_larger_than_the_differences_excuses_a_column(self):
+        a, b, c = runs(units={"n": "m"}, n=lambda t, dt: 100 + 0 * t)
+        b.data["n"] = b.data["n"] + 5e-4
+        self.assertEqual(row(stepsize.report(a, b, c), "n").verdict, "not converging")
+        # the limit is the rule's, not the unit's: 1e-2 absolute excuses it, 1e-4 does not
+        self.assertEqual(row(stepsize.report(a, b, c, rules=[("n", Tolerance(1e-2, 0))]), "n").verdict, "negligible")
+        self.assertEqual(row(stepsize.report(a, b, c, rules=[("n", Tolerance(1e-4, 0))]), "n").verdict,
+                         "not converging")
+        # REL is a share of the column's largest value over the runs (about 100): 1e-5 x 100 = 1e-3
+        self.assertEqual(row(stepsize.report(a, b, c, rules=[("n", Tolerance(0, 1e-5))]), "n").verdict, "negligible")
+        self.assertEqual(row(stepsize.report(a, b, c, rules=[("n", Tolerance(0, 1e-6))]), "n").verdict,
+                         "not converging")
+        # --rel does not touch a ruled column
+        self.assertEqual(row(stepsize.report(a, b, c, rel_tol=1.0, rules=[("n", Tolerance(1e-4, 0))]), "n").verdict,
+                         "not converging")
+
+    def test_a_rule_of_zero_stops_the_automatic_excuse(self):
+        a, b, c = self.blip()
+        self.assertEqual(row(stepsize.report(a, b, c), "small").verdict, "negligible")
+        strict = stepsize.report(a, b, c, rules=[("small", Tolerance(0, 0))])
+        self.assertEqual(row(strict, "small").verdict, "not converging")
+        # the other column keeps the automatic rule, and the last matching rule wins
+        rules = [("*", Tolerance(0, 0)), ("small", Tolerance(1e-3, 0))]
+        rows = stepsize.report(a, b, c, rules=rules)
+        self.assertEqual(row(rows, "small").verdict, "negligible")
+
+    def test_a_rule_never_changes_a_converging_or_equal_column(self):
+        a, b, c = self.blip()
+        for tolerance in (Tolerance(0, 0), Tolerance(1e3, 1.0)):
+            rows = stepsize.report(a, b, c, rules=[("*", tolerance)])
+            big = row(rows, "big")
+            self.assertEqual(big.verdict, "converging")
+            self.assertAlmostEqual(big.ratio, 0.5, delta=1e-6)
+            self.assertEqual(row(rows, "yaw").verdict, "equal")
+            self.assertEqual(row(rows, "speed").verdict, "equal")
+        # a loose rule does not excuse a NaN
+        b.data.loc[10, "big"] = np.nan
+        rows = stepsize.report(a, b, c, rules=[("big", Tolerance(1e9, 1e9))])
+        self.assertEqual(row(rows, "big").verdict, "not converging")
+
+    def test_cli_tol(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = frames(big=lambda t, dt: 100 + 1e-3 * dt, small=lambda t, dt: 0 * t)
+            data[1]["small"] += 1e-5
+            paths = write_all(folder, data, "t", units={"big": "N m", "small": "N m"})
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["stepsize", *paths]), 0)
+                self.assertEqual(cli.main(["stepsize", *paths, "--tol", "small=0"]), 1)
+                self.assertEqual(cli.main(["stepsize", *paths, "--tol", "small=0", "--tol", "sm*=1e-3"]), 0)
+                self.assertEqual(cli.main(["stepsize", *paths, "--tol", "small=0", "--tol", "big=1"]), 1)
+                self.assertEqual(cli.main(["stepsize", *paths, "--tol", "big=0"]), 0)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(cli.main(["stepsize", *paths, "--tol", "small"]), 2)
 
     def test_no_matplotlib(self):
         root = Path(__file__).resolve().parents[2]

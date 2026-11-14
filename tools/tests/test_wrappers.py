@@ -199,6 +199,44 @@ class CompareTest(Helpful, unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertGreater(output.stat().st_size, 10_000)
 
+    def test_without_labels_the_runs_are_named_by_what_differs_and_the_file_by_the_origin(self):
+        from rallytools.charts import overlay
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.layout(folder)
+            shown = io.StringIO()
+            with patch("rallytools.paths.SNAPSHOTS", root / "snapshots"), patch("rallytools.paths.RUNS", root / "runs"), \
+                    patch("rallytools.paths.COMPARE", root / "compare"), \
+                    patch.object(overlay, "figure", wraps=overlay.figure) as figure, \
+                    contextlib.redirect_stdout(shown):
+                with patch.object(sys, "argv", [str(TOOLS / "compare.py"), "--against", "snap", "x", "--save"]):
+                    try:
+                        runpy.run_path(str(TOOLS / "compare.py"), run_name="__main__")
+                    except SystemExit as stop:
+                        self.assertIn(stop.code, (None, 0))
+            files = sorted(path.name for path in (root / "compare").glob("*.png"))
+            self.assertEqual(files, ["x__snap_vs_current.png"])
+            first = shown.getvalue().splitlines()[0]
+            self.assertTrue(first.startswith("A = snap: "), first)
+            self.assertTrue(figure.called)
+        self.assertIn("B = current: ", shown.getvalue())
+
+    def test_given_labels_are_used_as_they_are(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.layout(folder)
+            shown = io.StringIO()
+            with patch("rallytools.paths.SNAPSHOTS", root / "snapshots"), patch("rallytools.paths.RUNS", root / "runs"), \
+                    patch("rallytools.paths.COMPARE", root / "compare"), contextlib.redirect_stdout(shown):
+                with patch.object(sys, "argv", [str(TOOLS / "compare.py"), "--against", "snap", "x", "--save",
+                                                "--labels", "old", "new"]):
+                    try:
+                        runpy.run_path(str(TOOLS / "compare.py"), run_name="__main__")
+                    except SystemExit as stop:
+                        self.assertIn(stop.code, (None, 0))
+            lines = shown.getvalue().splitlines()
+            self.assertEqual(lines[:2], ["A = old  (%s)" % (root / "snapshots" / "snap" / "runs" / "x.csv"),
+                                         "B = new  (%s)" % (root / "runs" / "x.csv")])
+            self.assertEqual(len(list((root / "compare").glob("x__old_vs_new.png"))), 1)
+
 
 class TopdownStaticTest(Helpful, unittest.TestCase):
     script = "topdown.py"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import fnmatch
 import math
 
 import numpy as np
@@ -63,11 +64,23 @@ def _verdict(d1, d2, ratio, abs_tol, negligible):
     return "negligible" if d1 <= negligible and d2 <= negligible else "not converging"
 
 
-def report(a: Run, b: Run, c: Run, abs_tol: float = 1e-9, rel_tol: float = 1e-6) -> list[Row]:
+def _rule_for(name, rules):
+    """The tolerance of the last rule whose pattern matches the column, or None."""
+    found = None
+    for pattern, tolerance in rules:
+        if fnmatch.fnmatchcase(name, pattern):
+            found = tolerance
+    return found
+
+
+def report(a: Run, b: Run, c: Run, abs_tol: float = 1e-9, rel_tol: float = 1e-6, rules=()) -> list[Row]:
     """The verdicts: "equal" (both differences within abs_tol), "converging" (ratio 0.6 or less), "negligible"
     (would read "not converging", but both differences are within rel_tol times the scale of the column's unit)
     and "not converging". The tolerance only excuses non-convergence, it never changes a converging column;
-    rel_tol 0 makes "negligible" impossible."""
+    rel_tol 0 makes "negligible" impossible.
+    rules are (pattern, Tolerance) pairs as diff takes them, the last matching one wins: for a column a rule
+    matches, "negligible" means both differences are within abs + rel x the column's largest absolute value over
+    the runs, in place of rel_tol times the scale of its unit."""
     _check_steps(a, b, c)
     first = {column.name: column for column in diff(a, b, _EXACT).columns}
     second = {column.name: column for column in diff(b, c, _EXACT).columns}
@@ -78,7 +91,9 @@ def report(a: Run, b: Run, c: Run, abs_tol: float = 1e-9, rel_tol: float = 1e-6)
         one = first[name]
         d1, d2 = one.largest, second[name].largest
         ratio = None if d1 <= abs_tol else d2 / d1
-        rows.append(Row(name, one.unit, d1, d2, ratio, _verdict(d1, d2, ratio, abs_tol, rel_tol * scale[name])))
+        rule = _rule_for(name, rules)
+        negligible = rel_tol * scale[name] if rule is None else rule.abs + rule.rel * _largest((a, b, c), name)
+        rows.append(Row(name, one.unit, d1, d2, ratio, _verdict(d1, d2, ratio, abs_tol, negligible)))
     return rows
 
 
