@@ -207,6 +207,61 @@ int main()
         check_true("sub-stepping: with four sub-steps the same wheel settles", four.flips == 0 && four.late < 1e-3);
     }
 
+    // the limit on the damping: with the contact speed held at zero, the damping makes the spin update
+    // omega' = omega (1 - k h), k h = damping_x R^2 h / I (weight is 1 at standstill). Explicit Euler: no overshoot
+    // below k h = 1, a decaying ring up to 2, growth beyond. The test sets k h through damping_x on the real wheel,
+    // one sub-step per step, with a spin so small that the grip cap stays out of the way. It catches a spin update
+    // that loses stability below k h = 2, and a damping term whose size is not k = damping_x R^2 / I (the first
+    // sub-step must leave 1 - k h of the spin, to the fade of weight at that speed).
+    {
+        struct spin
+        {
+            Real first, lowest, peak, last; // omega after one sub-step, its lowest, its largest |.| and its last, over omega0
+        };
+        const Real omega0 = 1e-6, h = 1e-3;
+        auto spin_down = [&](Real kh)
+        {
+            wheel_params one = w;
+            one.substeps = 1;
+            tyre_params d = t;
+            d.damping_x = kh * one.inertia / (one.radius * one.radius * h);
+            d.damping_y = 0;
+            wheel_state s;
+            s.omega = omega0;
+            spin out{0, 0, 0, 0};
+            for (int i = 0; i < 400; ++i)
+            {
+                step_wheel(s, one, d, patch_velocity{0, 0}, 3000.0, 0.0, 0.0, h);
+                if (i == 0)
+                    out.first = s.omega / omega0;
+                out.lowest = std::min(out.lowest, s.omega / omega0);
+                out.peak = std::max(out.peak, std::fabs(s.omega) / omega0);
+            }
+            out.last = s.omega / omega0;
+            return out;
+        };
+        const spin below_one = spin_down(0.95), above_one = spin_down(1.05), below_two = spin_down(1.9),
+                   above_two = spin_down(2.1);
+        std::printf("damping limit: k h 0.95: first %.3g, lowest %.3g, last %.3g; 1.05: first %.3g, lowest %.3g; "
+                    "1.9: peak %.3g, last %.3g; 2.1: peak %.3g\n",
+                    below_one.first, below_one.lowest, below_one.last, above_one.first, above_one.lowest,
+                    below_two.peak, below_two.last, above_two.peak);
+        check_near("damping limit: one sub-step leaves 1 - k h of the spin (k h 0.95)", below_one.first, 0.05, 1e-6);
+        check_near("damping limit: one sub-step leaves 1 - k h of the spin (k h 1.9)", below_two.first, -0.9, 1e-6);
+        // the relaxed slip is a weak spring on the spin, so the settled spin dips a fraction of a percent (0.2%) below
+        // zero; an overshoot from the damping itself is 5% at k h 1.05
+        check_true("damping limit: k h 0.95 settles without overshoot", below_one.lowest > -0.01 && std::fabs(below_one.last) < 1e-4);
+        check_true("damping limit: k h 1.05 overshoots", above_one.lowest < -0.04 && above_one.first < 0);
+        check_true("damping limit: k h 1.9 rings but settles, never above its start",
+                   below_two.peak <= 1.0 + 1e-9 && std::fabs(below_two.last) < 1e-4);
+        check_true("damping limit: k h 2.1 grows", above_two.peak > 1e3);
+
+        // and the default wheel and tyre at the usual 1 ms step with its four sub-steps is well inside
+        const Real kh = t.damping_x * w.radius * w.radius * (dt / w.substeps) / w.inertia;
+        std::printf("damping limit: default wheel, dt 1 ms, %d sub-steps: k h = %.3f\n", w.substeps, kh);
+        check_true("damping limit: the default wheel is below k h = 1", kh < 1.0);
+    }
+
     // low speed, where the damping acts: a twisted tyre on a free wheel at rest unwinds and settles without the
     // spin update blowing up (the damping also acts on the spin), and so does a slow roll
     {

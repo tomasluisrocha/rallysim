@@ -100,8 +100,11 @@ namespace rallysim
     // damping fades in linearly below damping_fade_speed, so at speed nothing changes; at standstill it soaks
     // up the patch's spring, so a stopped car settles instead of rocking. The total stays within the grip.
     //
-    // Keep damping_x * R^2 * (dt / substeps) / I below about 0.5: the damping also acts on the wheel's spin
-    // (through -Fx R), and above that the explicit spin update overshoots and blows up.
+    // The damping also acts on the wheel's spin (through -Fx R). With the contact speed held, that is
+    // omega' = -k (omega - vx / R), k = weight * damping_x * R^2 / I, and the spin update is explicit Euler: each
+    // sub-step of h = dt / substeps multiplies the distance from vx / R by (1 - k h). So the spin settles without
+    // overshoot for k h < 1, rings but settles for 1 < k h < 2, and grows above 2 (the grip cap then holds it to a
+    // chatter). Keep damping_x * R^2 * h / I below 1; weight is 1 at standstill, its largest.
     inline tyre_force wheel_force(const wheel_state &s, const wheel_params &w, const tyre_params &t,
                                   const patch_velocity &v, Real fz)
     {
