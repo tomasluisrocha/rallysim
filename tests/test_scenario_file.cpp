@@ -179,7 +179,7 @@ int main()
         check_true("step: light wheels on both axles give two errors",
                    errors_of(rear + "unsprung_mass_front = 2\ntyre_rate_front = 5000000\n").size() == 2);
     }
-    for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_showcase"})
+    for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_ramp", "fw_showcase"})
     {
         bool loads = true;
         try

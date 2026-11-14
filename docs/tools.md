@@ -95,6 +95,7 @@ the expected line. The stop force needs schema 6. `--save PNG` or `--show`, not 
 
 ```
 python tools/rally.py handling out/runs/fw_lane.csv
+python tools/rally.py handling out/runs/fw_ramp.csv
 python tools/rally.py handling out/runs/fw_lane.csv --from 1 --to 5 --save out/plots/handling.png
 ```
 

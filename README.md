@@ -13,8 +13,8 @@ The project includes:
 - kinematic bicycle, dynamic single-track and four-wheel vehicle models;
 - linear, peak-slide and TMeasy-inspired tyre curves;
 - scenarios as plain-text files (circles, lane changes, braking, launch,
-  handbrake turns, a jump into a hairpin) that run without rebuilding, with
-  any car parameter changeable from the command line;
+  handbrake turns, a steering ramp, a jump into a hairpin) that run without
+  rebuilding, with any car parameter changeable from the command line;
 - finite-state checks, golden tests and CTest coverage;
 - CSV telemetry with explicit units and vehicle metadata;
 - top-down and 3D replays, tyre plots and animated GIFs.
