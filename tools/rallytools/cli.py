@@ -287,6 +287,9 @@ def main(argv=None):
     command.add_argument("a", metavar="A", help="run at dt (CSV)")
     command.add_argument("b", metavar="B", help="run at dt/2 (CSV)")
     command.add_argument("c", metavar="C", help="run at dt/4 (CSV)")
+    command.add_argument("--rel", type=float, default=1e-6, metavar="R",
+                         help="a difference below R times the largest value of the columns with the same unit "
+                              "counts as zero (default 1e-6; 0 keeps only the absolute 1e-9)")
     command.add_argument("--all", action="store_true", help="also list the converging and equal columns")
     command = subparsers.add_parser("suspension", help="table and chart of body motion and suspension travel",
                                     description="Print a table of the body's motion and the suspension, "
@@ -475,7 +478,7 @@ def main(argv=None):
                 print(landing_text(load(path), args.window))
             return 0
         if args.command == "stepsize":
-            rows = stepsize_report(load(args.a), load(args.b), load(args.c))
+            rows = stepsize_report(load(args.a), load(args.b), load(args.c), rel_tol=args.rel)
             for label, path in (("A", args.a), ("B", args.b), ("C", args.c)):
                 print(f"{label}: {Path(path)}")
             print(stepsize_text(rows, args.all))

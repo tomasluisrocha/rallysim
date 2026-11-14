@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -10,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from rallytools import cli, run, stepsize
+from . import support
 from .support import write_run
 
 DTS = (0.004, 0.002, 0.001)
@@ -23,23 +25,26 @@ def make(dt, **functions):
     return pd.DataFrame(data)
 
 
+EXE = os.environ.get("RALLYSIM_EXE")
+
+
 def frames(**functions):
     return [make(dt, **functions) for dt in DTS]
 
 
-def runs(**functions):
-    return [run.from_frame(frame, kind="bicycle", dt=dt) for frame, dt in zip(frames(**functions), DTS)]
+def runs(units=None, **functions):
+    return [run.from_frame(frame, kind="bicycle", dt=dt, units=units) for frame, dt in zip(frames(**functions), DTS)]
 
 
 def row(rows, name):
     return next(r for r in rows if r.name == name)
 
 
-def write_all(folder, data, prefix):
+def write_all(folder, data, prefix, units=None):
     paths = []
     for name, dt, frame in zip("abc", DTS, data):
         path = Path(folder) / f"{prefix}{name}.csv"
-        write_run(path, frame, dt=dt)
+        write_run(path, frame, dt=dt, units=units)
         paths.append(str(path))
     return paths
 
@@ -115,6 +120,79 @@ class TestStepsize(unittest.TestCase):
             lines = out.getvalue().splitlines()
             self.assertEqual(lines[3], "column\td1\td2\tratio\tverdict")
             self.assertTrue(lines[4].startswith("r\t"))
+
+    def test_tolerance_scales_with_the_unit(self):
+        # a difference of 1e-5 that does not shrink, next to a column of size 100 in the same unit: 1e-5 < 1e-6 x 100
+        a, b, c = runs(units={"big": "N m", "small": "N m"}, big=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t)
+        b.data["small"] = b.data["small"] + 1e-5
+        small = row(stepsize.report(a, b, c), "small")
+        self.assertEqual((small.verdict, small.ratio), ("equal", None))
+        # the old rule, only the absolute floor: the same column does not converge
+        small = row(stepsize.report(a, b, c, rel_tol=0), "small")
+        self.assertEqual(small.verdict, "not converging")
+        self.assertAlmostEqual(small.ratio, 1.0, delta=1e-9)
+
+    def test_scale_is_the_largest_over_the_unit_and_the_runs(self):
+        # the large column is only large in the finest run, and a column of another unit does not count
+        a, b, c = runs(units={"big": "N m", "small": "N m", "other": "N"}, big=lambda t, dt: 0 * t,
+                       small=lambda t, dt: 0 * t, other=lambda t, dt: 1e6 + 0 * t)
+        c.data["big"] = c.data["big"] + 100
+        b.data["small"] = b.data["small"] + 1e-5
+        rows = stepsize.report(a, b, c)
+        self.assertEqual(row(rows, "small").verdict, "equal")
+        # the same difference next to a column of another unit only is measured against its own unit
+        a, b, c = runs(units={"small": "N m", "other": "N"}, small=lambda t, dt: 0 * t, other=lambda t, dt: 1e6 + 0 * t)
+        b.data["small"] = b.data["small"] + 1e-5
+        self.assertEqual(row(stepsize.report(a, b, c), "small").verdict, "not converging")
+
+    def test_column_without_a_unit_uses_its_own_size(self):
+        a, b, c = runs(own=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t, other=lambda t, dt: 100 + 0 * t)
+        for frame in (b.data,):
+            frame["own"] = frame["own"] + 1e-5
+            frame["small"] = frame["small"] + 1e-5
+        rows = stepsize.report(a, b, c)
+        self.assertEqual(row(rows, "own").verdict, "equal")  # 1e-5 < 1e-6 x its own 100
+        # no unit means no sharing: the small column is not measured against the others' size
+        self.assertEqual(row(rows, "small").verdict, "not converging")
+
+    def test_absolute_floor_is_kept(self):
+        # a column of size 1e-6: 1e-6 x its scale is 1e-12, below the 1e-9 floor, so 1e-10 is still zero
+        a, b, c = runs(units={"tiny": "m"}, tiny=lambda t, dt: 1e-6 + 0 * t)
+        b.data["tiny"] = b.data["tiny"] + 1e-10
+        self.assertEqual(row(stepsize.report(a, b, c), "tiny").verdict, "equal")
+        self.assertEqual(row(stepsize.report(a, b, c, abs_tol=0, rel_tol=1e-6), "tiny").verdict, "not converging")
+
+    def test_cli_rel(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = frames(big=lambda t, dt: 100 + 0 * t, small=lambda t, dt: 0 * t)
+            data[1]["small"] += 1e-5
+            paths = write_all(folder, data, "u", units={"big": "N m", "small": "N m"})
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["stepsize", *paths]), 0)
+                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "0"]), 1)
+                self.assertEqual(cli.main(["stepsize", *paths, "--rel", "1e-9"]), 1)
+
+    def test_fresh_runs(self):
+        support.need(self, EXE and os.path.isfile(EXE), "RALLYSIM_EXE must name an existing rallysim executable")
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as folder:
+            def at(scenario, name, *settings):
+                path = Path(folder) / f"{scenario}_{name}.csv"
+                result = subprocess.run([EXE, str(root / "scenarios" / f"{scenario}.ini"), str(path), *settings],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return str(path)
+            lane = [at("fw_lane", "a"), at("fw_lane", "b", "--set", "run.dt=0.5ms"),
+                    at("fw_lane", "c", "--set", "run.dt=0.25ms")]
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["stepsize", *lane]), 0, out.getvalue())
+                # the wheel torque blip is what the old absolute rule read as not converging
+                self.assertEqual(cli.main(["stepsize", *lane, "--rel", "0"]), 1)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["stepsize", *lane, "--all"]), 0)
+            self.assertRegex(out.getvalue(), r"(?m)^roll\t.*\tconverging\s*$")
 
     def test_no_matplotlib(self):
         root = Path(__file__).resolve().parents[2]
