@@ -1,35 +1,6 @@
 """The driver's inputs as plain bar charts, shared by topdown.py and view3d.py: the steer as a horizontal bar (left
 of zero when steering left) and every other input as a vertical bar, the share of its range."""
-from dataclasses import dataclass
-
-import numpy as np
-
-COLOURS = {"steer": "tab:blue", "throttle": "tab:green", "brake": "tab:red", "handbrake": "tab:orange"}
-
-
-@dataclass
-class Channel:
-    """One input over the run: its value per row and the range its bar spans. A range from below zero is a signed
-    bar, drawn from zero (in `below` under zero, if given)."""
-    name: str
-    values: np.ndarray
-    low: float
-    high: float
-    fmt: str = "{:+.2f}"
-    colour: str = "tab:blue"
-    below: str = None
-
-    def share(self, i):
-        """Row i's value as a share of the range: 0 to 1, or -1 to 1 for a signed bar."""
-        v = float(self.values[i])
-        if self.low < 0:
-            top = max(-self.low, self.high)
-            return float(np.clip(v / top, -1, 1)) if top > 0 else 0.0
-        span = self.high - self.low
-        return float(np.clip((v - self.low) / span, 0, 1)) if span > 0 else 0.0
-
-    def text(self, i):
-        return self.fmt.format(self.values[i])
+from rallytools.overhead import COLOURS, Channel  # noqa: F401  (they live in the library)
 
 
 class InputBars:
