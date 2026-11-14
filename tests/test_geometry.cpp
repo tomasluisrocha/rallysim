@@ -303,5 +303,135 @@ int main()
         check_near("toe gain: FL steer", f.kin[FL].steer, -0.01, 1e-12);
     }
 
+    // roll centre 0.15 m on the front, at rest: 1000 N to the left on each front tyre gives a jacking force of
+    // slope x force (slope 0.15 / 0.75), and the body's roll torque changes by the 2000 N acting at the roll centre,
+    // 0.35 m below the CG. Catches the sign (1300 N m) and a missing jacking term (1000 N m).
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.roll_centre = 0.15;
+        const four_wheel_state s = four_wheel_initial(p, 0.0);
+        const four_wheel_forces f = evaluate(s, p, none);
+        four_wheel_forces pushed = f;
+        pushed.tyre[FL].fy += 1000;
+        pushed.tyre[FR].fy += 1000;
+        set_jacking(pushed, s, p);
+        const Real roll = four_wheel_wrench(s, p, pushed).torque.x - four_wheel_wrench(s, p, f).torque.x;
+        std::printf("roll centre 0.15: jacking FL %.6f N, FR %.6f N, roll torque change %.6f N m\n", pushed.corner[FL].jacking,
+                    pushed.corner[FR].jacking, roll);
+        check_near("roll centre: FL jacking", pushed.corner[FL].jacking, -200, 1e-9);
+        check_near("roll centre: FR jacking", pushed.corner[FR].jacking, 200, 1e-9);
+        check_near("roll centre: roll torque of the force at the roll centre", roll, 700, 1e-6);
+    }
+
+    // the patch's sideways path: FL raised 0.02 m with roll centre 0.15 and gain -0.5 moves out by
+    // (0.15 x 0.02 - 0.25 x 0.02^2) / 0.75; moving up at 0.1 m/s with no gain, the patch moves outboard at slope x 0.1.
+    // Catches a missing sideways speed and a wrong side.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.roll_centre = 0.15;
+        p.front_corner.roll_centre_gain = -0.5;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[FL].z += 0.02;
+        const contact_geometry c = contact_of(p, s.body, FL, 0.0, &s.corners[FL]);
+        std::printf("roll centre path: FL patch out by %.9f m\n", c.point.y - c.load_point.y);
+        check_near("roll centre path: FL patch moves outboard", c.point.y - c.load_point.y, 0.0029 / 0.75, 1e-9);
+        check_near("roll centre path: FL patch outboard value", c.point.y - c.load_point.y, 0.00386667, 1e-8);
+
+        p.front_corner.roll_centre_gain = 0;
+        four_wheel_state m = four_wheel_initial(p, 0.0);
+        m.corners[FL].vz = m.corners[FR].vz = 0.1;
+        const Real fl = contact_of(p, m.body, FL, 0.0, &m.corners[FL]).velocity.vy;
+        const Real fr = contact_of(p, m.body, FR, 0.0, &m.corners[FR]).velocity.vy;
+        std::printf("roll centre speed: FL patch %.12f m/s, FR %.12f m/s across the wheel\n", fl, fr);
+        check_near("roll centre speed: FL patch moves left", fl, 0.02, 1e-12);
+        check_near("roll centre speed: FR patch moves right", fr, -0.02, 1e-12);
+    }
+
+    // steady left turn, 20 m/s held, roll centres on both axles. Per axle, the roll stiffness at the ground is
+    // K = kw kt / (kw + kt) track^2 / 2 and the linkage carries G = kt / (kt + kw) h F of the moment, F the axle's
+    // force along the body's left. Then roll = (m a_y hz - G_f - G_r) / (K_f + K_r - ms g hz), hz the CG's height,
+    // and each axle's transfer moment is K roll + G. Catches jacking on the body only (the loads would not add up),
+    // the geometric moment at full strength (roll 5.9% off) and, with the ratio 0.8, a wheel rate of k MR in roll.
+    {
+        struct turn
+        {
+            Real roll, expected, share, expected_share;
+        };
+        auto steady = [&](Real front, Real rear, Real mr)
+        {
+            four_wheel_params p = geometry_car(mr, 0);
+            p.front_corner.roll_centre = front;
+            p.rear_corner.roll_centre = rear;
+            four_wheel_run r;
+            r.params = p;
+            r.initial = four_wheel_initial(p, 20.0);
+            r.hold_speed = constant_script<Real>(20.0);
+            r.script.keys = {{0.0, four_wheel_input{0.0277, 0.0, 0.0, 0.0}}};
+            r.steps = 8000;
+            const four_wheel_state s = run(r);
+            const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+            Real F[2] = {0, 0}; // front, rear: the tyre forces along the body's left, laid flat
+            for (std::size_t i = 0; i < kWheels; ++i)
+            {
+                const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
+                const vec3 force = f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left;
+                F[is_front(i) ? 0 : 1] += dot(force, is_left(i) ? c.outboard : Real(-1) * c.outboard);
+            }
+            const Real kw = 50000 * mr * mr, kt = 250000, hz = s.body.pos.z;
+            const Real Kf = kw * kt / (kw + kt) * p.track_front * p.track_front / 2;
+            const Real Kr = kw * kt / (kw + kt) * p.track_rear * p.track_rear / 2;
+            const Real Gf = kt / (kt + kw) * front * F[0], Gr = kt / (kt + kw) * rear * F[1];
+            const Real a_y = std::hypot(s.body.vel.x, s.body.vel.y) * s.body.omega.z;
+            const Real expected = (p.chassis.mass * a_y * hz - Gf - Gr) / (Kf + Kr - p.sprung_mass() * g * hz);
+            const Real roll = roll_angle(s.body.q);
+            const Real Mf = (f.fz[FR] - f.fz[FL]) / 2 * p.track_front, Mr = (f.fz[RR] - f.fz[RL]) / 2 * p.track_rear;
+            const Real ef = Kf * expected + Gf, er = Kr * expected + Gr;
+            std::printf("steady turn, roll centres %.2f %.2f, MR %.1f: roll %.6f (closed form %.6f), CG %.6f m, transfer "
+                        "%.2f %.2f N m (K roll + G %.2f %.2f), share %.5f (closed form %.5f)\n",
+                        front, rear, mr, roll, expected, hz, Mf, Mr, Kf * roll + Gf, Kr * roll + Gr, Mf / (Mf + Mr),
+                        ef / (ef + er));
+            check_near("steady turn: roll within 0.2% of the closed form", roll / expected, 1.0, 2e-3);
+            check_near("steady turn: front transfer moment K roll + G", Mf, Kf * roll + Gf, 0.5);
+            check_near("steady turn: rear transfer moment K roll + G", Mr, Kr * roll + Gr, 0.5);
+            check_near("steady turn: front jacking difference is h F", (f.corner[FR].jacking - f.corner[FL].jacking) *
+                       p.track_front / 2, front * F[0], 1e-6);
+            check_near("steady turn: the loads add up to the weight", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
+                       p.chassis.mass * g, 1e-6);
+            return turn{roll, expected, Mf / (Mf + Mr), ef / (ef + er)};
+        };
+        const turn a = steady(0.10, 0.15, 1);
+        check_near("steady turn: front share", a.share, a.expected_share, 1e-4);
+        check_near("steady turn: front share value", a.share, 0.47636, 1e-4);
+        const turn b = steady(0.25, 0, 1);
+        check_near("steady turn, 0.25 and 0: front share", b.share, b.expected_share, 1e-4);
+        check_near("steady turn, 0.25 and 0: front share value", b.share, 0.59560, 1e-4);
+        steady(0.10, 0.15, 0.8);
+    }
+
+    // the toe-in run with roll centres 0.15 on both axles: each tyre's 120 N inboard gives slope x 120 = 24 N of
+    // jacking, which the struts give back, so the body rises J / 50000. Catches jacking that does not reach the wheel.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.set_tyre_curve(tyre_curve::linear);
+        p.front_tyre.cornering_stiffness = p.rear_tyre.cornering_stiffness = 30000;
+        p.lf = p.lr = 1.25;
+        rebuild_tyres(p);
+        p.front_corner.toe = p.rear_corner.toe = 0.004;
+        p.front_corner.roll_centre = p.rear_corner.roll_centre = 0.15;
+        four_wheel_run r;
+        r.params = p;
+        r.initial = four_wheel_initial(p, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{0.0, 0.0, 0.0, 0.0}}};
+        r.steps = 6000;
+        const four_wheel_state s = run(r);
+        const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+        std::printf("toe-in, roll centres 0.15: jacking %.6f %.6f %.6f %.6f N, CG up %.9f m\n", f.corner[FL].jacking,
+                    f.corner[FR].jacking, f.corner[RL].jacking, f.corner[RR].jacking, s.body.pos.z - p.cg_height);
+        for (std::size_t i = 0; i < kWheels; ++i)
+            check_near("toe, roll centres: jacking 24 N", f.corner[i].jacking, 24.0, 1e-3);
+        check_near("toe, roll centres: the CG rises J / 50000", s.body.pos.z - p.cg_height, 0.00048, 1e-7);
+    }
+
     return finish("geometry");
 }

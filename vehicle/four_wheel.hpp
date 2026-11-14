@@ -205,6 +205,8 @@ namespace rallysim
         Real ratio = 1;                   // motion ratio at this travel
         Real toe = 0;                     // rad, + toe-in
         Real steer = 0;                   // rad, this wheel's angle to the body, + left (set by contact_of)
+        Real slope = 0;                   // m outboard per m of bump: the roll centre's height over half the track
+        Real offset = 0;                  // m, the patch's sideways move from rest, + outboard
     };
 
     // mount, mount_rate: the mount's height above its rest height and its vertical speed. Written so that with a
@@ -222,6 +224,9 @@ namespace rallysim
         k.strut = today + (c.motion_ratio - 1) * k.travel + 0.5 * c.motion_ratio_gain * k.travel * k.travel;
         k.strut_rate = k.ratio * k.travel_rate;
         k.toe = c.toe + c.toe_gain * k.travel;
+        const Real half = 0.5 * (is_front(i) ? p.track_front : p.track_rear);
+        k.slope = (c.roll_centre + c.roll_centre_gain * k.travel) / half;
+        k.offset = (c.roll_centre * k.travel + 0.5 * c.roll_centre_gain * k.travel * k.travel) / half;
         return k;
     }
 
@@ -377,6 +382,8 @@ namespace rallysim
     {
         corner_kinematics kin;    // unsprung, with a wheel given: the corner's geometry
         vec3 point;               // the contact patch from the CG, body frame (m): where the tyre force acts
+        vec3 load_point;          // springs, unsprung: the patch at rest track, body frame (m): where the vertical force acts
+        vec3 outboard;            // unsprung, with a wheel: the body's x axis flat on the ground, turned to the wheel's side
         vec3 forward, left;       // the wheel's directions along the ground, world frame, unit length
         patch_velocity velocity;  // how fast the patch moves over the ground, in the wheel's frame (m/s)
         Real deflection = 0;      // springs, unsprung: how far the mount's spring is compressed at rest geometry (m)
@@ -391,13 +398,15 @@ namespace rallysim
     //   it, and the wheel's direction is the body's heading turned by the steer, laid flat on the ground, so a
     //   rolled or pitched body does not tilt the tyre forces into the ground.
     //   unsprung, with `wheel` given: the kinematics are worked out from the mount's height and speed (c.kin), and
-    //   the wheel's angle is wheel_steer (Ackermann and toe).
+    //   the wheel's angle is wheel_steer (Ackermann and toe). The patch moves offset metres outboard of its rest
+    //   track, and moves sideways against the body at slope times the travel rate.
     inline contact_geometry contact_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer,
                                        const corner_state *wheel = nullptr)
     {
         contact_geometry c;
         Real a = steer_angle(i, steer);
         const vec3 omega = to_world(body.q, body.omega);
+        vec3 sideways{0, 0, 0}; // the patch's velocity against the body from the travel, world frame
         if (p.vertical == vertical_model::unsprung && wheel)
         {
             const vec3 mount = to_world(body.q, p.suspension_point(i));
@@ -422,13 +431,22 @@ namespace rallysim
             c.deflection = p.static_deflection(i) - (body.pos.z + mount.z);
             c.deflection_rate = -(body.vel.z + cross(omega, mount).z);
             r = vec3{mount.x, mount.y, -body.pos.z};
+            c.load_point = to_body(body.q, r);
+            if (p.vertical == vertical_model::unsprung && wheel)
+            {
+                const vec3 ahead = to_world(body.q, vec3{1, 0, 0});
+                const Real m = std::hypot(ahead.x, ahead.y), side = is_left(i) ? 1 : -1;
+                c.outboard = vec3{-side * ahead.y / m, side * ahead.x / m, 0};
+                r = r + c.kin.offset * c.outboard;
+                sideways = (c.kin.slope * c.kin.travel_rate) * c.outboard;
+            }
             c.point = to_body(body.q, r);
             const vec3 heading = to_world(body.q, vec3{ca, sa, 0});
             const Real n = std::hypot(heading.x, heading.y);
             c.forward = vec3{heading.x / n, heading.y / n, 0};
             c.left = vec3{-c.forward.y, c.forward.x, 0};
         }
-        const vec3 v = body.vel + cross(omega, r);
+        const vec3 v = body.vel + cross(omega, r) + sideways;
         c.velocity = {dot(v, c.forward), dot(v, c.left)};
         return c;
     }
@@ -506,6 +524,20 @@ namespace rallysim
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
     };
 
+    // The vertical force the linkage makes of each tyre's ground force (unsprung): the patch moves `slope` metres
+    // outboard per metre of bump, so an inboard force F lifts the body and presses the wheel down with slope F.
+    inline void set_jacking(four_wheel_forces &f, const four_wheel_state &s, const four_wheel_params &p)
+    {
+        if (p.vertical != vertical_model::unsprung)
+            return;
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
+            const vec3 force = f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left;
+            f.corner[i].jacking = -c.kin.slope * dot(force, c.outboard);
+        }
+    }
+
     // Order: controls, contact geometry, normal loads, contact patch velocities, tyre forces
     // from the wheels' current slips. Nothing is changed; step() then applies it.
     inline four_wheel_forces evaluate(const four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in)
@@ -549,6 +581,7 @@ namespace rallysim
                 f.corner[l].strut += bar;
                 f.corner[r].strut -= bar;
             }
+        set_jacking(f, s, p);
         return f;
     }
 
@@ -557,7 +590,8 @@ namespace rallysim
     // corner's load also pushes up at its patch, and gravity acts; in the planar model gravity is cancelled.
     //
     // Unsprung: the strut's force (including the anti-roll bar) pushes up at the patch instead of the tyre load
-    // (that one acts on the wheel).
+    // (that one acts on the wheel), plus the jacking force. That vertical force acts at the patch's rest track
+    // (load_point), so its torque is moved back from the moved patch.
     // The body also gets each wheel's weight, upwards, at its corner at CG height. lf, lr and cg_height locate the
     // whole car's CG, not the sprung body's, and that term is what makes the strut forces balance about it: at
     // rest the two together are the tyre's static load, as with springs, and the car sits level.
@@ -575,10 +609,14 @@ namespace rallysim
             if (p.vertical == vertical_model::springs)
                 force.z += f.fz[i];
             else if (p.vertical == vertical_model::unsprung)
-                force.z += f.corner[i].strut;
+                force.z += f.corner[i].strut + f.corner[i].jacking;
             add_force_at(w, s.body.q, force, c.point);
             if (p.vertical == vertical_model::unsprung)
+            {
+                const Real up = f.corner[i].strut + f.corner[i].jacking;
+                add_torque(w, cross(c.load_point - c.point, to_body(s.body.q, vec3{0, 0, up})));
                 add_force_at(w, s.body.q, vec3{0, 0, p.corner(i).unsprung_mass * kGravity}, p.wheel_position(i));
+            }
         }
         if (p.vertical == vertical_model::planar)
             w.force.z += p.chassis.mass * kGravity; // the flat car stays on the ground plane
@@ -601,13 +639,14 @@ namespace rallysim
         for (std::size_t i = 0; i < kWheels; ++i)
             f.tyre[i] = step_wheel(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], f.torque[i].drive,
                                    f.torque[i].brake, dt);
+        set_jacking(f, s, p); // from the averaged tyre forces the body gets
         const wrench w = four_wheel_wrench(s, p, f);
         step(s.body, p.chassis, w, dt);
         if (p.vertical == vertical_model::unsprung)
             for (std::size_t i = 0; i < kWheels; ++i)
             {
                 corner_state &wheel = s.corners[i];
-                wheel.vz += ((f.fz[i] - f.corner[i].strut) / p.corner(i).unsprung_mass - kGravity) * dt;
+                wheel.vz += ((f.fz[i] - f.corner[i].strut - f.corner[i].jacking) / p.corner(i).unsprung_mass - kGravity) * dt;
                 wheel.z += wheel.vz * dt;
             }
     }

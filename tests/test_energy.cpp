@@ -527,5 +527,18 @@ int main()
                    r1 < 0.6 * r2 && r05 < 0.6 * r1);
     }
 
+    // roll centres 0.30 on both axles, a step of steer at 20 m/s: the jacking force and the patch's sideways speed
+    // do work on the car that must match, or the residual stops halving with dt
+    {
+        four_wheel_run r;
+        r.params.vertical = vertical_model::unsprung;
+        r.params.front_corner.roll_centre = r.params.rear_corner.roll_centre = 0.30;
+        r.initial = four_wheel_initial(r.params, 20.0);
+        r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{}},
+                         {0.6, four_wheel_input{0.04, 0.0, 0.0, 0.0}}};
+        r.steps = 3000;
+        check_halves("roll centres 0.30, steer step", r);
+    }
+
     return finish("energy");
 }
