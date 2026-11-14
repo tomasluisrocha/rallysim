@@ -433,5 +433,77 @@ int main()
         check_near("toe, roll centres: the CG rises J / 50000", s.body.pos.z - p.cg_height, 0.00048, 1e-7);
     }
 
+    // camber thrust, straight at 20 m/s held for 5 s, front camber -0.03 rad (tops inboard) and camber_thrust 0.1:
+    // each front wheel leans in and pushes inboard, as a lateral slip of 0.003 the other way. Catches the same sign
+    // on both sides (the car would drift).
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.camber = -0.03;
+        p.front_tyre.camber_thrust = 0.1;
+        four_wheel_run r;
+        r.params = p;
+        r.initial = four_wheel_initial(p, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{0.0, 0.0, 0.0, 0.0}}};
+        r.steps = 5000;
+        const four_wheel_state s = run(r);
+        const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+        const Real expected = tyre_forces(p.front_tyre, 0, 0.003, p.static_load(FL)).fy;
+        std::printf("camber thrust: Fy FL %.4f N, FR %.4f N (expected %.4f), y %.3g m\n", f.tyre[FL].fy, f.tyre[FR].fy,
+                    expected, s.body.pos.y);
+        check_near("camber thrust: FL pushes right", f.tyre[FL].fy, -expected, 1e-3);
+        check_near("camber thrust: FR pushes left", f.tyre[FR].fy, expected, 1e-3);
+        check_near("camber thrust: the car has not moved sideways", s.body.pos.y, 0.0, 1e-9);
+    }
+
+    // steady left turn, 20 m/s held, linear tyres, camber gain -0.35 /m and thrust 0.1 on both axles. Each wheel's
+    // camber to the road is its curve less (left) or plus (right) the body's roll, and each axle's force is
+    // C x (the two steady lateral slips + the two camber slips). Catches a lean without the body's roll, a gain
+    // that is ignored and a thrust that never reaches the wheel.
+    {
+        auto turn = [](Real thrust, four_wheel_params &p, four_wheel_run &r)
+        {
+            p = geometry_car(1, 0);
+            p.set_tyre_curve(tyre_curve::linear);
+            p.front_corner.camber_gain = p.rear_corner.camber_gain = -0.35;
+            p.front_tyre.camber_thrust = p.rear_tyre.camber_thrust = thrust;
+            r = four_wheel_run{};
+            r.params = p;
+            r.initial = four_wheel_initial(p, 20.0);
+            r.hold_speed = constant_script<Real>(20.0);
+            r.script.keys = {{0.0, four_wheel_input{0.0277, 0.0, 0.0, 0.0}}};
+            r.steps = 8000;
+            return run(r);
+        };
+        four_wheel_params p;
+        four_wheel_run r;
+        const four_wheel_state s = turn(0.1, p, r);
+        const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+        const Real roll = roll_angle(s.body.q);
+        std::printf("camber turn: roll %.6f, camber FL %.5f FR %.5f\n", roll, f.camber[FL], f.camber[FR]);
+        check_near("camber turn: FL is its curve less the roll", f.camber[FL], -0.35 * f.kin[FL].travel - roll, 1e-5);
+        check_near("camber turn: FR is its curve plus the roll", f.camber[FR], -0.35 * f.kin[FR].travel + roll, 1e-5);
+        for (std::size_t l : {FL, RL})
+        {
+            const std::size_t i = l + 1;
+            const Real C = p.tyre(l).cornering_stiffness;
+            Real slips = 0;
+            for (std::size_t w : {l, i})
+                slips += steady_lateral_slip(p.wheel, s.wheels[w].omega, f.patch[w]) +
+                         (is_left(w) ? 1 : -1) * 0.1 * f.camber[w];
+            const Real fy = f.tyre[l].fy + f.tyre[i].fy;
+            std::printf("camber turn: %s axle Fy %.4f N, C x slips %.4f N\n", is_front(l) ? "front" : "rear", fy, C * slips);
+            check_near(is_front(l) ? "camber turn: front axle force" : "camber turn: rear axle force", fy, C * slips, 0.01);
+        }
+        four_wheel_params p0;
+        four_wheel_run r0;
+        const four_wheel_state s0 = turn(0, p0, r0);
+        const four_wheel_forces f0 = evaluate(s0, p0, driver_input(r0, s0, r0.steps * r0.dt));
+        const Real with = f.tyre[FL].fy + f.tyre[FR].fy, without = f0.tyre[FL].fy + f0.tyre[FR].fy;
+        std::printf("camber turn: front axle Fy %.4f N with thrust, %.4f N without\n", with, without);
+        check_true("camber turn: the thrust changes the front axle force by more than 0.1 N",
+                   std::fabs(with - without) > 0.1);
+    }
+
     return finish("geometry");
 }

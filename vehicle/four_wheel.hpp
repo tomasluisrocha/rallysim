@@ -204,6 +204,7 @@ namespace rallysim
         Real strut = 0, strut_rate = 0;   // m, m/s: the strut's compression
         Real ratio = 1;                   // motion ratio at this travel
         Real toe = 0;                     // rad, + toe-in
+        Real camber = 0;                  // rad to the body, + top outboard
         Real steer = 0;                   // rad, this wheel's angle to the body, + left (set by contact_of)
         Real slope = 0;                   // m outboard per m of bump: the roll centre's height over half the track
         Real offset = 0;                  // m, the patch's sideways move from rest, + outboard
@@ -224,6 +225,7 @@ namespace rallysim
         k.strut = today + (c.motion_ratio - 1) * k.travel + 0.5 * c.motion_ratio_gain * k.travel * k.travel;
         k.strut_rate = k.ratio * k.travel_rate;
         k.toe = c.toe + c.toe_gain * k.travel;
+        k.camber = c.camber + c.camber_gain * k.travel;
         const Real half = 0.5 * (is_front(i) ? p.track_front : p.track_rear);
         k.slope = (c.roll_centre + c.roll_centre_gain * k.travel) / half;
         k.offset = (c.roll_centre * k.travel + 0.5 * c.roll_centre_gain * k.travel * k.travel) / half;
@@ -519,6 +521,8 @@ namespace rallysim
         std::array<Real, kWheels> fz{};            // vertical load on each wheel (N)
         std::array<corner_load, kWheels> corner;   // springs, unsprung: each corner's spring, damper, stops, anti-roll bar and tyre
         std::array<corner_kinematics, kWheels> kin; // unsprung: each corner's wheel travel, strut and motion ratio
+        std::array<Real, kWheels> camber{};        // unsprung: each wheel's lean to the road (rad, + top outboard)
+        std::array<Real, kWheels> camber_slip{};   // the lateral slip that lean is worth, wheel frame
         std::array<patch_velocity, kWheels> patch; // contact patch velocity in each wheel's frame (m/s)
         std::array<tyre_force, kWheels> tyre;      // tyre force in each wheel's frame (N)
         std::array<wheel_torque, kWheels> torque;  // drive and brake torque on each wheel (N m)
@@ -567,6 +571,10 @@ namespace rallysim
                                                     p.strut_static_deflection(i), p.wheel.radius - wheel.z, -wheel.vz);
                 f.corner[i].strut *= f.kin[i].ratio; // the force at the wheel; spring, damper and stop stay the strut's
                 f.fz[i] = f.corner[i].fz;            // the tyre spring's force
+                // the body's left side is `tilt` radians up, so the wheel leans with it
+                const Real tilt = std::asin(to_world(s.body.q, vec3{0, 1, 0}).z);
+                f.camber[i] = is_left(i) ? f.kin[i].camber - tilt : f.kin[i].camber + tilt;
+                f.camber_slip[i] = (is_left(i) ? 1 : -1) * p.tyre(i).camber_thrust * f.camber[i];
             }
             f.patch[i] = c.velocity;
             f.tyre[i] = wheel_force(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i]);
@@ -638,7 +646,7 @@ namespace rallysim
         four_wheel_forces f = evaluate(s, p, in);
         for (std::size_t i = 0; i < kWheels; ++i)
             f.tyre[i] = step_wheel(s.wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], f.torque[i].drive,
-                                   f.torque[i].brake, dt);
+                                   f.torque[i].brake, dt, f.camber_slip[i]);
         set_jacking(f, s, p); // from the averaged tyre forces the body gets
         const wrench w = four_wheel_wrench(s, p, f);
         step(s.body, p.chassis, w, dt);

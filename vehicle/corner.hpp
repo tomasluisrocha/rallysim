@@ -22,6 +22,8 @@ namespace rallysim
         Real motion_ratio_gain = 0; // 1/m: the motion ratio's change per metre of wheel travel (+ bump)
         Real toe = 0;               // rad, + toe-in, at rest (unsprung mode only)
         Real toe_gain = 0;          // rad per metre of wheel travel (+ bump)
+        Real camber = 0;            // rad to the body, + top outboard, at rest (unsprung mode only)
+        Real camber_gain = 0;       // rad per metre of wheel travel (+ bump)
         Real roll_centre = 0;       // m, the roll centre's height above the ground at rest (unsprung mode only)
         Real roll_centre_gain = 0;  // m per metre of wheel travel (+ bump)
         // The bump stop. Placeholder values, chosen so that no existing run reaches it (the default car's runs stay
