@@ -88,6 +88,7 @@ namespace rallysim
         Real cg_height = 0.5;                               // CG above the ground (m)
         Real front_transfer_share = 0.5;                    // fraction of the lateral load transfer on the front axle
         Real max_steer = 0.6;                               // steer input clamped to +-max_steer (rad)
+        Real ackermann = 0;                                 // 0: both front wheels turn by the steer; 1: full Ackermann
         wheel_params wheel;                                 // the same wheel at each corner
         // half of the single-track front and rear axles (60 / 70 kN/rad), at each wheel's load at rest
         tyre_params front_tyre = car_tyre(90000, 30000, 0.5 * chassis.mass * kGravity * lr / (lf + lr));
@@ -202,6 +203,8 @@ namespace rallysim
         Real travel = 0, travel_rate = 0; // m, m/s: the wheel against the body, + bump, 0 at rest
         Real strut = 0, strut_rate = 0;   // m, m/s: the strut's compression
         Real ratio = 1;                   // motion ratio at this travel
+        Real toe = 0;                     // rad, + toe-in
+        Real steer = 0;                   // rad, this wheel's angle to the body, + left (set by contact_of)
     };
 
     // mount, mount_rate: the mount's height above its rest height and its vertical speed. Written so that with a
@@ -218,6 +221,7 @@ namespace rallysim
         k.ratio = c.motion_ratio + c.motion_ratio_gain * k.travel;
         k.strut = today + (c.motion_ratio - 1) * k.travel + 0.5 * c.motion_ratio_gain * k.travel * k.travel;
         k.strut_rate = k.ratio * k.travel_rate;
+        k.toe = c.toe + c.toe_gain * k.travel;
         return k;
     }
 
@@ -232,7 +236,7 @@ namespace rallysim
     // gearbox model.
     struct four_wheel_input
     {
-        Real steer = 0;     // front wheel angle, rad (+left); both front wheels turn by it (no Ackermann yet)
+        Real steer = 0;     // front wheel angle, rad (+left); the front wheels turn by it, shared by the Ackermann fraction
         Real throttle = 0;  // 0 to 1
         Real brake = 0;     // 0 to 1
         Real handbrake = 0; // 0 to 1, rear wheels only
@@ -354,9 +358,24 @@ namespace rallysim
         return is_front(i) ? steer : static_cast<Real>(0);
     }
 
+    // The angle of wheel i to the body: the steer, shared between the front wheels by the Ackermann fraction, less
+    // toe-in on the left and plus it on the right.
+    inline Real wheel_steer(const four_wheel_params &p, std::size_t i, Real steer, Real toe)
+    {
+        Real a = 0;
+        if (is_front(i))
+        {
+            const Real t = std::tan(steer), k = 0.5 * p.track_front / p.wheelbase();
+            const Real full = std::atan(t / (is_left(i) ? 1 - k * t : 1 + k * t));
+            a = steer + p.ackermann * (full - steer);
+        }
+        return is_left(i) ? a - toe : a + toe;
+    }
+
     // Where a wheel touches the ground and how it moves there (steps 1 and 2).
     struct contact_geometry
     {
+        corner_kinematics kin;    // unsprung, with a wheel given: the corner's geometry
         vec3 point;               // the contact patch from the CG, body frame (m): where the tyre force acts
         vec3 forward, left;       // the wheel's directions along the ground, world frame, unit length
         patch_velocity velocity;  // how fast the patch moves over the ground, in the wheel's frame (m/s)
@@ -371,12 +390,24 @@ namespace rallysim
     //   the compression and its vertical speed the compression rate. The patch is on the ground straight below
     //   it, and the wheel's direction is the body's heading turned by the steer, laid flat on the ground, so a
     //   rolled or pitched body does not tilt the tyre forces into the ground.
-    inline contact_geometry contact_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer)
+    //   unsprung, with `wheel` given: the kinematics are worked out from the mount's height and speed (c.kin), and
+    //   the wheel's angle is wheel_steer (Ackermann and toe).
+    inline contact_geometry contact_of(const four_wheel_params &p, const rigid_body_state &body, std::size_t i, Real steer,
+                                       const corner_state *wheel = nullptr)
     {
         contact_geometry c;
-        const Real a = steer_angle(i, steer);
-        const Real ca = std::cos(a), sa = std::sin(a);
+        Real a = steer_angle(i, steer);
         const vec3 omega = to_world(body.q, body.omega);
+        if (p.vertical == vertical_model::unsprung && wheel)
+        {
+            const vec3 mount = to_world(body.q, p.suspension_point(i));
+            const Real deflection = p.static_deflection(i) - (body.pos.z + mount.z);
+            const Real rate = -(body.vel.z + cross(omega, mount).z);
+            c.kin = kinematics_of(p, i, p.static_deflection(i) - deflection, -rate, *wheel);
+            a = wheel_steer(p, i, steer, c.kin.toe);
+            c.kin.steer = a;
+        }
+        const Real ca = std::cos(a), sa = std::sin(a);
         vec3 r; // the patch from the CG, world frame
         if (p.vertical == vertical_model::planar)
         {
@@ -490,7 +521,7 @@ namespace rallysim
             f.fz = four_wheel_loads(p, f.a_x, f.a_y);
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            const contact_geometry c = contact_of(p, s.body, i, f.steer);
+            const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
             if (p.vertical == vertical_model::springs)
             {
                 f.corner[i] = corner_force(p.corner(i), c.deflection, c.deflection_rate);
@@ -498,10 +529,8 @@ namespace rallysim
             }
             else if (p.vertical == vertical_model::unsprung)
             {
-                // the mount's height above its rest height, and its vertical speed, from the springs geometry
-                const Real mount = p.static_deflection(i) - c.deflection, mount_rate = -c.deflection_rate;
                 const corner_state &wheel = s.corners[i];
-                f.kin[i] = kinematics_of(p, i, mount, mount_rate, wheel);
+                f.kin[i] = c.kin;
                 f.corner[i] = unsprung_corner_force(p.corner(i), f.kin[i].strut, f.kin[i].strut_rate,
                                                     p.strut_static_deflection(i), p.wheel.radius - wheel.z, -wheel.vz);
                 f.corner[i].strut *= f.kin[i].ratio; // the force at the wheel; spring, damper and stop stay the strut's
@@ -541,7 +570,7 @@ namespace rallysim
         wrench w{};
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            const contact_geometry c = contact_of(p, s.body, i, f.steer);
+            const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
             vec3 force = f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left;
             if (p.vertical == vertical_model::springs)
                 force.z += f.fz[i];

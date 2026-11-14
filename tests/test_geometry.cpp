@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <vector>
 #include "tests/check.hpp"
+#include "runner/run_four_wheel.hpp"
 #include "vehicle/four_wheel.hpp"
 
 using namespace rallysim;
@@ -168,6 +169,138 @@ int main()
                        k.strut == p.strut_static_deflection(i) - mount + (w.z - p.wheel_rest_height(i)));
             check_true("defaults: strut rate is exactly vz - mount rate", k.strut_rate == w.vz - mount_rate);
         }
+    }
+
+    // Ackermann: each front wheel's angle is atan(L / (R -+ t/2)) on the circle of radius R = L / tan(steer), the
+    // inner wheel turning more. Catches the two wheels swapped.
+    {
+        four_wheel_params p;
+        p.ackermann = 1;
+        const Real L = p.wheelbase(), t = p.track_front;
+        const Real cases[][3] = {{0.125, 0.129842820, 0.120503753}, {-0.2, -0.188813101, -0.212574753}};
+        for (const auto &c : cases)
+        {
+            const Real fl = wheel_steer(p, FL, c[0], 0), fr = wheel_steer(p, FR, c[0], 0);
+            const Real R = L / std::tan(c[0]);
+            std::printf("ackermann 1, steer %.3f: FL %.9f, FR %.9f\n", c[0], fl, fr);
+            check_near("ackermann: FL", fl, c[1], 1e-9);
+            check_near("ackermann: FR", fr, c[2], 1e-9);
+            check_near("ackermann: FL is atan(L / (R - t/2))", fl, std::atan(L / (R - t / 2)), 1e-9);
+            check_near("ackermann: FR is atan(L / (R + t/2))", fr, std::atan(L / (R + t / 2)), 1e-9);
+            check_near("ackermann: rear wheels straight", wheel_steer(p, RL, c[0], 0), 0.0, 0.0);
+        }
+        p.ackermann = 0.5;
+        check_near("ackermann 0.5: FL", wheel_steer(p, FL, 0.3, 0), 0.314308097, 1e-9);
+        check_near("ackermann 0.5: FR", wheel_steer(p, FR, 0.3, 0), 0.287925393, 1e-9);
+        p.ackermann = 0;
+        check_true("ackermann 0: both wheels turn by the steer exactly",
+                   wheel_steer(p, FL, 0.3, 0) == 0.3 && wheel_steer(p, FR, 0.3, 0) == 0.3);
+    }
+
+    // a slow circle at 5 m/s, steer 0.125: with Ackermann 1 the path radius is the geometric L / tan(steer) and the
+    // front slip angles agree; with 0 the outer wheel is turned too much and the slips differ. Slower still, at
+    // 1 m/s, the tyres hardly slip, so with 0 the two front tyres push against each other and with 1 they do not.
+    // Catches a reversed split (the slips would differ twice as much).
+    {
+        auto circle = [](Real ackermann, Real speed, four_wheel_state &s, four_wheel_params &p)
+        {
+            p = geometry_car(1, 0);
+            p.ackermann = ackermann;
+            four_wheel_run r;
+            r.params = p;
+            r.initial = four_wheel_initial(p, speed);
+            r.hold_speed = constant_script<Real>(speed);
+            r.script.keys = {{0.0, four_wheel_input{0.125, 0.0, 0.0, 0.0}}};
+            r.steps = 20000;
+            s = run(r);
+            return r;
+        };
+        auto slip = [](const four_wheel_state &s, const four_wheel_params &, std::size_t i)
+        { return std::fabs(std::atan(s.wheels[i].lateral_slip)); };
+        four_wheel_state s;
+        four_wheel_params p;
+        circle(1, 5.0, s, p);
+        const Real radius = std::hypot(velocity_in_body(s.body).u, velocity_in_body(s.body).v) / s.body.omega.z;
+        const Real expected = p.wheelbase() / std::tan(0.125);
+        const Real d1 = std::fabs(slip(s, p, FL) - slip(s, p, FR));
+        std::printf("circle, ackermann 1: radius %.4f m (geometric %.4f), front slips %.5f %.5f\n", radius, expected,
+                    slip(s, p, FL), slip(s, p, FR));
+        check_near("circle: radius within 1.5% of L / tan(steer)", radius, expected, 0.015 * expected);
+        check_true("circle: ackermann 1 front slips within 0.0015 rad", d1 < 0.0015);
+        circle(0, 5.0, s, p);
+        const Real d0 = std::fabs(slip(s, p, FL) - slip(s, p, FR));
+        std::printf("circle, ackermann 0: front slips %.5f %.5f\n", slip(s, p, FL), slip(s, p, FR));
+        check_true("circle: ackermann 0 front slips differ by more than 0.007 rad", d0 > 0.007);
+
+        for (Real a : {0.0, 1.0})
+        {
+            const four_wheel_run r = circle(a, 1.0, s, p);
+            const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+            std::printf("1 m/s, ackermann %.0f: Fy FL %.1f N, FR %.1f N\n", a, f.tyre[FL].fy, f.tyre[FR].fy);
+            if (a == 0)
+                check_true("slow: ackermann 0 tyres push against each other",
+                           f.tyre[FL].fy < -100 && f.tyre[FR].fy > 100);
+            else
+                check_true("slow: ackermann 1 both tyres within 20 N of 15 N",
+                           std::fabs(f.tyre[FL].fy - 15) < 20 && std::fabs(f.tyre[FR].fy - 15) < 20);
+        }
+    }
+
+    // toe-in 0.004 rad on both axles, linear tyres (C = 30000), straight at 20 m/s: each tyre pushes inboard with
+    // C tan(toe) and the pairs cancel, so the car goes straight. Catches toe-out read as toe-in.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.set_tyre_curve(tyre_curve::linear);
+        p.front_tyre.cornering_stiffness = p.rear_tyre.cornering_stiffness = 30000;
+        p.lf = p.lr = 1.25;
+        rebuild_tyres(p);
+        p.front_corner.toe = p.rear_corner.toe = 0.004;
+        four_wheel_run r;
+        r.params = p;
+        r.initial = four_wheel_initial(p, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{0.0, 0.0, 0.0, 0.0}}};
+        r.steps = 6000;
+        const four_wheel_state s = run(r);
+        const four_wheel_forces f = evaluate(s, p, driver_input(r, s, r.steps * r.dt));
+        const Real expected = 30000 * std::tan(0.004);
+        std::printf("toe-in: Fy FL %.4f RL %.4f FR %.4f RR %.4f N (C tan(toe) %.4f), y %.3g m\n", f.tyre[FL].fy,
+                    f.tyre[RL].fy, f.tyre[FR].fy, f.tyre[RR].fy, expected, s.body.pos.y);
+        check_near("toe: FL pushes right", f.tyre[FL].fy, -expected, 0.01);
+        check_near("toe: RL pushes right", f.tyre[RL].fy, -expected, 0.01);
+        check_near("toe: FR pushes left", f.tyre[FR].fy, expected, 0.01);
+        check_near("toe: RR pushes left", f.tyre[RR].fy, expected, 0.01);
+        check_near("toe: the car has not moved sideways", s.body.pos.y, 0.0, 1e-9);
+    }
+
+    // the wrench takes each tyre force along the wheel's own angle: 1000 N more sideways force on FL, toed in 0.004
+    // rad, pushes the body 1000 sin(toe) forward and 1000 cos(toe) left. Catches four_wheel_wrench using the bare
+    // steer (the heading), which gives no forward part.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.toe = 0.004;
+        const four_wheel_state s = four_wheel_initial(p, 0.0);
+        const four_wheel_forces f = evaluate(s, p, none);
+        four_wheel_forces more = f;
+        more.tyre[FL].fy += 1000;
+        const vec3 d = four_wheel_wrench(s, p, more).force - four_wheel_wrench(s, p, f).force;
+        std::printf("wrench: FL +1000 N sideways moves the body by x %.6f, y %.6f N\n", d.x, d.y);
+        check_near("wrench: forward part 1000 sin(toe)", d.x, 1000 * std::sin(0.004), 1e-9);
+        check_near("wrench: left part 1000 cos(toe)", d.y, 1000 * std::cos(0.004), 1e-9);
+    }
+
+    // toe against wheel travel: toe_gain 0.5 on the front, FL raised 0.02 m: 0.01 rad of toe-in on FL, which is
+    // 0.01 rad right of straight
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.toe_gain = 0.5;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[FL].z += 0.02;
+        const four_wheel_forces f = evaluate(s, p, none);
+        std::printf("toe gain: FL toe %.6f steer %.6f, FR toe %.6f\n", f.kin[FL].toe, f.kin[FL].steer, f.kin[FR].toe);
+        check_near("toe gain: FL toe", f.kin[FL].toe, 0.01, 1e-12);
+        check_near("toe gain: FR toe", f.kin[FR].toe, 0.0, 1e-12);
+        check_near("toe gain: FL steer", f.kin[FL].steer, -0.01, 1e-12);
     }
 
     return finish("geometry");

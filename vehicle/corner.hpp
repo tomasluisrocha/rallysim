@@ -20,6 +20,8 @@ namespace rallysim
         Real antiroll_rate = 0;    // N/m: anti-roll bar rate for this corner's axle, unsprung mode only
         Real motion_ratio = 1;      // strut travel per wheel travel at rest, unsprung mode only
         Real motion_ratio_gain = 0; // 1/m: the motion ratio's change per metre of wheel travel (+ bump)
+        Real toe = 0;               // rad, + toe-in, at rest (unsprung mode only)
+        Real toe_gain = 0;          // rad per metre of wheel travel (+ bump)
         // The bump stop. Placeholder values, chosen so that no existing run reaches it (the default car's runs stay
         // below about 0.17 m); not measured values for this car.
         Real bump_travel = 0.25;      // m of compression past rest before the bump stop touches

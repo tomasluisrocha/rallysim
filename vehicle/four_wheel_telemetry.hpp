@@ -147,7 +147,7 @@ namespace rallysim
         Real yaw_moment = 0; // their moment about the CG, about the body's z axis
         for (std::size_t i = 0; i < kWheels; ++i)
         {
-            const contact_geometry c = contact_of(p, s.body, i, f.steer);
+            const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
             const vec3 tyre = to_body(s.body.q, f.tyre[i].fx * c.forward + f.tyre[i].fy * c.left);
             net += tyre;
             yaw_moment += c.point.x * tyre.y - c.point.y * tyre.x;
