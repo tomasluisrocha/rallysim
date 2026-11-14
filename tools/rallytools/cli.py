@@ -101,6 +101,25 @@ def _tyre_rig(args):
     return 0
 
 
+def _path(args):
+    from .charts.path import figure
+    run = load(args.run)
+    if args.save is None:
+        # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+        import matplotlib.pyplot as plt
+        figure(run, args.every, fig=plt.figure())
+        plt.show()
+        return 0
+    import matplotlib
+    matplotlib.use("Agg")
+    chart = figure(run, args.every)
+    output = Path(args.save)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    chart.savefig(output, dpi=110, bbox_inches="tight")
+    print(f"wrote {output}")
+    return 0
+
+
 def _columns(args):
     from .charts.columns import figure
     run = load(args.file)
@@ -253,6 +272,13 @@ def main(argv=None):
     command.add_argument("y", nargs="+", metavar="Y", help="one or more columns to plot")
     command.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
     command.add_argument("--wrapped", action="store_true", help="draw yaw as written, between -pi and pi")
+    command = subparsers.add_parser("path", help="the path of a run coloured by speed, with the car drawn along it",
+                                    description="Draw the path of a run of any kind, coloured by speed, with the "
+                                                "car drawn at intervals. Without --save the figure is shown.")
+    command.add_argument("run", metavar="RUN", help="run (CSV)")
+    command.add_argument("--every", type=float, default=0, metavar="S",
+                         help="seconds between cars (default: about ten cars)")
+    command.add_argument("--save", metavar="PNG", help="save the figure to this file instead of showing it")
     command = subparsers.add_parser("overlay", help="overlay of two or more runs and each minus the first",
                                     description="Draw the paths and chosen channels of the runs, and under each "
                                                 "channel every later run minus the first. Prints the largest "
@@ -302,6 +328,8 @@ def main(argv=None):
             return _sweep(args)
         if args.command == "columns":
             return _columns(args)
+        if args.command == "path":
+            return _path(args)
         if args.command == "tyre-rig":
             return _tyre_rig(args)
         if args.command == "tyre-points":
