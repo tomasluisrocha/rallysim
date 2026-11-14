@@ -222,7 +222,6 @@ int main()
         four_wheel_params p;
         for (const param_entry &e : table)
         {
-            check_true(e.name, e.range != param_range::any); // every number so far has one
             check_true(e.name, range_error(e, e.field(p)).empty());
         }
     }
@@ -305,6 +304,41 @@ int main()
         check_true("rebuild: any order gives the same tyres", same_tables(a.front_tyre, b.front_tyre) &&
                                                                  same_tables(a.rear_tyre, b.rear_tyre));
         check_true("rebuild: keeps the curve", a.front_tyre.curve == tyre_curve::tmeasy);
+    }
+
+    {
+        const char *geometry[][2] = {
+            {"motion_ratio_front", "-"}, {"motion_ratio_rear", "-"},
+            {"motion_ratio_gain_front", "1/m"}, {"motion_ratio_gain_rear", "1/m"},
+            {"roll_centre_front", "m"}, {"roll_centre_rear", "m"},
+            {"roll_centre_gain_front", "-"}, {"roll_centre_gain_rear", "-"},
+            {"camber_front", "rad"}, {"camber_rear", "rad"},
+            {"camber_gain_front", "rad/m"}, {"camber_gain_rear", "rad/m"},
+            {"toe_front", "rad"}, {"toe_rear", "rad"},
+            {"toe_gain_front", "rad/m"}, {"toe_gain_rear", "rad/m"},
+            {"camber_thrust_front", "-"}, {"camber_thrust_rear", "-"},
+            {"ackermann", "-"},
+        };
+        four_wheel_params q;
+        for (const auto &g : geometry)
+        {
+            const param_entry *e = find_param(g[0]);
+            check_true("geometry: found", e != nullptr);
+            if (e == nullptr)
+                continue;
+            check_true("geometry: unit", std::string(e->unit) == g[1]);
+            check_true("geometry: unused on the springs car", !param_used(*e, q));
+        }
+        q.vertical = vertical_model::unsprung;
+        for (const auto &g : geometry)
+            check_true("geometry: used on the unsprung car", param_used(*find_param(g[0]), q));
+        check_true("geometry: motion ratio 0 refused",
+                   refused("motion_ratio_front", "0", "parameter motion_ratio_front: must be above 0"));
+        four_wheel_params p;
+        apply(p, "camber_front", "-1.5 deg");
+        check_near("geometry: camber in degrees", p.front_corner.camber, -0.026179939, 1e-9);
+        check_true("geometry: negative camber thrust refused", throws("camber_thrust_rear", "-0.1"));
+        check_true("geometry: negative front camber thrust refused", throws("camber_thrust_front", "-0.1"));
     }
 
     return finish("registry");

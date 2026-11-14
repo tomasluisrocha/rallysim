@@ -126,6 +126,16 @@ int main()
         check_near("car: anti-roll front", bars.params.front_corner.antiroll_rate, 20000, 0);
         check_near("car: anti-roll rear", bars.params.rear_corner.antiroll_rate, 10000, 0);
     }
+    {
+        const four_wheel_run g = load(kMinimal + "[car]\nvertical = unsprung\ntoe_gain_front = 0.05\nackermann = 1\nroll_centre_rear = 150 mm\n");
+        check_near("car: toe gain", g.params.front_corner.toe_gain, 0.05, 0);
+        check_near("car: ackermann", g.params.ackermann, 1, 0);
+        check_near("car: rear roll centre", g.params.rear_corner.roll_centre, 0.15, 1e-12);
+    }
+    check_one_error("unused: camber on the springs car", kMinimal + "[car]\ncamber_front = -1 deg\n", "t.ini:4:",
+                    "camber_front: only used with vertical = unsprung");
+    check_one_error("unused: ackermann on the springs car", kMinimal + "[car]\nackermann = 1\n", "t.ini:4:",
+                    "ackermann: only used with vertical = unsprung");
     check_one_error("unused: a front bar on the springs car", kMinimal + "[car]\nantiroll_front = 20000\n", "t.ini:4:",
                     "antiroll_front: only used with vertical = unsprung");
     check_one_error("unused: a rear bar on the springs car", kMinimal + "[car]\nantiroll_rear = 10000\n", "t.ini:4:",

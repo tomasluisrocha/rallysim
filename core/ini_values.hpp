@@ -83,6 +83,13 @@ namespace rallysim
         // Rate
         {"1/s", "1/s", 1},
 
+        // Angle per length
+        {"rad/m", "rad/m", 1},
+        {"deg/m", "rad/m", kPi / 180},
+
+        // Per length
+        {"1/m", "1/m", 1},
+
         // Dimensionless ratio
         {"%", "-", 0.01},
     };

@@ -84,6 +84,9 @@ int main()
     check_near("number: unit with no space", parse_number("25deg", "rad"), 25 * (kPi / 180), 0);
     check_near("number: km/h", parse_number("50 km/h", "m/s"), 50 * (1.0 / 3.6), 0);
     check_near("number: unit with a space in it", parse_number("3.2 kN m", "N m"), 3200, 0);
+    check_near("number: deg/m", parse_number("2 deg/m", "rad/m"), 0.034906585, 1e-9);
+    check_near("number: 1/m", parse_number("0.5 1/m", "1/m"), 0.5, 0);
+    check_true("number: rad/m is not 1/m", fails([] { parse_number("1 rad/m", "1/m"); }, "rad/m"));
     check_near("number: percent", parse_number("62 %", "-"), 0.62, 1e-15);
     check_near("number: no unit on a ratio", parse_number("0.62", "-"), 0.62, 0);
 
