@@ -204,6 +204,19 @@ int main()
         }
         check_true((std::string("step: shipped scenario loads unsprung: ") + name).c_str(), loads);
     }
+    // geometry the strut or the steering cannot follow
+    {
+        const std::string mr = kMinimal + "[car]\nvertical = unsprung\nmotion_ratio_front = 0.5\n";
+        check_one_error("geometry: a ratio that crosses 0 before the bump stop", mr + "motion_ratio_gain_front = -2\n", "t.ini:6:",
+                        "must stay above 0");
+        check_true("geometry: a gain that keeps the ratio above 0 loads",
+                   errors_of(mr + "motion_ratio_gain_front = -0.5\n").empty());
+        const std::string an = kMinimal + "[car]\nvertical = unsprung\nackermann = 1\n";
+        check_one_error("geometry: a steer past the inner wheel's solution", an + "max_steer = 1.3\n", "t.ini:5:", "no solution");
+        check_true("geometry: a smaller steer loads", errors_of(an + "max_steer = 1.2\n").empty());
+        check_true("geometry: the same steer without Ackermann loads",
+                   errors_of(kMinimal + "[car]\nvertical = unsprung\nackermann = 0\nmax_steer = 1.3\n").empty());
+    }
     check_true("step: the springs car is not screened", errors_of(kMinimal + "[car]\nvertical = springs\n").empty());
     check_true("step: the springs car with a 10 ms dt is not screened",
                errors_of("[run]\nduration = 1 s\ndt = 10 ms\n[car]\nvertical = springs\n").empty());

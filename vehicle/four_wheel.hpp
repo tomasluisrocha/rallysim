@@ -152,6 +152,24 @@ namespace rallysim
         Real b = 0; // twice the damping over mass (1/s)
     };
 
+    // The motion ratio at the two ends of the wheel travel between the stops (the ratio is linear in the travel, so
+    // these are its smallest and largest values, in either order).
+    struct ratio_ends
+    {
+        Real lo = 1, hi = 1; // at the droop stop and at the end of the bump stop
+        Real smallest() const { return std::min(lo, hi); }
+        Real largest() const { return std::max(lo, hi); }
+    };
+
+    inline ratio_ends motion_ratio_ends(const corner_params &c)
+    {
+        const Real s_lo = -c.droop / c.motion_ratio, s_hi = (c.bump_travel + c.bump_stop_length) / c.motion_ratio;
+        ratio_ends e;
+        e.lo = c.motion_ratio + c.motion_ratio_gain * s_lo;
+        e.hi = c.motion_ratio + c.motion_ratio_gain * s_hi;
+        return e;
+    }
+
     inline corner_step_terms corner_step_coefficients(const four_wheel_params &p, std::size_t i)
     {
         const corner_params &c = p.corner(i);
@@ -160,9 +178,10 @@ namespace rallysim
         const Real body = 1 / (1 / ms + r.y * r.y / p.chassis.inertia.x + r.x * r.x / p.chassis.inertia.y);
         const Real reduced = mu * body / (mu + body);
         corner_step_terms t;
-        // in roll each wheel sees twice the anti-roll bar's rate
-        t.a = (c.spring_rate + 2 * c.antiroll_rate + std::max(c.bump_stop_rate, c.stop_rate)) / reduced + c.tyre_rate / mu;
-        t.b = 2 * (std::max(Real(1), c.rebound_ratio) * c.damper_rate / reduced + c.tyre_damping / mu);
+        // the strut's rates reach the wheel times the ratio squared; in roll each wheel sees twice the bar's rate
+        const Real mr = motion_ratio_ends(c).largest(), mr2 = mr * mr;
+        t.a = (mr2 * (c.spring_rate + std::max(c.bump_stop_rate, c.stop_rate)) + 2 * c.antiroll_rate) / reduced + c.tyre_rate / mu;
+        t.b = 2 * (std::max(Real(1), c.rebound_ratio) * mr2 * c.damper_rate / reduced + c.tyre_damping / mu);
         return t;
     }
 

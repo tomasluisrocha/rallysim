@@ -126,8 +126,8 @@ and `sliding_ratio` only when that axle is on `peak_slide`. This is judged after
 they are in the file; `rallysim params <scenario>` marks what a car does not use.
 
 An unsprung car is refused when a corner's step number reaches 2 at the run's `dt` (a light wheel, a stiff tyre, stop or
-anti-roll bar, or strong damping for the step); the message gives the largest `dt`. The number screens step
-stability only, not accuracy.
+anti-roll bar, a motion ratio above 1, or strong damping for the step); the message gives the largest `dt`. The number
+screens step stability only, not accuracy.
 
 `rebound_ratio_*` multiplies `damper_*` while the strut extends (1: the same in both directions). `bump_travel_*` is the
 compression past rest where the bump stop starts, and its stiffness rises to `bump_stop_rate_*` over
@@ -196,7 +196,13 @@ my_run.ini:4: speed: give speed or velocity, not both
 my_run.ini:7: mass: must be above 0
 my_run.ini:8: spring_front: unit km/h is not N/m
 my_run.ini:9: unknown section [track]
+my_run.ini:10: motion_ratio_gain_front: the motion ratio reaches -0.62 between the stops; it must stay above 0
+my_run.ini:11: ackermann: with max_steer 1.3 rad the inner wheel's angle has no solution; max_steer must be below 1.27934 rad
 ```
+
+The last two apply to an unsprung car: the motion ratio, which changes linearly with wheel travel, must stay above 0
+between the droop stop and the end of the bump stop, and with `ackermann` other than 0, `max_steer` must be below
+atan(2 (`lf` + `lr`) / `track_front`).
 
 ## Example
 

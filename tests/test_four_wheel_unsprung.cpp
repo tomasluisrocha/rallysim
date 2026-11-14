@@ -692,6 +692,16 @@ int main()
         check_near("step number: front bar 20000 adds 2 kb dt^2 / mr", corner_step_number(ab, FL, 0.001) - f1, 0.001132267, 1e-8);
         check_true("step number: a front bar leaves the rear unchanged", corner_step_number(ab, RL, 0.001) == r1);
 
+        // the strut's rates reach the wheel times the ratio squared (front reduced mass 35.327354 kg)
+        four_wheel_params mr15 = p;
+        mr15.front_corner.motion_ratio = 1.5;
+        check_near("step number: front motion ratio 1.5", corner_step_number(mr15, FL, 0.001), 0.52532, 1e-4);
+        check_true("step number: a front ratio leaves the rear unchanged", corner_step_number(mr15, RL, 0.001) == r1);
+        // a gain raises the ratio to 1.28 at the end of the bump stop (s = 0.28)
+        four_wheel_params gain = p;
+        gain.front_corner.motion_ratio_gain = 1;
+        check_near("step number: the largest ratio between the stops counts", corner_step_number(gain, FL, 0.001), 0.38423, 1e-4);
+
         four_wheel_params o4 = unsprung_car();
         for (corner_params *c : {&o4.front_corner, &o4.rear_corner})
         {
