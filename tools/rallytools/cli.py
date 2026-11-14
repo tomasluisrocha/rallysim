@@ -244,6 +244,12 @@ def main(argv=None):
                          help="end of the window in seconds (default: the end of the run)")
     command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
     command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
+    command = subparsers.add_parser("energy", help="the energy books of a four-wheel run: stored, work, balance",
+                                    description="Print the end values of the energy books of a four-wheel run, "
+                                                "and optionally draw the energy flow chart.")
+    command.add_argument("run", metavar="RUN", help="four-wheel run (CSV)")
+    command.add_argument("--save", metavar="PNG", help="save a PNG headlessly (mutually exclusive with --show)")
+    command.add_argument("--show", action="store_true", help="display the chart interactively (mutually exclusive with --save)")
     command = subparsers.add_parser("landing", help="settling, rebound and suspension travel after each landing",
                                     description="Measure each landing of a run: settling time, rebound, "
                                                 "overshoot, travel and margin.")
@@ -377,6 +383,29 @@ def main(argv=None):
         if args.command == "suspension" and args.save is not None and args.show:
             print("suspension: --save and --show are mutually exclusive", file=sys.stderr)
             return 2
+        if args.command == "energy" and args.save is not None and args.show:
+            print("energy: --save and --show are mutually exclusive", file=sys.stderr)
+            return 2
+        if args.command == "energy":
+            from .energy import text as energy_text
+            run = load(args.run)
+            print(energy_text(run))
+            if args.save is not None or args.show:
+                from .charts.energy import figure
+                if args.save is not None:
+                    import matplotlib
+                    matplotlib.use("Agg")
+                    chart = figure(run)
+                    output = Path(args.save)
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    chart.savefig(output, dpi=110)
+                    print(f"wrote {output}")
+                else:
+                    # The window needs a figure pyplot made: matplotlib 3.10 cannot show a bare Figure.
+                    import matplotlib.pyplot as plt
+                    figure(run, fig=plt.figure())
+                    plt.show()
+            return 0
         if args.command == "handling" and args.save is not None and args.show:
             print("handling: --save and --show are mutually exclusive", file=sys.stderr)
             return 2

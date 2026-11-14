@@ -82,6 +82,19 @@ oversteer). It uses the rows of the window (the whole run by default) at 1 m/s o
 `a_lat` varies by less than 0.5 m/s^2 there. `--save PNG` also draws the two-panel diagram (extra steer and the
 axle slip angles against `a_lat`); `--show` opens it. Not both.
 
+### energy
+
+```
+python tools/rally.py energy out/runs/fw_brake.csv
+python tools/rally.py energy out/runs/fw_brake.csv --save out/plots/energy.png
+```
+
+Prints the end values of the five stored energy terms, the four works, the stored energy (`energy.total` minus its
+first value), the net work (drive minus brake, damper and tyre) and the residual, then the largest absolute residual
+with its time. Everything comes from the file's own `energy.*` and `work.*` columns; a run without them (older
+build, or not four-wheel) is refused. `--save PNG` also draws three panels over time (stored terms, works, and
+stored against net work with the residual); `--show` opens it. Not both.
+
 ### landing
 
 ```
