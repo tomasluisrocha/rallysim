@@ -9,8 +9,8 @@ namespace rallysim
     // out; gravity and the springs only move it around. So over a run
     //     residual = (E(t) - E(0)) - integral of (drive - brake - damper - tyre) dt
     // stays near zero. energy_of() is E, rates_of() the integrand. A residual that drifts is a physics bug: a sign
-    // error, a force applied at the wrong point, an integrator leak. "The quickest single detector of physics
-    // bugs", and phase 7's gate is this balance.
+    // error, a force applied at the wrong point, an integrator leak. It needs no reference solution, so it checks
+    // every scenario, and a model change must keep this balance closed.
     //
     // Expect small departures, not a drift: step() applies each tyre's force averaged over the wheel's sub-steps
     // while rates_of() uses the force at the start of the step (first-order error, shrinking with dt), and the
