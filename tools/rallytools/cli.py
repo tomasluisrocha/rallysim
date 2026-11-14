@@ -202,6 +202,18 @@ def _sweep(args):
     return 0
 
 
+def _run_all(args):
+    import os
+    import time
+    from .run_all import run_all
+    exe = find_exe(args.exe)
+    start = time.time()
+    failed = run_all(exe, args.only, args.gif, not args.no_plots, args.snapshot, OUT,
+                     args.jobs or max(1, (os.cpu_count() or 2) - 1), progress=print)
+    print(f"done in {time.time() - start:.0f} s" + (f"; {len(failed)} failed: {', '.join(failed)}" if failed else ""))
+    return 1 if failed else 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python tools/rally.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -318,8 +330,21 @@ def main(argv=None):
     command.add_argument("--show", action="store_true", help="open the picture instead of only saving it")
     command.add_argument("--exe", help="the rallysim executable (default: found under build/)")
     command.add_argument("--jobs", type=int, default=None, metavar="N", help="runs at once (default: CPUs - 1)")
+    command = subparsers.add_parser("run-all", help="run every scenario and make every picture into out/",
+                                    description="Run rallysim for every scenario and the tyre rig (CSVs to "
+                                                "out/runs and out/rig), then draw the path of each run, the "
+                                                "tyres of each four-wheel run and the rig plot into out/plots. "
+                                                "Exit 1 when anything failed.")
+    command.add_argument("--only", nargs="+", metavar="NAME", help="just these scenarios")
+    command.add_argument("--gif", action="store_true", help="also write the GIFs: the dashboards and the 3D views")
+    command.add_argument("--no-plots", action="store_true", help="only write the CSVs")
+    command.add_argument("--snapshot", metavar="NAME", help="then copy out/runs and out/rig to out/snapshots/NAME")
+    command.add_argument("--exe", help="the rallysim executable (default: found under build/)")
+    command.add_argument("--jobs", type=int, default=None, metavar="N", help="GIFs made at once (default: CPUs - 1)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "run-all":
+            return _run_all(args)
         if args.command == "overlay":
             if len(args.runs) < 2:
                 parser.error("overlay needs at least two runs")
