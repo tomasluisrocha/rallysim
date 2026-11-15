@@ -15,16 +15,16 @@ namespace rallysim
 {
     // Four-wheel car: four contact patches, each with its own wheel spin and tyre,
     // driven by pedals through vehicle/drive_brake.hpp. Two ways to get the vertical loads:
-    //   springs (step 6, the default): gravity acts, each corner of the body sits on a spring and damper
+    //   springs (step 6): gravity acts, each corner of the body sits on a spring and damper
     //     (vehicle/corner.hpp) and the tyre forces act on the ground, below the CG, so the body heaves, rolls and
     //     pitches and the load transfer comes out of the springs;
     //   planar (steps 3 to 5): gravity is cancelled and the tyre forces act at CG height, so the body stays flat
     //     on the ground plane, as the single-track; the loads come from the quasi-static load transfer.
-    //   unsprung: as springs, but each wheel has its own mass on a tyre spring below the strut, with stops
+    //   unsprung (the default): as springs, but each wheel has its own mass on a tyre spring below the strut, with stops
     //     and an optional anti-roll bar, so the tyre load is the tyre spring's and the wheel can hop and hang (see
     //     "the corner with a wheel" below).
     // The planar model stays so the four-wheel car can still be compared one to one with the single-track, and
-    // the springs model so the unsprung one can be compared with it.
+    // the springs model so the unsprung one can be compared with it; both are references the tests compare with.
     enum class vertical_model
     {
         planar,
@@ -94,7 +94,7 @@ namespace rallysim
         tyre_params front_tyre = car_tyre(90000, 30000, 0.5 * chassis.mass * kGravity * lr / (lf + lr));
         tyre_params rear_tyre = car_tyre(90000, 35000, 0.5 * chassis.mass * kGravity * lf / (lf + lr));
         drive_brake_params drive_brake;                    // pedals to wheel torques; rear drive by default
-        vertical_model vertical = vertical_model::springs; // how the vertical loads are found (see above)
+        vertical_model vertical = vertical_model::unsprung; // how the vertical loads are found (see above)
         corner_params front_corner;                        // suspension of each front corner (springs, unsprung)
         corner_params rear_corner;                         // and of each rear corner
 

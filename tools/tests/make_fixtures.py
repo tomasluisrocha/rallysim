@@ -15,7 +15,7 @@ RUNS = (
     ("rigid_body.csv", ("thrown",)),
     ("bicycle.csv", ("circle",)),
     ("single_track.csv", ("st_lane",)),
-    ("four_wheel_springs.csv", ("fw_brake",)),
+    ("four_wheel_springs.csv", ("fw_brake", "--set", "vertical=springs")),
     ("four_wheel_unsprung.csv", ("fw_brake", "--set", "vertical=unsprung")),
 )
 REMOVED = tuple(

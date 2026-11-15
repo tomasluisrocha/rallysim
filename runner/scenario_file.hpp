@@ -22,7 +22,7 @@ namespace rallysim
     //   [run]       model (four_wheel), duration (s, required), dt (s, default 0.001)
     //   [start]     position (m), heading, pitch, roll (rad), speed (m/s) or velocity (m/s), angular_velocity (rad/s)
     //   [car]       every registry name (rallysim params) the car uses, tyre_curve or tyre_curve_front / _rear,
-    //               vertical (springs, planar, unsprung); a number the chosen model or tyre curve does not use is refused (param_used), and so is
+    //               vertical (unsprung, the default; springs; planar); a number the chosen model or tyre curve does not use is refused (param_used), and so is
     //               one outside its range (range_error)
     //   [driver]    steer (rad), throttle, brake, handbrake (0 to 1) as timelines; hold_speed (m/s, a timeline) for
     //               the speed controller (gain speed_gain, 1/s), in place of throttle and brake; hold_heading (rad)
