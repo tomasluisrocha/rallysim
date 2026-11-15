@@ -130,6 +130,29 @@ namespace
         return r;
     }
 
+    // The scenario `name` in the unsprung model with the suspension geometry set on its car.
+    four_wheel_run geometry_scenario(const char *name)
+    {
+        four_wheel_run r = unsprung_scenario(name);
+        four_wheel_params &p = r.params;
+        for (corner_params *c : {&p.front_corner, &p.rear_corner})
+        {
+            c->motion_ratio = 0.8;
+            c->motion_ratio_gain = 1;
+            c->camber = -0.02;
+            c->camber_gain = -0.35;
+            c->toe = 0.002;
+            c->toe_gain = 0.05;
+            c->roll_centre_gain = -0.5;
+        }
+        p.front_corner.roll_centre = 0.08;
+        p.rear_corner.roll_centre = 0.12;
+        p.front_tyre.camber_thrust = p.rear_tyre.camber_thrust = 0.1;
+        p.ackermann = 1;
+        r.initial = four_wheel_initial(p, r.initial.body.vel.x);
+        return r;
+    }
+
     void check_run(const char *name, const four_wheel_run &r, Real tolerance)
     {
         const booked b = run_booked(r, r.dt);
@@ -538,6 +561,15 @@ int main()
                          {0.6, four_wheel_input{0.04, 0.0, 0.0, 0.0}}};
         r.steps = 3000;
         check_halves("roll centres 0.30, steer step", r);
+    }
+
+    // the shipped unsprung scenarios with the whole geometry set: the books close and the residual halves with dt
+    for (const char *name : {"fw_lane", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_brake", "fw_launch"})
+    {
+        const four_wheel_run r = geometry_scenario(name);
+        const std::string label = std::string(name) + ", unsprung, geometry";
+        check_run(label.c_str(), r, 0.005);
+        check_halves(label.c_str(), r);
     }
 
     return finish("energy");

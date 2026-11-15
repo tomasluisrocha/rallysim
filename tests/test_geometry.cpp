@@ -5,6 +5,7 @@
 #include "tests/check.hpp"
 #include "tests/telemetry_helpers.hpp"
 #include "runner/run_four_wheel.hpp"
+#include "runner/scenario_file.hpp"
 #include "vehicle/four_wheel.hpp"
 #include "vehicle/four_wheel_telemetry.hpp"
 
@@ -24,6 +25,45 @@ namespace
         p.front_corner.motion_ratio = p.rear_corner.motion_ratio = mr;
         p.front_corner.motion_ratio_gain = p.rear_corner.motion_ratio_gain = gain;
         return p;
+    }
+
+    // fw_lane in the unsprung model, the car placed after `tune` has set its parameters.
+    template <class F>
+    four_wheel_run lane_with(F tune)
+    {
+        four_wheel_run r = four_wheel_scenario("fw_lane");
+        r.params.vertical = vertical_model::unsprung;
+        tune(r.params);
+        r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
+        return r;
+    }
+
+    // The same run at time step dt, its duration kept.
+    four_wheel_state run_at(four_wheel_run r, Real dt)
+    {
+        const Real duration = r.steps * r.dt;
+        r.dt = dt;
+        r.steps = std::lround(duration / dt);
+        return run(r);
+    }
+
+    // The geometry set on both axles.
+    void geometry_set(four_wheel_params &p)
+    {
+        for (corner_params *c : {&p.front_corner, &p.rear_corner})
+        {
+            c->motion_ratio = 0.8;
+            c->motion_ratio_gain = 1;
+            c->camber = -0.02;
+            c->camber_gain = -0.35;
+            c->toe = 0.002;
+            c->toe_gain = 0.05;
+            c->roll_centre_gain = -0.5;
+        }
+        p.front_corner.roll_centre = 0.08;
+        p.rear_corner.roll_centre = 0.12;
+        p.front_tyre.camber_thrust = p.rear_tyre.camber_thrust = 0.1;
+        p.ackermann = 1;
     }
 
     // FL's strut force at the wheel with its wheel moved `dz` from rest, the body at rest.
@@ -591,6 +631,59 @@ int main()
         std::printf("camber turn: front axle Fy %.4f N with thrust, %.4f N without\n", with, without);
         check_true("camber turn: the thrust changes the front axle force by more than 0.1 N",
                    std::fabs(with - without) > 0.1);
+    }
+
+    // fw_lane at 1 ms ends within 0.1 mm of its 0.1 ms run, whatever the geometry: a term that made the explicit
+    // step ring would show as a gap between the two.
+    {
+        struct variant
+        {
+            const char *name;
+            void (*tune)(four_wheel_params &);
+        };
+        const variant variants[] = {
+            {"the set", [](four_wheel_params &p) { geometry_set(p); }},
+            {"motion ratio 1.5",
+             [](four_wheel_params &p) { p.front_corner.motion_ratio = p.rear_corner.motion_ratio = 1.5; }},
+            {"roll centres 0.6",
+             [](four_wheel_params &p) { p.front_corner.roll_centre = p.rear_corner.roll_centre = 0.6; }},
+            {"roll centres 0.3, gain -3",
+             [](four_wheel_params &p)
+             {
+                 p.front_corner.roll_centre = p.rear_corner.roll_centre = 0.3;
+                 p.front_corner.roll_centre_gain = p.rear_corner.roll_centre_gain = -3;
+             }},
+            {"toe gain 0.5, camber gain -2, thrust 0.3",
+             [](four_wheel_params &p)
+             {
+                 p.front_corner.toe_gain = p.rear_corner.toe_gain = 0.5;
+                 p.front_corner.camber_gain = p.rear_corner.camber_gain = -2;
+                 p.front_tyre.camber_thrust = p.rear_tyre.camber_thrust = 0.3;
+             }},
+        };
+        for (const variant &v : variants)
+        {
+            const four_wheel_run r = lane_with(v.tune);
+            const four_wheel_state coarse = run_at(r, 0.001), fine = run_at(r, 0.0001);
+            const Real gap = std::sqrt(dot(coarse.body.pos - fine.body.pos, coarse.body.pos - fine.body.pos));
+            std::printf("fw_lane, unsprung, %s: 1 ms ends %.3g m from 0.1 ms\n", v.name, gap);
+            check_true((std::string("fw_lane step: ") + v.name + " ends within 0.1 mm of the 0.1 ms run").c_str(),
+                       gap < 1e-4);
+        }
+    }
+
+    // fw_circle with the set: at its last step the four loads add up to the weight and no wheel is on a stop
+    {
+        four_wheel_run r = four_wheel_scenario("fw_circle");
+        r.params.vertical = vertical_model::unsprung;
+        geometry_set(r.params);
+        r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
+        const four_wheel_state s = run(r);
+        const four_wheel_forces f = evaluate(s, r.params, driver_input(r, s, r.steps * r.dt));
+        check_near("fw_circle, the set: the loads add up to the weight", f.fz[FL] + f.fz[FR] + f.fz[RL] + f.fz[RR],
+                   r.params.chassis.mass * g, 1e-6);
+        for (std::size_t k = 0; k < kWheels; ++k)
+            check_true("fw_circle, the set: no wheel is on a stop", f.corner[k].stop == 0);
     }
 
     return finish("geometry");
