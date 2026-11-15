@@ -245,14 +245,14 @@ namespace rallysim
                 for (const std::string axle : {"front", "rear"})
                 {
                     const corner_params &c = run.params.corner(axle == "front" ? FL : RL);
-                    const Real smallest = motion_ratio_ends(c).smallest();
-                    if (smallest > 0)
+                    const ratio_ends ends = motion_ratio_ends(c);
+                    if (ends.lo2 > 0 && ends.hi2 > 0)
                         continue;
                     const ini_entry *at = entry_of("car", "motion_ratio_gain_" + axle);
                     if (!at)
                         at = entry_of("car", "motion_ratio_" + axle);
-                    fail(at ? *at : *e, std::string(at ? "" : "motion_ratio_" + axle + ": ") + "the motion ratio reaches " + number_text(smallest) +
-                                            " between the stops; it must stay above 0");
+                    fail(at ? *at : *e, std::string(at ? "" : "motion_ratio_" + axle + ": ") + "the motion ratio reaches 0 before the " +
+                                            (ends.lo2 > 0 ? "bump" : "droop") + " stop; it must stay above 0 between the stops");
                 }
                 // the inner front wheel's angle has a solution only below atan(2 L / t)
                 const Real limit = std::atan(2 * run.params.wheelbase() / run.params.track_front);

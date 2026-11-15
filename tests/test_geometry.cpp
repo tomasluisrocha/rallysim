@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -670,6 +672,164 @@ int main()
             check_true((std::string("fw_lane step: ") + v.name + " ends within 0.1 mm of the 0.1 ms run").c_str(),
                        gap < 1e-4);
         }
+    }
+
+    // jacking in step: roll centres 0.30, a steer step at 20 m/s stopped mid-turn, one step. Each wheel's new vz is
+    // vz + ((Fz - strut - J) / mu - g) dt with J = -slope x the sub-step average tyre force along the outboard
+    // direction, the average taken here from step_wheel on a copy of the wheels. Catches J from the start-of-step
+    // tyre forces.
+    {
+        four_wheel_run r;
+        r.params = geometry_car(1, 0);
+        r.params.front_corner.roll_centre = r.params.rear_corner.roll_centre = 0.30;
+        r.initial = four_wheel_initial(r.params, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{}}, {0.6, four_wheel_input{0.04, 0.0, 0.0, 0.0}}};
+        r.steps = 700;
+        const four_wheel_params &p = r.params;
+        const four_wheel_state s = run(r);
+        const four_wheel_input in = driver_input(r, s, r.steps * r.dt);
+        const Real dt = r.dt;
+        const four_wheel_forces f = evaluate(s, p, in);
+        std::array<wheel_state, kWheels> wheels = s.wheels;
+        four_wheel_state next = s;
+        step(next, p, in, dt);
+        Real largest_gap = 0; // the most the start-of-step jacking would move vz
+        for (std::size_t i = 0; i < kWheels; ++i)
+        {
+            const tyre_force avg = step_wheel(wheels[i], p.wheel, p.tyre(i), f.patch[i], f.fz[i], f.torque[i].drive,
+                                              f.torque[i].brake, dt, f.camber_slip[i]);
+            const contact_geometry c = contact_of(p, s.body, i, f.steer, &s.corners[i]);
+            const Real J = -c.kin.slope * dot(avg.fx * c.forward + avg.fy * c.left, c.outboard);
+            const Real mu = p.corner(i).unsprung_mass;
+            const Real expected = s.corners[i].vz + ((f.fz[i] - f.corner[i].strut - J) / mu - g) * dt;
+            std::printf("jacking in step: wheel %zu J %.6f N (start of step %.6f N), vz %.12f (expected %.12f)\n", i, J,
+                        f.corner[i].jacking, next.corners[i].vz, expected);
+            check_near("jacking in step: vz with J from the averaged tyre force", next.corners[i].vz, expected, 1e-12);
+            largest_gap = std::max(largest_gap, std::fabs(J - f.corner[i].jacking) / mu * dt);
+        }
+        check_true("jacking in step: the start-of-step J would move vz by more than 1e-9 m/s", largest_gap > 1e-9);
+    }
+
+    // net forces in the row with toed wheels: the toe-in run's last state; net.Fx is the sum of
+    // Fx cos(wheelSteer) - Fy sin(wheelSteer) from the same row. Catches the row's contact geometry taken without the
+    // wheel (no toe: about 1.9 N off).
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.set_tyre_curve(tyre_curve::linear);
+        p.front_tyre.cornering_stiffness = p.rear_tyre.cornering_stiffness = 30000;
+        p.lf = p.lr = 1.25;
+        rebuild_tyres(p);
+        p.front_corner.toe = p.rear_corner.toe = 0.004;
+        four_wheel_run r;
+        r.params = p;
+        r.initial = four_wheel_initial(p, 20.0);
+        r.hold_speed = constant_script<Real>(20.0);
+        r.script.keys = {{0.0, four_wheel_input{0.0, 0.0, 0.0, 0.0}}};
+        r.steps = 6000;
+        const four_wheel_state s = run(r);
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const std::vector<Real> row = four_wheel_row(r.steps, r.dt, s, p, driver_input(r, s, r.steps * r.dt),
+                                                     energy_books(s, p));
+        auto col = [&](const std::string &name) { return row[static_cast<std::size_t>(index_of(names, name))]; };
+        Real sum = 0;
+        for (const char *w : {"FL", "FR", "RL", "RR"})
+        {
+            const std::string b = std::string("wheel.") + w + ".";
+            sum += col(b + "Fx") * std::cos(col(b + "wheelSteer")) - col(b + "Fy") * std::sin(col(b + "wheelSteer"));
+        }
+        std::printf("toe-in row: net.Fx %.9f N, from the wheels %.9f N\n", col("net.Fx"), sum);
+        check_near("toe-in row: net.Fx is the wheels' forces along the body", col("net.Fx"), sum, 1e-6);
+    }
+
+    // the stops through the ratio, 0.8, at rest: FL's wheel raised until the strut is 0.01 m into the bump stop
+    // (x - x0 = bump_travel + 0.01), then lowered until it is 0.01 m into the droop stop. The force at the wheel is
+    // MR (spring + stop), the bump stop kb e^2 / (2 L), the droop stop stop_rate e, MR^2 = MR0^2 + 2 gain (x - x0).
+    // Catches the stop force left out of the ratio.
+    {
+        const Real mr0 = 0.8, gain = 0;
+        const four_wheel_params p = geometry_car(mr0, gain);
+        const corner_params &c = p.front_corner;
+        const Real x0 = p.strut_static_deflection(FL);
+        for (const Real d : {c.bump_travel + 0.01, -c.droop - 0.01}) // x - x0
+        {
+            const Real mr = std::sqrt(mr0 * mr0 + 2 * gain * d);
+            const Real travel = 2 * d / (mr0 + mr); // x - x0 = MR0 s + gain s^2 / 2
+            const Real spring = 50000 * std::max(x0 + d, Real(0));
+            const Real stop = d > 0 ? 500000 * 0.01 * 0.01 / (2 * 0.03) : 500000 * -0.01;
+            const Real force = fl_strut_at(p, travel);
+            std::printf("stops through the ratio, x - x0 %.3f: strut at the wheel %.6f N (MR (spring + stop) %.6f N)\n", d,
+                        force, mr * (spring + stop));
+            check_near(d > 0 ? "stops through the ratio: bump stop" : "stops through the ratio: droop stop", force,
+                       mr * (spring + stop), 1e-6);
+        }
+    }
+
+    // unequal tracks: front 1.6 m, rear 1.4 m, rear roll centre 0.14 m; RL raised 0.02 m at rest moves its patch
+    // 0.14 x 0.02 / 0.7 m outboard (left), and rollCentre.rear reads 0.14. Catches the front track on the rear axle.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.track_front = 1.6;
+        p.track_rear = 1.4;
+        p.rear_corner.roll_centre = 0.14;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[RL].z += 0.02;
+        const contact_geometry c = contact_of(p, s.body, RL, 0.0, &s.corners[RL]);
+        std::printf("unequal tracks: RL patch out by %.12f m\n", c.point.y - c.load_point.y);
+        check_near("unequal tracks: RL patch moves outboard by h s / (track_rear / 2)", c.point.y - c.load_point.y,
+                   0.14 * 0.02 / 0.7, 1e-12);
+        const std::vector<std::string> names = column_names(four_wheel_columns());
+        const std::vector<Real> row = four_wheel_row(0, 0.001, s, p, none, energy_books(s, p));
+        check_column(names, row, "rollCentre.rear", 0.14, 1e-12);
+    }
+
+    // a negative roll centre, front -0.05 m: FL raised 0.02 m moves its patch 0.05 x 0.02 / 0.75 m inboard; at rest,
+    // 1000 N to the left on each front tyre jacks FL by +0.05 / 0.75 x 1000 N and FR by the opposite. Catches the
+    // height's sign lost.
+    {
+        four_wheel_params p = geometry_car(1, 0);
+        p.front_corner.roll_centre = -0.05;
+        four_wheel_state s = four_wheel_initial(p, 0.0);
+        s.corners[FL].z += 0.02;
+        const contact_geometry c = contact_of(p, s.body, FL, 0.0, &s.corners[FL]);
+        check_near("negative roll centre: FL patch moves inboard", c.point.y - c.load_point.y, -0.05 * 0.02 / 0.75, 1e-9);
+        check_near("negative roll centre: FL patch inboard value", c.point.y - c.load_point.y, -0.00133333, 1e-8);
+        const four_wheel_state rest = four_wheel_initial(p, 0.0);
+        four_wheel_forces f = evaluate(rest, p, none);
+        f.tyre[FL].fy += 1000;
+        f.tyre[FR].fy += 1000;
+        set_jacking(f, rest, p);
+        std::printf("negative roll centre: jacking FL %.9f N, FR %.9f N\n", f.corner[FL].jacking, f.corner[FR].jacking);
+        check_near("negative roll centre: FL jacking", f.corner[FL].jacking, 0.05 / 0.75 * 1000, 1e-9);
+        check_near("negative roll centre: FR jacking", f.corner[FR].jacking, -0.05 / 0.75 * 1000, 1e-9);
+        check_near("negative roll centre: FL jacking value", f.corner[FL].jacking, 66.6667, 1e-4);
+    }
+
+    // jacking's torque at the rest track: FL raised 0.02 m at rest, no tyre force, front roll centre 0.15 m. The
+    // vertical forces act at the rest track, so the wrench is the same as with roll centre 0. Catches the torque
+    // left at the moved patch (about 9 N m).
+    {
+        auto wrench_of = [&](Real roll_centre)
+        {
+            four_wheel_params p = geometry_car(1, 0);
+            p.front_corner.roll_centre = roll_centre;
+            four_wheel_state s = four_wheel_initial(p, 0.0);
+            s.corners[FL].z += 0.02;
+            four_wheel_forces f = evaluate(s, p, none);
+            for (tyre_force &t : f.tyre)
+                t = tyre_force{};
+            set_jacking(f, s, p);
+            return four_wheel_wrench(s, p, f);
+        };
+        const wrench a = wrench_of(0.15), b = wrench_of(0);
+        std::printf("torque at the rest track: torque x %.9f y %.9f z %.9f N m (roll centre 0: %.9f %.9f %.9f)\n", a.torque.x,
+                    a.torque.y, a.torque.z, b.torque.x, b.torque.y, b.torque.z);
+        check_near("torque at the rest track: force x", a.force.x, b.force.x, 1e-9);
+        check_near("torque at the rest track: force y", a.force.y, b.force.y, 1e-9);
+        check_near("torque at the rest track: force z", a.force.z, b.force.z, 1e-9);
+        check_near("torque at the rest track: torque x", a.torque.x, b.torque.x, 1e-9);
+        check_near("torque at the rest track: torque y", a.torque.y, b.torque.y, 1e-9);
+        check_near("torque at the rest track: torque z", a.torque.z, b.torque.z, 1e-9);
     }
 
     // fw_circle with the set: at its last step the four loads add up to the weight and no wheel is on a stop

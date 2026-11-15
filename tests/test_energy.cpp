@@ -439,7 +439,7 @@ int main()
                 {
                     const corner_params &c = p.corner(k);
                     const Real mount = p.static_deflection(k) - contact_of(p, s.body, k, 0.0).deflection;
-                    const Real x = p.strut_static_deflection(k) - mount + (s.corners[k].z - p.wheel_rest_height(k));
+                    const Real x = kinematics_of(p, k, mount, 0.0, s.corners[k]).strut;
                     stop_energy += bump_stop_energy(x - (p.strut_static_deflection(k) + c.bump_travel), c.bump_stop_rate,
                                                     c.bump_stop_length);
                 }
@@ -484,6 +484,50 @@ int main()
                    o1.peak_residual <= 0.005 * o1.scale);
         const Real qo = o05.peak_residual / o1.peak_residual;
         check_true("drop, own bump stop: halving dt halves the largest residual (ratio 0.4 to 0.6)", qo > 0.4 && qo < 0.6);
+
+        // the same drop with a motion ratio of 0.8: the stop's energy is taken at the strut's compression. Catches it
+        // taken at the wheel's travel.
+        const four_wheel_run ratio = unsprung_drop(1.0,
+                                                   [](corner_params &c)
+                                                   {
+                                                       c.tyre_damping = 0;
+                                                       c.bump_travel = 0.10;
+                                                       c.bump_stop_length = 0.03;
+                                                       c.bump_stop_rate = 500000;
+                                                       c.motion_ratio = 0.8;
+                                                   });
+        const drop_run m2 = drop(ratio, 0.002), m1 = drop(ratio, 0.001), m05 = drop(ratio, 0.0005);
+        std::printf("drop, bump stop, ratio 0.8: engaged for %ld corner-steps, peak %.1f N, peak stop energy %.1f J; largest "
+                    "residual %.3f J at 2 ms, %.3f at 1 ms, %.3f at 0.5 ms\n",
+                    m1.engaged, m1.peak_force, m1.peak_stop_energy, m2.peak_residual, m1.peak_residual, m05.peak_residual);
+        check_true("drop, bump stop, ratio 0.8: the stop is engaged", m1.peak_force > 1000 && m1.engaged > 10);
+        check_true("drop, bump stop, ratio 0.8: the diagnostic reads the stop holding energy", m1.peak_stop_energy > 1);
+        check_true("drop, bump stop, ratio 0.8: each halving of dt leaves under 0.6 of the largest residual",
+                   m1.peak_residual < 0.6 * m2.peak_residual && m05.peak_residual < 0.6 * m1.peak_residual);
+    }
+
+    // the bar's energy with a ratio of 0.7 on both axles: with a front bar of 20000 N/m and FL raised 0.013 m at rest,
+    // the slope of the stored springs energy against FL's height, with the bar less without it, is 20000 x 0.013 N.
+    // Catches the bar's energy taken on strut compression (127.4 N).
+    {
+        auto bar_slope = [](Real bar)
+        {
+            four_wheel_params p;
+            p.vertical = vertical_model::unsprung;
+            p.front_corner.motion_ratio = p.rear_corner.motion_ratio = 0.7;
+            p.front_corner.antiroll_rate = bar;
+            const Real h = 1e-6;
+            auto springs = [&](Real dz)
+            {
+                four_wheel_state s = four_wheel_initial(p, 0.0);
+                s.corners[FL].z += 0.013 + dz;
+                return energy_of(s, p).springs;
+            };
+            return (springs(h) - springs(-h)) / (2 * h);
+        };
+        const Real slope = bar_slope(20000) - bar_slope(0);
+        std::printf("bar energy, ratio 0.7: slope %.6f N (kb x 0.013 = 260 N)\n", slope);
+        check_near("bar energy, ratio 0.7: slope of the bar's energy is kb x travel", slope, 20000 * 0.013, 0.01);
     }
 
     // the scenarios the checks above leave out, in the unsprung model: showcase, launch, handbrake, hairpin. Each starts

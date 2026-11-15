@@ -206,11 +206,20 @@ int main()
     }
     // geometry the strut or the steering cannot follow
     {
+        // MR^2 = MR0^2 + 2 gain (x - x0), x - x0 from -0.10 (droop) to 0.28 (end of the bump stop). Catches the ratio's
+        // ends taken as linear in strut travel, which accepted gain -2.5 and 2.4 below.
         const std::string mr = kMinimal + "[car]\nvertical = unsprung\nmotion_ratio_front = 0.5\n";
-        check_one_error("geometry: a ratio that crosses 0 before the bump stop", mr + "motion_ratio_gain_front = -2\n", "t.ini:6:",
-                        "must stay above 0");
-        check_true("geometry: a gain that keeps the ratio above 0 loads",
-                   errors_of(mr + "motion_ratio_gain_front = -0.5\n").empty());
+        check_one_error("geometry: ratio 0.5, gain -2 (MR^2 -0.87 at the bump stop's end)", mr + "motion_ratio_gain_front = -2\n",
+                        "t.ini:6:", "reaches 0 before the bump stop");
+        check_one_error("geometry: ratio 0.5, gain -0.5 (MR^2 -0.03)", mr + "motion_ratio_gain_front = -0.5\n", "t.ini:6:",
+                        "reaches 0 before the bump stop");
+        check_true("geometry: ratio 0.5, gain -0.4 loads (MR^2 0.026)", errors_of(mr + "motion_ratio_gain_front = -0.4\n").empty());
+        check_one_error("geometry: ratio 0.5, gain 2.4 (MR^2 -0.23 at the droop stop)", mr + "motion_ratio_gain_front = 2.4\n",
+                        "t.ini:6:", "reaches 0 before the droop stop; it must stay above 0 between the stops");
+        const std::string one = kMinimal + "[car]\nvertical = unsprung\nmotion_ratio_front = 1\n";
+        check_one_error("geometry: ratio 1, gain -2.5 (MR^2 -0.4)", one + "motion_ratio_gain_front = -2.5\n", "t.ini:6:",
+                        "reaches 0 before the bump stop; it must stay above 0 between the stops");
+        check_true("geometry: ratio 1, gain -1.7 loads (MR^2 0.048)", errors_of(one + "motion_ratio_gain_front = -1.7\n").empty());
         const std::string an = kMinimal + "[car]\nvertical = unsprung\nackermann = 1\n";
         check_one_error("geometry: a steer past the inner wheel's solution", an + "max_steer = 1.3\n", "t.ini:5:", "no solution");
         check_true("geometry: a smaller steer loads", errors_of(an + "max_steer = 1.2\n").empty());

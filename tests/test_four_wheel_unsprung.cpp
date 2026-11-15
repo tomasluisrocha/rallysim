@@ -730,10 +730,16 @@ int main()
         mr15.front_corner.motion_ratio = 1.5;
         check_near("step number: front motion ratio 1.5", corner_step_number(mr15, FL, 0.001), 0.52532, 1e-4);
         check_true("step number: a front ratio leaves the rear unchanged", corner_step_number(mr15, RL, 0.001) == r1);
-        // a gain raises the ratio to 1.28 at the end of the bump stop (s = 0.28)
+        // a gain of 1 /m: MR^2 = 1 + 2 x 1 x 0.28 = 1.56 at the end of the bump stop (x - x0 = 0.25 + 0.03), so
+        // S = dt^2 (1.56 (k + k_stop) / mr + kt / mu) + 2 dt 1.56 c / mr. Catches MR^2 from strut travel taken as
+        // wheel travel (1.28^2, 0.38423).
         four_wheel_params gain = p;
         gain.front_corner.motion_ratio_gain = 1;
-        check_near("step number: the largest ratio between the stops counts", corner_step_number(gain, FL, 0.001), 0.38423, 1e-4);
+        const Real at = 0.001, mr2 = 1 + 2 * 1 * (0.25 + 0.03), reduced = 35.327354;
+        const Real by_hand = at * at * (mr2 * (50000 + 500000) / reduced + 250000 / 40.0) + 2 * at * mr2 * 3800 / reduced;
+        check_near("step number: gain 1, by hand", by_hand, 0.36614, 1e-4);
+        check_near("step number: the largest ratio between the stops counts", corner_step_number(gain, FL, 0.001), by_hand, 1e-6);
+        check_near("step number: gain 1 value", corner_step_number(gain, FL, 0.001), 0.36614, 1e-4);
 
         four_wheel_params o4 = unsprung_car();
         for (corner_params *c : {&o4.front_corner, &o4.rear_corner})

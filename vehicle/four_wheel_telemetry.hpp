@@ -64,7 +64,7 @@ namespace rallysim
 
     // The body columns come in groups: time, the driver's inputs, where the car is (world position, then roll, pitch
     // and yaw), how it moves (body_velocity's u, v, w, p, q, r, in that order), then values worked out from those and
-    // from the tyre forces. Then each wheel's block, the energy books and the anti-roll forces.
+    // from the tyre forces. Then each wheel's block, the energy books, the anti-roll forces and the geometry.
     inline std::vector<telemetry_column> four_wheel_columns()
     {
         std::vector<telemetry_column> c{{"step", "count"}, {"time", "s"},

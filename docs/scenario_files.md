@@ -196,12 +196,12 @@ my_run.ini:4: speed: give speed or velocity, not both
 my_run.ini:7: mass: must be above 0
 my_run.ini:8: spring_front: unit km/h is not N/m
 my_run.ini:9: unknown section [track]
-my_run.ini:10: motion_ratio_gain_front: the motion ratio reaches -0.62 between the stops; it must stay above 0
+my_run.ini:10: motion_ratio_gain_front: the motion ratio reaches 0 before the bump stop; it must stay above 0 between the stops
 my_run.ini:11: ackermann: with max_steer 1.3 rad the inner wheel's angle has no solution; max_steer must be below 1.27934 rad
 ```
 
-The last two apply to an unsprung car: the motion ratio, which changes linearly with wheel travel, must stay above 0
-between the droop stop and the end of the bump stop, and with `ackermann` other than 0, `max_steer` must be below
+The last two apply to an unsprung car: the motion ratio, linear in wheel travel, must stay above 0 from the droop stop
+to the end of the bump stop, and with `ackermann` other than 0, `max_steer` must be below
 atan(2 (`lf` + `lr`) / `track_front`).
 
 ## Example

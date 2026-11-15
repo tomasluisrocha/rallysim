@@ -257,6 +257,9 @@ between the wheel and the body is that plus `jackF`. Like the other force column
 state at the start of the step. The body gets jacking from the tyre forces averaged over the wheel's sub-steps, so
 `jackF` is not exactly the force applied.
 
+With camber thrust, `Fy` follows the kinematic slip plus the camber slip (`camber` times the tyre's
+`camber_thrust`), not `slipAngle` alone.
+
 `Fx` and `Fy` are in the wheel's own frame, so on a steered front wheel they are turned by `steer` from the body
 axes. The slips are the patch's steady slips, worked out from the wheel's spin and the patch velocity. The wheel's own
 relaxed slips (the twist of the tyre, which the force comes from) are not logged: they are capped where the force stops

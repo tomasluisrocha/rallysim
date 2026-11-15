@@ -152,21 +152,20 @@ namespace rallysim
         Real b = 0; // twice the damping over mass (1/s)
     };
 
-    // The motion ratio at the two ends of the wheel travel between the stops (the ratio is linear in the travel, so
-    // these are its smallest and largest values, in either order).
+    // The motion ratio squared at the two ends of the strut's travel between the stops. With x0 the strut's rest
+    // compression, MR^2 = motion_ratio^2 + 2 gain (x - x0) exactly; the stops are at x - x0 = -droop and
+    // bump_travel + bump_stop_length. 0 or less at an end: the ratio reaches 0 before that stop.
     struct ratio_ends
     {
-        Real lo = 1, hi = 1; // at the droop stop and at the end of the bump stop
-        Real smallest() const { return std::min(lo, hi); }
-        Real largest() const { return std::max(lo, hi); }
+        Real lo2 = 1, hi2 = 1; // at the droop stop and at the end of the bump stop
     };
 
     inline ratio_ends motion_ratio_ends(const corner_params &c)
     {
-        const Real s_lo = -c.droop / c.motion_ratio, s_hi = (c.bump_travel + c.bump_stop_length) / c.motion_ratio;
+        const Real mr2 = c.motion_ratio * c.motion_ratio;
         ratio_ends e;
-        e.lo = c.motion_ratio + c.motion_ratio_gain * s_lo;
-        e.hi = c.motion_ratio + c.motion_ratio_gain * s_hi;
+        e.lo2 = mr2 - 2 * c.motion_ratio_gain * c.droop;
+        e.hi2 = mr2 + 2 * c.motion_ratio_gain * (c.bump_travel + c.bump_stop_length);
         return e;
     }
 
@@ -179,7 +178,8 @@ namespace rallysim
         const Real reduced = mu * body / (mu + body);
         corner_step_terms t;
         // the strut's rates reach the wheel times the ratio squared; in roll each wheel sees twice the bar's rate
-        const Real mr = motion_ratio_ends(c).largest(), mr2 = mr * mr;
+        const ratio_ends e = motion_ratio_ends(c);
+        const Real mr2 = std::max(e.lo2, e.hi2); // with no gain, exactly motion_ratio * motion_ratio
         t.a = (mr2 * (c.spring_rate + std::max(c.bump_stop_rate, c.stop_rate)) + 2 * c.antiroll_rate) / reduced + c.tyre_rate / mu;
         t.b = 2 * (std::max(Real(1), c.rebound_ratio) * mr2 * c.damper_rate / reduced + c.tyre_damping / mu);
         return t;
@@ -659,7 +659,8 @@ namespace rallysim
     // steps on its own, in sub-steps (step_wheel): its spin changes with its tyre force (-Fx R), drive torque and
     // brake torque (the brake stops a wheel but never reverses it), and its slips relax. The body then moves with
     // each wheel's average tyre force over the step, so it gets the same impulse the wheels felt. Unsprung: each
-    // wheel then moves vertically between its tyre and its strut, velocity first, with the same start-of-step forces.
+    // wheel then moves vertically between its tyre and its strut, velocity first, with the start-of-step forces
+    // except jacking, which is from the averaged tyre forces.
     inline void step(four_wheel_state &s, const four_wheel_params &p, const four_wheel_input &in, Real dt)
     {
         four_wheel_forces f = evaluate(s, p, in);
