@@ -67,7 +67,9 @@ def tmeasy_at(tyre, axis, fz):
     f = np.maximum(np.asarray(fz, dtype=float), 0) / tyre["fz0"]
     one = [tyre[f"tmeasy_{axis}_{field}1"] for field in TMEASY_FIELDS]
     two = [tyre[f"tmeasy_{axis}_{field}2"] for field in TMEASY_FIELDS]
-    stiffness = np.maximum(f * (2 * one[0] - 0.5 * two[0] - (one[0] - 0.5 * two[0]) * f), 0)
+    a, b = 2 * one[0] - 0.5 * two[0], one[0] - 0.5 * two[0]
+    fk = np.minimum(f, a / (2 * b)) if b > 0 else f  # past its peak the stiffness stays there
+    stiffness = np.maximum(fk * (2 * one[0] - 0.5 * two[0] - (one[0] - 0.5 * two[0]) * fk), 0)
     linear = lambda i: one[i] + (two[i] - one[i]) * (f - 1)
     peak = np.maximum(linear(1), 1e-4)
     sliding = np.maximum(linear(2), 1.01 * peak)

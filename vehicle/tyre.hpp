@@ -132,6 +132,8 @@ namespace rallysim
     // A TMeasy direction at load fz, interpolated as TMeasy does from its two given loads (f = fz / Fz0):
     //   the stiffness, like a force, goes through zero and is quadratic in the load through both given points:
     //     k(f) = f (2 k1 - k2 / 2 - (k1 - k2 / 2) f)      (k1 at f = 1, k2 at f = 2)
+    //   where that peaks and would fall (k1 > k2 / 2), it stays at its peak from there: a stiffness that fell in one
+    //   direction only would turn the force's direction (tmeasy_combine splits it along (kx sx, ky sy))
     //   the slips and the sliding ratio are linear in the load through both points.
     // The peak force is the grip, mu(fz) fz: TMeasy's peak forces at Fz0 and 2 Fz0, mu0 Fz0 and 2 Fz0 mu0 (1 - k),
     // interpolated the same quadratic way, give exactly the linear load sensitivity the other curves use, so all
@@ -141,7 +143,9 @@ namespace rallysim
         const Real f = std::max(fz, static_cast<Real>(0)) / nominal_load;
         const tmeasy_point &a = d.nominal, &b = d.double_load;
         auto linear = [f](Real at1, Real at2) { return at1 + (at2 - at1) * (f - 1); };
-        const Real stiffness = f * (2 * a.stiffness - 0.5 * b.stiffness - (a.stiffness - 0.5 * b.stiffness) * f);
+        const Real A = 2 * a.stiffness - 0.5 * b.stiffness, B = a.stiffness - 0.5 * b.stiffness;
+        const Real fk = B > 0 && f > A / (2 * B) ? A / (2 * B) : f; // past its peak the stiffness stays there
+        const Real stiffness = fk * (2 * a.stiffness - 0.5 * b.stiffness - (a.stiffness - 0.5 * b.stiffness) * fk);
         const Real peak = std::max(linear(a.peak_slip, b.peak_slip), static_cast<Real>(1e-4));
         const Real sliding = std::max(linear(a.sliding_slip, b.sliding_slip), 1.01 * peak);
         const Real ratio = std::clamp(linear(a.sliding_ratio, b.sliding_ratio), static_cast<Real>(0), static_cast<Real>(1));

@@ -35,6 +35,12 @@ class TestTyreByHand(unittest.TestCase):
         self.assertAlmostEqual(float(fx), 3000.0, places=9)
         self.assertAlmostEqual(float(fy), 0.0, places=9)
 
+    def test_tmeasy_stiffness_stays_at_its_peak(self):
+        t = dict(tyre.TYRE_DEFAULTS)  # peaks: 250000 at 5 x 3000 N along, 105625 at 6.5 x 3000 N across
+        for fz, along, across in ((8 * 3000.0, 250000.0, 105625.0), (4 * 3000.0, 240000.0, 90000.0)):
+            self.assertAlmostEqual(float(tyre.tmeasy_at(t, "x", fz)[0]), along, places=6)
+            self.assertAlmostEqual(float(tyre.tmeasy_at(t, "y", fz)[0]), across, places=6)
+
 
 class TestRig(unittest.TestCase):
     def test_copy_matches_cpp(self):

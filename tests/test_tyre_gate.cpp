@@ -277,12 +277,126 @@ namespace
                            std::fabs(heavy / light - 1) < 0.15);
         }
     }
+
+    // The tmeasy stiffness interpolated with no hold past its peak: the old law, kept to compare against below it.
+    tmeasy_point unheld_tmeasy_at(const tmeasy_direction &d, Real fz, Real nominal_load)
+    {
+        const Real f = std::max(fz, static_cast<Real>(0)) / nominal_load;
+        const tmeasy_point &a = d.nominal, &b = d.double_load;
+        auto linear = [f](Real at1, Real at2) { return at1 + (at2 - at1) * (f - 1); };
+        const Real stiffness = f * (2 * a.stiffness - 0.5 * b.stiffness - (a.stiffness - 0.5 * b.stiffness) * f);
+        const Real peak = std::max(linear(a.peak_slip, b.peak_slip), static_cast<Real>(1e-4));
+        const Real sliding = std::max(linear(a.sliding_slip, b.sliding_slip), 1.01 * peak);
+        const Real ratio = std::clamp(linear(a.sliding_ratio, b.sliding_ratio), static_cast<Real>(0), static_cast<Real>(1));
+        return {std::max(stiffness, static_cast<Real>(0)), peak, sliding, ratio};
+    }
+
+    // The tmeasy force from given points of each direction: the combination and the split along (kx sx, ky sy).
+    tyre_force tmeasy_force_from(const tmeasy_point &ax, const tmeasy_point &ay, Real grip, Real sx, Real sy)
+    {
+        const Real nx = sx / ax.peak_slip, ny = sy / ay.peak_slip, sigma = std::hypot(nx, ny);
+        const Real cx = nx / sigma, cy = ny / sigma;
+        const Real slope = std::hypot(ax.stiffness * ax.peak_slip * cx, ay.stiffness * ay.peak_slip * cy);
+        const Real p = std::clamp(slope / grip, static_cast<Real>(1.5), static_cast<Real>(3));
+        const Real q = std::hypot(ax.sliding_slip / ax.peak_slip * cx, ay.sliding_slip / ay.peak_slip * cy) * p;
+        const Real r = std::hypot(ax.sliding_ratio * cx, ay.sliding_ratio * cy);
+        const Real lx = ax.stiffness * sx, ly = ay.stiffness * sy, l = std::hypot(lx, ly);
+        const Real force = grip * peak_slide_shape(sigma * p, p, q, r);
+        const Real ux = lx / l, uy = ly / l;
+        return {force * ux, force * uy};
+    }
+
+    // The tmeasy stiffness k(f) = f (A - B f) peaks at f = A / (2 B) (5 nominal loads along, 6.5 across with the
+    // default tables) and would fall to zero at A / B; past the peak it stays there. A stiffness falling in one
+    // direction only turns the force sideways, since the force is split along (kx sx, ky sy).
+    void check_tmeasy_stiffness_hold()
+    {
+        tyre_params t;
+        t.curve = tyre_curve::tmeasy;
+        const Real fz0 = t.nominal_load;
+        auto k = [&](Real n, slip_axis axis) { return pure_slip_curve(t, n * fz0, axis).stiffness; };
+
+        // by hand: along A 100000, B 10000, peak 5 x 50000; across A 32500, B 2500, peak 6.5 x 16250
+        const Real along_at[] = {4, 5, 6, 8, 10, 15}, along_k[] = {240000, 250000, 250000, 250000, 250000, 250000};
+        for (int i = 0; i < 6; ++i)
+        {
+            char what[160];
+            std::snprintf(what, sizeof what, "tmeasy hold: along stiffness at %g nominal loads", along_at[i]);
+            check_near(what, k(along_at[i], slip_axis::x), along_k[i], 1e-6);
+        }
+        const Real across_at[] = {4, 6.5, 8, 11, 15}, across_k[] = {90000, 105625, 105625, 105625, 105625};
+        for (int i = 0; i < 5; ++i)
+        {
+            char what[160];
+            std::snprintf(what, sizeof what, "tmeasy hold: across stiffness at %g nominal loads", across_at[i]);
+            check_near(what, k(across_at[i], slip_axis::y), across_k[i], 1e-6);
+        }
+
+        // the stiffness never falls with load; the curve's starting slope is the stiffness held within the
+        // shape's bounds, 1.5 to 3 grip / peak slip, and never falls from 6 nominal loads up
+        bool stiffness_rises = true, slope_rises = true;
+        Real worst_slope = 0, last_k[2] = {0, 0}, last_slope[2] = {0, 0};
+        for (int i = 1; i <= 30; ++i)
+        {
+            const Real n = 0.5 * i, fz = n * fz0, grip = tyre_grip(t, fz), h = 1e-7;
+            for (int a = 0; a < 2; ++a)
+            {
+                const slip_axis axis = a == 0 ? slip_axis::x : slip_axis::y;
+                const slip_curve c = pure_slip_curve(t, fz, axis);
+                const Real slope = (a == 0 ? tyre_forces(t, h, 0, fz).fx : tyre_forces(t, 0, h, fz).fy) / h;
+                const Real expected = std::clamp(c.stiffness, 1.5 * grip / c.peak_slip, 3 * grip / c.peak_slip);
+                worst_slope = std::max(worst_slope, std::fabs(slope / expected - 1));
+                stiffness_rises = stiffness_rises && c.stiffness >= last_k[a];
+                if (n > 6)
+                    slope_rises = slope_rises && slope >= last_slope[a];
+                last_k[a] = c.stiffness;
+                last_slope[a] = slope;
+            }
+        }
+        std::printf("tmeasy hold: largest relative difference of the starting slope from the bounded stiffness %.3g\n", worst_slope);
+        check_true("tmeasy hold: the stiffness never falls with load, 0.5 to 15 nominal loads, both directions", stiffness_rises);
+        check_near("tmeasy hold: starting slope = stiffness within 1.5..3 grip / peak slip, 0.5 to 15 nominal loads",
+                   worst_slope, 0.0, 1e-5);
+        check_true("tmeasy hold: the starting slope never falls from 6 nominal loads up, both directions", slope_rises);
+
+        // braking with a little lateral slip: the force points along (kx sx, ky sy), with the held stiffnesses
+        const Real sx = -0.05, sy = 0.01;
+        for (Real n : {8.0, 11.0})
+        {
+            const tyre_force f = tyre_forces(t, sx, sy, n * fz0);
+            std::printf("tmeasy hold: %g nominal loads, slip ratio %g, lateral slip %g: fx %.1f N, fy %.1f N\n", n, sx, sy,
+                        f.fx, f.fy);
+            char what[160];
+            std::snprintf(what, sizeof what, "tmeasy hold: %g nominal loads: fy / fx = ky sy / (kx sx) = -0.0845", n);
+            check_near(what, f.fy / f.fx / (105625 * sy / (250000 * sx)), 1.0, 1e-9);
+        }
+
+        // below the peak, the same bits as with no hold
+        for (Real n : {2.0, 4.0})
+        {
+            const Real fz = n * fz0;
+            const tmeasy_point ax = unheld_tmeasy_at(t.tmeasy_x, fz, fz0), ay = unheld_tmeasy_at(t.tmeasy_y, fz, fz0);
+            const tyre_force want = tmeasy_force_from(ax, ay, tyre_grip(t, fz), sx, sy), got = tyre_forces(t, sx, sy, fz);
+            const slip_curve cx = pure_slip_curve(t, fz, slip_axis::x), cy = pure_slip_curve(t, fz, slip_axis::y);
+            char what[160];
+            std::snprintf(what, sizeof what, "tmeasy hold: %g nominal loads: both tables as with no hold (==)", n);
+            auto same = [](const slip_curve &c, const tmeasy_point &p)
+            {
+                return c.stiffness == p.stiffness && c.peak_slip == p.peak_slip && c.sliding_slip == p.sliding_slip &&
+                       c.sliding_ratio == p.sliding_ratio;
+            };
+            check_true(what, same(cx, ax) && same(cy, ay));
+            std::snprintf(what, sizeof what, "tmeasy hold: %g nominal loads: the force as with no hold (==)", n);
+            check_true(what, got.fx == want.fx && got.fy == want.fy);
+        }
+    }
 }
 
 int main()
 {
     for (const auto &[name, t] : tyre_rig_curves())
         check_gate(name, t, t.curve != tyre_curve::linear);
+    check_tmeasy_stiffness_hold();
 
     // 12. the brush model: with its peak at 3 and no fall-off, the cubic is exactly
     // s - s^2 / 3 + s^3 / 27 up to s = 3, then 1

@@ -167,7 +167,7 @@ static void test_drops()
         Real lift, peak_front, peak_rear, lowest;
     };
     const golden_drop expected[2] = {{0.3, 10614.414913909215, 10673.874336907696, 0.40886937918016802},
-                                    {1.0, 19522.057065924699, 19707.000938215722, 0.30221777758715512}};
+                                    {1.0, 19522.056867303989, 19707.001075500953, 0.30221777758715512}};
     for (const golden_drop &e : expected)
     {
         const landing l = drop(e.lift);
