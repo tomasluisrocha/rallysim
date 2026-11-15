@@ -56,6 +56,13 @@ simpler model and with a physical or mathematical expectation.
 - Slip ratio is positive when the wheel surface is faster than the road
   (driving); a locked wheel moving forwards approaches -1.
 - Suspension deflection is compression.
+- Wheel travel is the wheel's motion against the body, positive in bump.
+- Camber is positive with the top of the wheel outboard. The tyre takes the
+  camber to the road, the body's roll included.
+- Toe is positive toe-in. Track change is positive outboard.
+- Roll-centre height is measured above the ground.
+- The jacking force is positive when it lifts the body and presses the wheel
+  down.
 - Positive roll means the right side is down; positive pitch means the nose is
   down.
 - Torque and angular velocity use the body frame and the right-hand rule.
@@ -94,6 +101,13 @@ the friction circle). The tyre also models relaxation length, so force builds
 over distance rather than appearing instantaneously. These choices are intentionally simple enough to
 compare against the tyre rig and to replace independently later.
 
+Camber acts as an extra lateral slip, `camber_thrust` times the camber to the
+road, signed so that a wheel leaning out pushes outboard. It builds over the
+relaxation length, is zero at standstill and shares the grip. Camber does not
+change the peak grip. The TMeasy stiffness, quadratic in the load, is held
+at its peak past it: it never falls with load, and a braking slip at high load
+does not turn into side force.
+
 ### Loads and suspension
 
 The four-wheel car finds its vertical loads in one of three ways, chosen with
@@ -112,11 +126,39 @@ The four-wheel car finds its vertical loads in one of three ways, chosen with
   pushes; the strut may also pull, through its damper and the droop stop. The
   bump stop only pushes. An anti-roll bar per axle (`antiroll_*`, 0 by
   default) puts equal and opposite forces on the axle's two wheels in
-  proportion to the difference of their strut travel. It resists roll and
+  proportion to the difference of their wheel travel. It resists roll and
   moves lateral load transfer towards its axle, without changing heave or
   pitch.
 
 All three are kept, so each can be compared with the one before it.
+
+#### Suspension geometry
+
+The unsprung model only. Wheel travel is each corner's coordinate. Per axle,
+the motion ratio, the roll-centre height, camber and toe are each a value at
+rest and a linear gain per metre of travel.
+
+- The strut's spring, damper and stops reach the wheel through the motion
+  ratio: the wheel rate is the spring rate times the ratio squared, and the
+  damper's rate likewise.
+- The roll-centre height sets the contact patch's sideways path. A sideways
+  tyre force therefore makes a vertical force between wheel and body
+  (jacking), as if the force acted at the roll centre.
+- The front wheels share the steer by an Ackermann fraction: 0 turns them
+  alike, 1 gives the full geometric split. Toe adds to each wheel's angle.
+- Camber leans the wheel with the body.
+
+The defaults (ratio 1, everything else 0) leave the car as it was.
+
+Limits:
+
+- The curves are given, not a solved linkage, and each is linear and on its
+  own. A real linkage ties camber, toe and track together.
+- Travel is measured vertically and the patch's path is flat on the ground.
+  The vertical forces act at the rest track.
+- There is no fore-aft wheel path (anti-dive, anti-squat), caster, kingpin,
+  scrub radius or compliance.
+- The rolling radius does not change with camber.
 
 ### Wheel masses
 
@@ -160,7 +202,18 @@ What the tests establish, within the model's own assumptions:
   the end;
 - the step screening: linear two-mass cases at a screening number of 3.9 do
   not grow, and the light-wheel car at a step just inside the simple limit
-  stays within 20% of its static tyre load.
+  stays within 20% of its static tyre load;
+- the wheel rate is k MR^2 and the damper's rate c MR^2;
+- heave is within 0.1% of the two-mass closed form with the wheel rate;
+- each front wheel's Ackermann angle equals atan(L / (R -+ t/2)), and a slow
+  circle's radius is within 1.5% of L / tan(steer);
+- toe-in makes forces of C tan(toe);
+- with raised roll centres, the steady roll is within 0.2% of the closed form
+  with the geometric moment, and each axle's transfer moment is within
+  0.5 N m of its roll stiffness times the roll plus that moment;
+- the energy books with the whole geometry, on six shipped scenarios, are
+  within 0.5% of the energy that flows and the residual halves with the step;
+- camber thrust on a rolling wheel equals the tyre curve at the camber slip.
 
 These are agreements with closed forms and simpler models, not a claim of
 accuracy against a real car.

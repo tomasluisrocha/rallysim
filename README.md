@@ -12,6 +12,8 @@ The project includes:
 
 - kinematic bicycle, dynamic single-track and four-wheel vehicle models;
 - linear, peak-slide and TMeasy-inspired tyre curves;
+- suspension geometry: motion ratio, roll centre and jacking, camber, toe and
+  Ackermann;
 - scenarios as plain-text files (circles, lane changes, braking, launch,
   handbrake turns, a steering ramp, a jump into a hairpin) that run without
   rebuilding, with any car parameter changeable from the command line;
