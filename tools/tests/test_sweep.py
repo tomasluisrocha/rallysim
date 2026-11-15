@@ -59,7 +59,8 @@ class SweepTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.result = None
         if EXE and Path(EXE).exists():
-            cls.result = sweep(EXE, "fw_circle", "spring_front", VALUES, out=Path(cls.tmp.name))
+            cls.result = sweep(EXE, "fw_circle", "spring_front", VALUES, held=("vertical=springs",),
+                               out=Path(cls.tmp.name))
 
     @classmethod
     def tearDownClass(cls):

@@ -117,6 +117,7 @@ int main()
     {
         // when a parameter is used
         four_wheel_params p;
+        p.vertical = vertical_model::springs;
         check_true("used: a spring on the springs car", param_used(*find_param("spring_front"), p));
         check_true("used: no transfer share on the springs car", !param_used(*find_param("front_transfer_share"), p));
         check_true("used: no peak_slide shape on a tmeasy tyre", !param_used(*find_param("peak_slip_front"), p));
@@ -188,6 +189,7 @@ int main()
             check_true("strut: negative refused", throws(n, "-1"));
         }
         four_wheel_params q;
+        q.vertical = vertical_model::springs;
         for (const char *n : names)
             check_true("strut: unused on the springs car", !param_used(*find_param(n), q));
         q.vertical = vertical_model::planar;
@@ -320,6 +322,7 @@ int main()
             {"ackermann", "-"},
         };
         four_wheel_params q;
+        q.vertical = vertical_model::springs;
         for (const auto &g : geometry)
         {
             const param_entry *e = find_param(g[0]);

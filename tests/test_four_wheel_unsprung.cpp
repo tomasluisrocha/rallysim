@@ -243,7 +243,8 @@ int main()
             c->unsprung_mass = 2;
             c->tyre_rate = 5e6;
         }
-        const four_wheel_params springs;
+        four_wheel_params springs;
+        springs.vertical = vertical_model::springs;
         const Real h = 0.0001;
         const four_wheel_state lane_s = run(in_mode("fw_lane", springs, 15.0, h)), lane_u = run(in_mode("fw_lane", light, 15.0, h));
         const four_wheel_state brake_s = run(in_mode("fw_brake", springs, 25.0, h)), brake_u = run(in_mode("fw_brake", light, 25.0, h));
@@ -304,7 +305,8 @@ int main()
             c->unsprung_mass = 2;
             c->tyre_rate = 5e6;
         }
-        const four_wheel_params springs;
+        four_wheel_params springs;
+        springs.vertical = vertical_model::springs;
         const four_wheel_run base = four_wheel_scenario("fw_circle");
         const Real speed = base.initial.body.vel.x;
         const four_wheel_state cs = run(in_mode("fw_circle", springs, speed, 0.0001));

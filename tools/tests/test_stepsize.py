@@ -197,8 +197,9 @@ class TestStepsize(unittest.TestCase):
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 return str(path)
-            lane = [at("fw_lane", "a"), at("fw_lane", "b", "--set", "run.dt=0.5ms"),
-                    at("fw_lane", "c", "--set", "run.dt=0.25ms")]
+            pin = ("--set", "vertical=springs")
+            lane = [at("fw_lane", "a", *pin), at("fw_lane", "b", *pin, "--set", "run.dt=0.5ms"),
+                    at("fw_lane", "c", *pin, "--set", "run.dt=0.25ms")]
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 self.assertEqual(cli.main(["stepsize", *lane, "--all"]), 0, out.getvalue())
             text = out.getvalue()

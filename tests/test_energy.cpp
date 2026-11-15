@@ -48,6 +48,7 @@ namespace
     four_wheel_run bounce(Real lift, long steps)
     {
         four_wheel_run r;
+        r.params.vertical = vertical_model::springs;
         r.initial = four_wheel_initial(r.params, 0.0);
         r.initial.body.pos.z += lift;
         r.script.keys = {{0.0, four_wheel_input{}}};
@@ -175,13 +176,13 @@ namespace
 int main()
 {
     // every four-wheel scenario, as run (1 ms, springs, the car's tmeasy tyre)
-    check_run("fw_circle", four_wheel_scenario("fw_circle"), 0.005);
-    check_run("fw_lane", four_wheel_scenario("fw_lane"), 0.005);
-    check_run("fw_brake", four_wheel_scenario("fw_brake"), 0.005);
-    check_run("fw_launch", four_wheel_scenario("fw_launch"), 0.005);
-    check_run("fw_handbrake", four_wheel_scenario("fw_handbrake"), 0.005);
-    check_run("fw_hairpin", four_wheel_scenario("fw_hairpin"), 0.005);
-    check_run("fw_showcase", four_wheel_scenario("fw_showcase"), 0.005); // a jump and a landing, at 0.5 ms
+    check_run("fw_circle", four_wheel_scenario("fw_circle", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_lane", four_wheel_scenario("fw_lane", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_brake", four_wheel_scenario("fw_brake", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_launch", four_wheel_scenario("fw_launch", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_handbrake", four_wheel_scenario("fw_handbrake", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_hairpin", four_wheel_scenario("fw_hairpin", {{"vertical", "springs"}}), 0.005);
+    check_run("fw_showcase", four_wheel_scenario("fw_showcase", {{"vertical", "springs"}}), 0.005); // a jump and a landing, at 0.5 ms
 
     // the planar model (gravity cancelled, no springs): only motion and wheel spin are stored
     {
@@ -218,8 +219,8 @@ int main()
 
     // convergence: halving dt halves the residual (first order, like the step itself). A wrong sign or a missing
     // force would leave a part that does not shrink.
-    for (const auto &[name, scenario] : {std::pair<const char *, four_wheel_run>{"fw_lane", four_wheel_scenario("fw_lane")},
-                                         std::pair<const char *, four_wheel_run>{"fw_brake", four_wheel_scenario("fw_brake")}})
+    for (const auto &[name, scenario] : {std::pair<const char *, four_wheel_run>{"fw_lane", four_wheel_scenario("fw_lane", {{"vertical", "springs"}})},
+                                         std::pair<const char *, four_wheel_run>{"fw_brake", four_wheel_scenario("fw_brake", {{"vertical", "springs"}})}})
     {
         const booked coarse = run_booked(scenario, 0.002), fine = run_booked(scenario, 0.001),
                      finer = run_booked(scenario, 0.0005);

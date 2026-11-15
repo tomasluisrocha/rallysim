@@ -80,9 +80,9 @@ static four_wheel_state trace(const four_wheel_run &r, const std::function<void(
 // Circle: 20 s at 6 m/s (held), steer step to 0.2 rad at 1 s.
 static void test_circle()
 {
-    const four_wheel_run r = four_wheel_scenario("fw_circle");
+    const four_wheel_run r = four_wheel_scenario("fw_circle", {{"vertical", "springs"}});
     const four_wheel_state s = run(r);
-    check_true("circle: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_circle"))));
+    check_true("circle: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_circle", {{"vertical", "springs"}}))));
     check_golden("circle", s, {9.92197438208491, 24.400028218566668, 2.7380305775516356, 5.9909956599165479,
         0.41062452916747527, 0.47750371405849906, 0.49995429516940204, 0.016113115079905576,
         0.00038477787250838173, 18.164199589856302, 20.392710527739581, 17.884126055193637, 20.154892552664688});
@@ -108,9 +108,9 @@ static void test_circle()
 // Lane change: 7 s at 15 m/s (held), triangle-wave steer of 0.02 rad.
 static void test_lane_change()
 {
-    const four_wheel_run r = four_wheel_scenario("fw_lane");
+    const four_wheel_run r = four_wheel_scenario("fw_lane", {{"vertical", "springs"}});
     const four_wheel_state s = run(r);
-    check_true("lane: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_lane"))));
+    check_true("lane: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_lane", {{"vertical", "springs"}}))));
     check_golden("lane", s, {104.85015197593086, 3.4005716965072508, -3.627078119674203e-06, 14.999999999564123,
         2.5154731007182409e-08, -6.7472109341571973e-10, 0.50000000000154554, -2.3738304286770109e-10,
         -7.0982692384757764e-12, 47.619047619220005, 47.619047615842305, 47.619047620114337, 47.619047616736644});
@@ -128,7 +128,7 @@ static void test_lane_change()
 // Braking: 25 m/s, rolling for a second, then the brake fully down.
 static void test_brake()
 {
-    const four_wheel_run r = four_wheel_scenario("fw_brake");
+    const four_wheel_run r = four_wheel_scenario("fw_brake", {{"vertical", "springs"}});
     Real x_brake = 0, x_stop = -1, t_stop = -1;
     bool all_locked = false;
     const four_wheel_state s = trace(r, [&](Real t, const four_wheel_state &st)
@@ -144,7 +144,7 @@ static void test_brake()
             t_stop = t;
             x_stop = st.body.pos.x;
         } });
-    check_true("brake: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_brake"))));
+    check_true("brake: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_brake", {{"vertical", "springs"}}))));
     check_golden("brake", s, {67.436703481699723, 0, 0, -0.0037244601527707502,
         0, 0, 0.5001406620655966, 0,
         0.00063693370040539905, 0, 0, 0, 0});
@@ -166,7 +166,7 @@ static void test_brake()
 // Launch: four-wheel drive (30/70), from 2 m/s, full throttle from 0.5 s.
 static void test_launch()
 {
-    const four_wheel_run r = four_wheel_scenario("fw_launch");
+    const four_wheel_run r = four_wheel_scenario("fw_launch", {{"vertical", "springs"}});
     Real u_a = 0, u_b = 0, u_end_a = 0, rear_share = 0, front_slip = 0;
     const four_wheel_state s = trace(r, [&](Real t, const four_wheel_state &st)
                                      {
@@ -181,7 +181,7 @@ static void test_launch()
             rear_share = f.tyre[RL].fx / tyre_grip(r.params.rear_tyre, f.fz[RL]);
             front_slip = steady_slip_ratio(r.params.wheel, st.wheels[FL].omega, f.patch[FL].vx);
         } });
-    check_true("launch: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_launch"))));
+    check_true("launch: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_launch", {{"vertical", "springs"}}))));
     check_golden("launch", s, {39.130999886072779, 0, 0, 23.858754368389384,
         0, 0, 0.49931076238784389, 0,
         -0.01296610505916369, 77.403366434689985, 77.403366434689985, 78.590437044503105, 78.590437044503105});
@@ -211,13 +211,13 @@ static void test_launch()
 // Handbrake flick: 15 m/s held, a gentle left turn, a short partial pull of the handbrake, the wheel straightened.
 static void test_handbrake()
 {
-    const four_wheel_run r = four_wheel_scenario("fw_handbrake");
+    const four_wheel_run r = four_wheel_scenario("fw_handbrake", {{"vertical", "springs"}});
     Real peak_beta = 0;
     const four_wheel_state s = trace(r, [&](Real, const four_wheel_state &st)
                                      {
         const body_velocity v = velocity_in_body(st.body);
         peak_beta = std::max(peak_beta, std::fabs(std::atan2(v.v, v.u))); });
-    check_true("handbrake: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_handbrake"))));
+    check_true("handbrake: determinism: two runs give identical bits", identical(s, run(four_wheel_scenario("fw_handbrake", {{"vertical", "springs"}}))));
     check_golden("handbrake", s, {76.340299045613563, 36.365745815187914, 0.78867505558573792, 14.999999996300588,
         2.0441127901449363e-08, -1.0612007120768798e-09, 0.49999999994269573, 5.3360968309490133e-10,
         -1.0935608894508067e-10, 47.6190476089143, 47.619047603681537, 47.619047616499877, 47.619047611267128});
@@ -244,15 +244,15 @@ static void test_convergence()
     auto gap = [](const snapshot &a, const snapshot &b)
     { return std::hypot(a.x - b.x, a.y - b.y); };
 
-    const snapshot lane2 = at(four_wheel_scenario("fw_lane"), 0.002), lane1 = at(four_wheel_scenario("fw_lane"), 0.001),
-                   lane05 = at(four_wheel_scenario("fw_lane"), 0.0005);
+    const four_wheel_run lane = four_wheel_scenario("fw_lane", {{"vertical", "springs"}});
+    const snapshot lane2 = at(lane, 0.002), lane1 = at(lane, 0.001), lane05 = at(lane, 0.0005);
     const Real coarse = gap(lane2, lane1), fine = gap(lane1, lane05);
     std::printf("convergence, lane change: end position moves %.2e m from 2 to 1 ms, %.2e m from 1 to 0.5 ms\n", coarse, fine);
     check_true("convergence: lane change, halving dt changes the end position less each time", fine < 0.7 * coarse);
     check_true("convergence: lane change, by under 1 cm at 1 ms", coarse < 0.01);
 
-    const snapshot brake2 = at(four_wheel_scenario("fw_brake"), 0.002), brake1 = at(four_wheel_scenario("fw_brake"), 0.001),
-                   brake05 = at(four_wheel_scenario("fw_brake"), 0.0005);
+    const four_wheel_run brake = four_wheel_scenario("fw_brake", {{"vertical", "springs"}});
+    const snapshot brake2 = at(brake, 0.002), brake1 = at(brake, 0.001), brake05 = at(brake, 0.0005);
     const Real b_coarse = std::fabs(brake2.x - brake1.x), b_fine = std::fabs(brake1.x - brake05.x);
     std::printf("convergence, braking: stop moves %.2e m from 2 to 1 ms, %.2e m from 1 to 0.5 ms\n", b_coarse, b_fine);
     check_true("convergence: braking, halving dt changes where the car stops less each time", b_fine < 0.7 * b_coarse);

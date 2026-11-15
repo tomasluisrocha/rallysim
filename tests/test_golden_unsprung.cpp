@@ -69,7 +69,7 @@ static four_wheel_run unsprung_run(const char *name)
     return r;
 }
 
-static four_wheel_state springs_end(const char *name) { return run(four_wheel_scenario(name)); }
+static four_wheel_state springs_end(const char *name) { return run(four_wheel_scenario(name, {{"vertical", "springs"}})); }
 
 static snapshot at(four_wheel_run r, Real dt)
 {

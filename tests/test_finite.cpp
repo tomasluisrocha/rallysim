@@ -60,7 +60,9 @@ int main()
         check_true("rigid body: the first bad field is named (vel before omega)", bad && std::string(bad) == "body.vel");
     }
     {
-        four_wheel_state s = four_wheel_initial(four_wheel_params{}, 10.0);
+        four_wheel_params car;
+        car.vertical = vertical_model::springs;
+        four_wheel_state s = four_wheel_initial(car, 10.0);
         check_true("four-wheel: a good state has no bad field", non_finite_field(s) == nullptr);
         s.wheels[RL].omega = inf_value;
         const char *bad = non_finite_field(s);
@@ -97,7 +99,7 @@ int main()
     // first step after t = 0 (the script blends towards a NaN key), so the state is NaN after step 1 and the
     // runner stops there, not seconds later
     {
-        four_wheel_run r = four_wheel_scenario("fw_circle");
+        four_wheel_run r = four_wheel_scenario("fw_circle", {{"vertical", "springs"}});
         r.script.keys = {{0.0, four_wheel_input{}}, {0.5, four_wheel_input{nan_value, 0, 0, 0}}};
         const std::string e = error_of([&] { run(r); });
         std::printf("NaN steer: \"%s\"\n", e.c_str());
@@ -116,8 +118,10 @@ int main()
 
     // outside_model: a springs car on its side, roof or below the ground stops the run; planar is never refused
     {
-        const four_wheel_params p;
+        four_wheel_params p;
+        p.vertical = vertical_model::springs;
         four_wheel_run r;
+        r.params.vertical = vertical_model::springs;
         r.steps = 10;
         r.initial = four_wheel_initial(p, 0.0);
         check_true("outside_model: a level car is inside", outside_model(r.initial, r.params) == nullptr);
@@ -148,7 +152,7 @@ int main()
     // every shipped scenario runs to its end inside the model
     for (const char *name : {"fw_showcase", "fw_brake", "fw_circle", "fw_lane", "fw_launch", "fw_hairpin", "fw_handbrake"})
     {
-        const std::string e = error_of([&] { run(four_wheel_scenario(name)); });
+        const std::string e = error_of([&] { run(four_wheel_scenario(name, {{"vertical", "springs"}})); });
         if (!e.empty())
             std::printf("%s: \"%s\"\n", name, e.c_str());
         const std::string what = std::string("scenario ") + name + " runs without throwing";

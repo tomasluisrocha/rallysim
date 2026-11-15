@@ -53,7 +53,9 @@ static Real steer_for(const single_track_params &q, Real u, Real a_y)
 
 int main()
 {
-    const four_wheel_params p; // tyres 30 / 35 kN/rad, so the axles match the single-track's 60 / 70
+    four_wheel_params p0; // tyres 30 / 35 kN/rad, so the axles match the single-track's 60 / 70
+    p0.vertical = vertical_model::springs;
+    const four_wheel_params p = p0;
     const single_track_params q = matching_single_track(p);
     // The car's own tyre is tmeasy. The closed forms below (the understeer gradient, the linear step
     // response, the friction limit with a flat ceiling) are for the linear tyre, so those checks run the same car on
@@ -138,7 +140,7 @@ int main()
     // The lane change, compared over the whole run: the four-wheel car follows the single-track's path and
     // yaw rate closely (it lags a little, because its tyres build force over a relaxation length)
     {
-        four_wheel_run a = four_wheel_scenario("fw_lane");
+        four_wheel_run a = four_wheel_scenario("fw_lane", {{"vertical", "springs"}});
         single_track_run b = single_track_lane_change();
         b.params = q;
         four_wheel_state sa = a.initial;

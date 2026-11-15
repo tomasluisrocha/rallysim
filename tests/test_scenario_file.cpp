@@ -11,10 +11,17 @@ using namespace rallysim;
 
 namespace
 {
+    // A text that does not name a vertical model gets springs, as an override.
     four_wheel_run load(const std::string &text, const settings &overrides = {})
     {
+        settings with = overrides;
+        bool named = text.find("vertical") != std::string::npos;
+        for (const auto &kv : overrides)
+            named = named || kv.first == "vertical";
+        if (!named)
+            with.push_back({"vertical", "springs"});
         std::istringstream in(text);
-        return load_scenario(in, "t.ini", overrides);
+        return load_scenario(in, "t.ini", with);
     }
 
     // The messages loading `text` throws, or none if it loads.
@@ -69,6 +76,7 @@ int main()
                                          "[start]\n"
                                          "speed = 90 km/h\n");
         four_wheel_run built; // fw_brake built in code: the default car at 25 m/s for 5 s
+        built.params.vertical = vertical_model::springs;
         built.initial = four_wheel_initial(built.params, 25.0);
         built.steps = 5000;
         check_true("same: dt and steps", file.dt == built.dt && file.steps == built.steps);
@@ -395,7 +403,7 @@ int main()
                                    "hold_speed = 8\n"
                                    "hold_heading = 3.141592653589793\n"
                                    "hold_heading_from = 1.6 s\n");
-        const four_wheel_run built = four_wheel_scenario("fw_hairpin");
+        const four_wheel_run built = four_wheel_scenario("fw_hairpin", {{"vertical", "springs"}});
         check_true("hairpin: a car with no new fit keeps the default tyre tables",
                    same_tables(file.params.front_tyre, built.params.front_tyre));
         const four_wheel_state a = run(file), b = run(built);
@@ -468,7 +476,7 @@ int main()
 
     // ---- the showcase file loads and runs to the end --------------------------------------------------------
     {
-        const four_wheel_run r = load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {});
+        const four_wheel_run r = load_scenario_file(RALLYSIM_SOURCE_DIR "/scenarios/fw_showcase.ini", {{"vertical", "springs"}});
         check_true("showcase: 20000 steps of 0.5 ms", r.steps == 20000 && r.dt == 0.0005);
         check_true("showcase: starts in the air", r.initial.body.pos.z > r.params.cg_height + 0.2);
         check_true("showcase: a speed timeline", r.hold_speed.keys.size() == 5);

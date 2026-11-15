@@ -92,7 +92,7 @@ target_compile_definitions(test_scenario_file PRIVATE RALLYSIM_SOURCE_DIR="${CMA
 # The command line: --set reaches a four-wheel car; a bad name, a missing value, a model without settings or a value
 # outside its range fails.
 add_test(NAME cli_set COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_set.csv
-         --set spring_front=60000 --set mu_rear=0.8)
+         --set vertical=springs --set spring_front=60000 --set mu_rear=0.8)
 set_tests_properties(cli_set PROPERTIES PASS_REGULAR_EXPRESSION "with --set")
 add_test(NAME cli_set_unknown COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set sprng_front=1)
 add_test(NAME cli_set_no_value COMMAND rallysim fw_brake ${CMAKE_BINARY_DIR}/cli_bad.csv --set spring_front)

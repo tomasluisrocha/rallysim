@@ -209,7 +209,9 @@ namespace
 
 int main()
 {
-    const four_wheel_params p; // springs, 50 kN/m and 3800 N s/m at every corner
+    four_wheel_params p0; // springs, 50 kN/m and 3800 N s/m at every corner
+    p0.vertical = vertical_model::springs;
+    const four_wheel_params p = p0;
     const Real dt = 0.001;
 
     // 0.3 m

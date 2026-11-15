@@ -35,7 +35,9 @@ static bool identical(const four_wheel_state &a, const four_wheel_state &b)
 
 int main()
 {
-    const four_wheel_params p; // the springs model is the default
+    four_wheel_params p0; // the springs model, named
+    p0.vertical = vertical_model::springs;
+    const four_wheel_params p = p0;
     const Real dt = 0.001, m = 1200, h = 0.5, L = 2.5, t = 1.5, g = kGravity, k = 50000, c = 3800;
 
     // one corner: pushes, never pulls
@@ -219,7 +221,7 @@ int main()
 
     // a right run mirrors a left run, roll included; the same run gives the same bits
     {
-        four_wheel_run left = four_wheel_scenario("fw_lane");
+        four_wheel_run left = four_wheel_scenario("fw_lane", {{"vertical", "springs"}});
         four_wheel_run right = left;
         for (auto &key : right.script.keys)
             key.value.steer = -key.value.steer;
