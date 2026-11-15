@@ -10,9 +10,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Strict floating point for deterministic results. Do not enable fast-math.
+# Strict floating point for deterministic results. Do not enable fast-math. /MP compiles a target's files in
+# parallel; it does not change the code generated.
 if(MSVC)
-  add_compile_options(/W4 /fp:precise)
+  add_compile_options(/W4 /fp:precise /MP)
 else()
   add_compile_options(-Wall -Wextra -ffp-contract=off)
 endif()

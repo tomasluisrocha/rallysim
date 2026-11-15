@@ -17,13 +17,13 @@ jobs:
       - name: Configure            # Visual Studio generator: multi-config
         run: cmake -S . -B build
       - name: Build Release
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
       - name: Test Release
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure --parallel 4
       - name: Build Debug
-        run: cmake --build build --config Debug
+        run: cmake --build build --config Debug --parallel
       - name: Test Debug
-        run: ctest --test-dir build -C Debug --output-on-failure
+        run: ctest --test-dir build -C Debug --output-on-failure --parallel 4
 
   linux-gcc:
     runs-on: ubuntu-26.04          # pinned: GCC 15.2, checked against the goldens
@@ -34,13 +34,13 @@ jobs:
       - name: Build Release
         run: cmake --build build-release -j
       - name: Test Release
-        run: ctest --test-dir build-release --output-on-failure
+        run: ctest --test-dir build-release --output-on-failure --parallel 4
       - name: Configure Debug
         run: cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
       - name: Build Debug
         run: cmake --build build-debug -j
       - name: Test Debug
-        run: ctest --test-dir build-debug --output-on-failure
+        run: ctest --test-dir build-debug --output-on-failure --parallel 4
 
   tools:
     runs-on: ubuntu-26.04
