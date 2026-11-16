@@ -159,6 +159,8 @@ A number outside its range is an error too; nothing is clamped:
 | 0 or more | `mu_*`, `k_*`, `damper_*`, `tyre_damping_*`, `antiroll_*`, `camber_thrust_*`, `max_drive_torque`, `max_brake_torque`, `max_handbrake_torque` |
 | 0 to 1 | `front_transfer_share`, `drive_split_front`, `brake_bias_front`, `sliding_ratio_*` |
 | 1.5 to 3 | `peak_slip_*` |
+| -0.2 to 0.2 rad | `camber_*`, `toe_*` (at rest) |
+| -1 to 1 | `ackermann` |
 
 On a `peak_slide` axle, `sliding_slip` must also be above `peak_slip`.
 

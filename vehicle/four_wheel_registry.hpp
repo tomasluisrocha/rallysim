@@ -27,6 +27,8 @@ namespace rallysim
         non_negative, // 0 or more
         fraction,     // 0 to 1
         peak_shape,   // 1.5 to 3: the peak_slide curve's peak_slip
+        angle,           // -0.2 to 0.2 rad: camber and toe at rest
+        signed_fraction, // -1 to 1
     };
 
     // A four-wheel parameter by name, so a run can be changed without rebuilding (rallysim --set, scenario files).
@@ -120,17 +122,17 @@ namespace rallysim
             PARAM_IF("roll_centre_rear", "m", rear_corner.roll_centre, param_use::unsprung, param_range::any),
             PARAM_IF("roll_centre_gain_front", "-", front_corner.roll_centre_gain, param_use::unsprung, param_range::any),
             PARAM_IF("roll_centre_gain_rear", "-", rear_corner.roll_centre_gain, param_use::unsprung, param_range::any),
-            PARAM_IF("camber_front", "rad", front_corner.camber, param_use::unsprung, param_range::any),
-            PARAM_IF("camber_rear", "rad", rear_corner.camber, param_use::unsprung, param_range::any),
+            PARAM_IF("camber_front", "rad", front_corner.camber, param_use::unsprung, param_range::angle),
+            PARAM_IF("camber_rear", "rad", rear_corner.camber, param_use::unsprung, param_range::angle),
             PARAM_IF("camber_gain_front", "rad/m", front_corner.camber_gain, param_use::unsprung, param_range::any),
             PARAM_IF("camber_gain_rear", "rad/m", rear_corner.camber_gain, param_use::unsprung, param_range::any),
-            PARAM_IF("toe_front", "rad", front_corner.toe, param_use::unsprung, param_range::any),
-            PARAM_IF("toe_rear", "rad", rear_corner.toe, param_use::unsprung, param_range::any),
+            PARAM_IF("toe_front", "rad", front_corner.toe, param_use::unsprung, param_range::angle),
+            PARAM_IF("toe_rear", "rad", rear_corner.toe, param_use::unsprung, param_range::angle),
             PARAM_IF("toe_gain_front", "rad/m", front_corner.toe_gain, param_use::unsprung, param_range::any),
             PARAM_IF("toe_gain_rear", "rad/m", rear_corner.toe_gain, param_use::unsprung, param_range::any),
             PARAM_IF("camber_thrust_front", "-", front_tyre.camber_thrust, param_use::unsprung, param_range::non_negative),
             PARAM_IF("camber_thrust_rear", "-", rear_tyre.camber_thrust, param_use::unsprung, param_range::non_negative),
-            PARAM_IF("ackermann", "-", ackermann, param_use::unsprung, param_range::any),
+            PARAM_IF("ackermann", "-", ackermann, param_use::unsprung, param_range::signed_fraction),
             // drive and brakes
             PARAM("max_drive_torque", "N m", drive_brake.max_drive_torque, param_range::non_negative),
             PARAM("max_drive_power", "W", drive_brake.max_drive_power, param_range::positive),
@@ -206,6 +208,10 @@ namespace rallysim
             return value >= 0 && value <= 1 ? "" : "must be within 0 to 1";
         case param_range::peak_shape:
             return value >= 1.5 && value <= 3 ? "" : "must be within 1.5 to 3";
+        case param_range::angle:
+            return value >= -0.2 && value <= 0.2 ? "" : "must be within -0.2 to 0.2";
+        case param_range::signed_fraction:
+            return value >= -1 && value <= 1 ? "" : "must be within -1 to 1";
         default:
             return "";
         }

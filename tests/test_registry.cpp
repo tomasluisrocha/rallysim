@@ -236,6 +236,21 @@ int main()
     check_true("range: the ends are inside", !throws("drive_split_front", "100 %") && !throws("mu_front", "0") &&
                                                  !throws("peak_slip_rear", "1.5") && !throws("peak_slip_rear", "3"));
 
+    {
+        // each end is inside and just past it is refused: catches a name left on any or an exclusive end
+        const char *angles[] = {"camber_front", "camber_rear", "toe_front", "toe_rear"};
+        for (const char *n : angles)
+        {
+            const std::string msg = std::string("parameter ") + n + ": must be within -0.2 to 0.2";
+            check_true((std::string(n) + ": 0.2 and -0.2 inside").c_str(), !throws(n, "0.2") && !throws(n, "-0.2"));
+            check_true((std::string(n) + ": past 0.2").c_str(), refused(n, "0.2001", msg));
+            check_true((std::string(n) + ": past -0.2").c_str(), refused(n, "-0.2001", msg));
+        }
+        check_true("ackermann: 1 and -1 inside", !throws("ackermann", "1") && !throws("ackermann", "-1"));
+        check_true("ackermann: past 1", refused("ackermann", "1.01", "parameter ackermann: must be within -1 to 1"));
+        check_true("ackermann: past -1", refused("ackermann", "-1.01", "parameter ackermann: must be within -1 to 1"));
+    }
+
     // ---- rebuild_tyres --------------------------------------------------------------------------------------
     {
         // the car as built is already fitted, so a rebuild only moves the tables by rounding (the scale factor is 1

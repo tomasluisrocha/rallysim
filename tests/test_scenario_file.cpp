@@ -176,6 +176,10 @@ int main()
     check_one_error("range: a negative bar", kMinimal + "[car]\nvertical = unsprung\nantiroll_front = -1\n", "t.ini:5:",
                     "antiroll_front: must be 0 or more");
     check_true("range: a bar of 0 loads", errors_of(kMinimal + "[car]\nvertical = unsprung\nantiroll_front = 0\n").empty());
+    check_one_error("range: a camber past 0.2 rad (12 deg)", kMinimal + "[car]\nvertical = unsprung\ncamber_front = 12 deg\n",
+                    "t.ini:5:", "camber_front: must be within -0.2 to 0.2");
+    check_true("range: a camber of 11 deg loads",
+               errors_of(kMinimal + "[car]\nvertical = unsprung\ncamber_front = 11 deg\n").empty());
     check_one_error("unused: a wheel mass on the springs car", kMinimal + "[car]\nunsprung_mass_front = 30\n", "t.ini:4:",
                     "unsprung_mass_front: only used with vertical = unsprung");
     check_one_error("unused: a tyre rate on the planar car", kMinimal + "[car]\nvertical = planar\ntyre_rate_rear = 2e5\n",
