@@ -60,11 +60,15 @@ static void check_golden(const char *name, const four_wheel_state &s, const snap
     }
 }
 
+// The placeholder stop: 0.25 m past rest, out of reach of these runs.
+static void pin_stop(four_wheel_params &p) { p.front_corner.bump_travel = p.rear_corner.bump_travel = 0.25; }
+
 // A scenario file's run on the unsprung model, from the scenario's own start speed, at its own step.
 static four_wheel_run unsprung_run(const char *name)
 {
     four_wheel_run r = four_wheel_scenario(name);
     r.params.vertical = vertical_model::unsprung;
+    pin_stop(r.params); // the placeholder stop
     r.initial = four_wheel_initial(r.params, r.initial.body.vel.x);
     return r;
 }
@@ -139,10 +143,8 @@ struct landing
     Real peak_front = 0, peak_rear = 0, lowest = 1e9;
 };
 
-static landing drop(Real lift)
+static landing drop(const four_wheel_params &p, Real lift)
 {
-    four_wheel_params p;
-    p.vertical = vertical_model::unsprung;
     four_wheel_state s = four_wheel_initial(p, 0.0);
     s.body.pos.z += lift;
     for (corner_state &c : s.corners)
@@ -161,18 +163,25 @@ static landing drop(Real lift)
 
 static void test_drops()
 {
-    const four_wheel_params p = [] { four_wheel_params q; q.vertical = vertical_model::unsprung; return q; }();
+    four_wheel_params p;
+    p.vertical = vertical_model::unsprung;
+    const four_wheel_params car = p; // the default stop
+    pin_stop(p);                     // the placeholder stop
     struct golden_drop
     {
+        const four_wheel_params *params;
+        const char *name;
         Real lift, peak_front, peak_rear, lowest;
     };
-    const golden_drop expected[2] = {{0.3, 10614.414913909215, 10673.874336907696, 0.40886937918016802},
-                                    {1.0, 19522.056867303989, 19707.001075500953, 0.30221777758715512}};
+    // The default car reaches its stop after the tyre peaks, so its peaks are the pinned car's.
+    const golden_drop expected[3] = {{&p, "drop 0.3 m", 0.3, 10614.414913909215, 10673.874336907696, 0.40886937918016802},
+                                    {&p, "drop 1.0 m", 1.0, 19522.056867303989, 19707.001075500953, 0.30221777757209822},
+                                    {&car, "default car, drop 1.0 m", 1.0, 19522.056867303989, 19707.001075500953, 0.30835087907947822}};
     for (const golden_drop &e : expected)
     {
-        const landing l = drop(e.lift);
-        const std::string name = "drop " + std::to_string(e.lift).substr(0, 3) + " m";
-        check_true((name + ": determinism").c_str(), [&] { const landing again = drop(e.lift); return again.peak_front == l.peak_front && again.peak_rear == l.peak_rear && again.lowest == l.lowest; }());
+        const landing l = drop(*e.params, e.lift);
+        const std::string name = e.name;
+        check_true((name + ": determinism").c_str(), [&] { const landing again = drop(*e.params, e.lift); return again.peak_front == l.peak_front && again.peak_rear == l.peak_rear && again.lowest == l.lowest; }());
         check_true((name + ": the peak tyre loads are above the static loads").c_str(),
                    l.peak_front > p.static_load(FL) && l.peak_rear > p.static_load(RL));
         const int before = failures;

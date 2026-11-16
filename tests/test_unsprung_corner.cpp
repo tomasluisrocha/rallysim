@@ -43,11 +43,13 @@ int main()
         const corner_load in = unsprung_corner_force(cp, x0 - 0.11, 0.0, x0, 0.01, 0.0);
         check_near("past the stop's start: stop force", in.stop, -5000, 1e-9);
         check_near("past the stop's start: strut", in.strut, -5000, 1e-9);
+        corner_params pinned = cp;
+        pinned.bump_travel = 0.25; // the placeholder stop
         bool never_positive = true;
         for (int i = 0; i <= 400; ++i)
         {
             const Real x = -0.2 + 0.001 * i;
-            if (unsprung_corner_force(cp, x, 0.0, x0, 0.01, 0.0).stop > 0)
+            if (unsprung_corner_force(pinned, x, 0.0, x0, 0.01, 0.0).stop > 0)
                 never_positive = false;
         }
         check_true("the stop is never positive", never_positive);
@@ -150,13 +152,15 @@ int main()
                    12000, 1e-6);
     }
 
-    // the defaults never reach the bump stop below 0.25 m past rest
+    // the default bump stop starts 0.10 m past rest
     {
         bool untouched = true;
-        for (int i = 0; 0.001 * i <= x0 + 0.24; ++i)
+        for (int i = 0; 0.001 * i <= x0 + 0.10; ++i)
             if (unsprung_corner_force(cp, 0.001 * i, 0.0, x0, 0.01, 0.0).stop > 0)
                 untouched = false;
-        check_true("defaults: no bump stop up to x0 + 0.24", untouched);
+        check_true("defaults: no bump stop up to x0 + 0.10", untouched);
+        check_true("defaults: a bump stop force above 0 at x0 + 0.101",
+                   unsprung_corner_force(cp, x0 + 0.101, 0.0, x0, 0.01, 0.0).stop > 0);
     }
 
     return finish("unsprung_corner");

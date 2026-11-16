@@ -164,7 +164,7 @@ int main()
                                "bump_stop_rate_rear", "droop_stop_rate_front", "droop_stop_rate_rear"};
         four_wheel_params p;
         check_near("strut: rebound_ratio_front default", find_param("rebound_ratio_front")->field(p), 1, 0);
-        check_near("strut: bump_travel_rear default", find_param("bump_travel_rear")->field(p), 0.25, 0);
+        check_near("strut: bump_travel_rear default", find_param("bump_travel_rear")->field(p), 0.10, 0);
         check_near("strut: bump_stop_length_front default", find_param("bump_stop_length_front")->field(p), 0.03, 0);
         check_near("strut: bump_stop_rate_rear default", find_param("bump_stop_rate_rear")->field(p), 500000, 0);
         check_near("strut: droop_stop_rate_front default", find_param("droop_stop_rate_front")->field(p), 500000, 0);
@@ -173,7 +173,7 @@ int main()
         check_near("strut: rebound_ratio_front untouched", p.front_corner.rebound_ratio, 1, 0);
         apply(p, "bump_travel_front", "120 mm");
         check_near("strut: bump_travel_front set", p.front_corner.bump_travel, 0.12, 1e-15);
-        check_near("strut: bump_travel_rear untouched", p.rear_corner.bump_travel, 0.25, 0);
+        check_near("strut: bump_travel_rear untouched", p.rear_corner.bump_travel, 0.10, 0);
         apply(p, "bump_stop_length_rear", "40 mm");
         check_near("strut: bump_stop_length_rear set", p.rear_corner.bump_stop_length, 0.04, 1e-15);
         check_near("strut: bump_stop_length_front untouched", p.front_corner.bump_stop_length, 0.03, 0);

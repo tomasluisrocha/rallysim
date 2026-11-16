@@ -292,12 +292,30 @@ int main()
         check_true("unsprung drop 1 m: the stored energy is never above its starting value", hard.never_gained);
         check_settled("unsprung drop 1 m", u, hard);
 
-        // C: the placeholder stop stays clear of the default unsprung 1 m drop
-        std::printf("unsprung drop 1 m, default stop: travel past rest front %.3f m rear %.3f m, stop never above 0: %s\n",
-                    hard.travel[0], hard.travel[1], hard.stop_steps[0] + hard.stop_steps[1] == 0 ? "yes" : "no");
-        check_true("placeholder stop: never engaged in the default unsprung 1 m drop",
-                   hard.stop_steps[0] + hard.stop_steps[1] == 0 && hard.stop_max[0] == 0 && hard.stop_max[1] == 0);
-        check_true("placeholder stop: travel past rest below 0.25 m", hard.travel[0] < 0.25 && hard.travel[1] < 0.25);
+        // C: the default stop engages in the 1 m drop, never in the 0.3 m drop
+        std::printf("unsprung drop 1 m, default stop: travel past rest front %.4f m rear %.4f m, engaged over %ld and "
+                    "%ld corner-steps\n",
+                    hard.travel[0], hard.travel[1], hard.stop_steps[0], hard.stop_steps[1]);
+        check_true("default stop: engaged on both axles in the 1 m drop", hard.stop_steps[0] > 0 && hard.stop_steps[1] > 0);
+        check_true("default stop: never engaged in the 0.3 m drop",
+                   l.stop_steps[0] + l.stop_steps[1] == 0 && l.stop_max[0] == 0 && l.stop_max[1] == 0);
+        check_true("default stop: travel past rest below 0.14 m in the 1 m drop",
+                   hard.travel[0] < 0.14 && hard.travel[1] < 0.14);
+
+        // the default car is the car with the stop's values set explicitly, bit for bit
+        four_wheel_params e = u;
+        for (corner_params *c : {&e.front_corner, &e.rear_corner})
+        {
+            c->bump_travel = 0.10;
+            c->bump_stop_length = 0.03;
+            c->bump_stop_rate = 500000;
+        }
+        const landing he = drop(e, 1.0, dt, 4.0);
+        bool same = identical(hard.end.body, he.end.body);
+        for (std::size_t k = 0; k < kWheels; ++k)
+            same = same && hard.end.corners[k].z == he.end.corners[k].z && hard.end.corners[k].vz == he.end.corners[k].vz &&
+                   hard.end.wheels[k].omega == he.end.wheels[k].omega;
+        check_true("default stop: the 1 m drop ends identical to the explicit 0.10 m, 0.03 m, 500 kN/m stop", same);
     }
 
     // A: the car against the independent quarter-car, with the stop's test values (pure heave, lf = lr)

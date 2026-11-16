@@ -139,9 +139,10 @@ axle, `mass`, `lf`, `lr`; the motion ratio: `motion_ratio_gain_*`, `motion_ratio
 
 `rebound_ratio_*` multiplies `damper_*` while the strut extends (1: the same in both directions). `bump_travel_*` is the
 compression past rest where the bump stop starts, and its stiffness rises to `bump_stop_rate_*` over
-`bump_stop_length_*`; `droop_stop_rate_*` is the droop stop's stiffness. The bump-stop defaults are placeholders that no
-shipped scenario reaches, not measured values for the car. `antiroll_*` is an anti-roll bar per axle: the force at
-each wheel per metre of difference in wheel travel between the two wheels of the axle; 0 (the default) is no bar.
+`bump_stop_length_*`; `droop_stop_rate_*` is the droop stop's stiffness. The bump-stop defaults (0.10 m, 0.03 m,
+500 kN/m) are provisional, not measured values for the car: a 1 m drop reaches the stop, no shipped scenario does.
+`antiroll_*` is an anti-roll bar per axle: the force at each wheel per metre of difference in wheel travel between the
+two wheels of the axle; 0 (the default) is no bar.
 
 Every suspension curve is a value at rest and a gain per metre of wheel travel (+ bump): `camber_*` and
 `camber_gain_*`, `toe_*` and `toe_gain_*`, `roll_centre_*` and `roll_centre_gain_*`, `motion_ratio_*` and

@@ -26,9 +26,9 @@ namespace rallysim
         Real camber_gain = 0;       // rad per metre of wheel travel (+ bump)
         Real roll_centre = 0;       // m, the roll centre's height above the ground at rest (unsprung mode only)
         Real roll_centre_gain = 0;  // m per metre of wheel travel (+ bump)
-        // The bump stop. Placeholder values, chosen so that no existing run reaches it (the default car's runs stay
-        // below about 0.17 m); not measured values for this car.
-        Real bump_travel = 0.25;      // m of compression past rest before the bump stop touches
+        // The bump stop. Provisional values for this car, not measured: it engages in a 1 m drop of the default car
+        // and no shipped scenario reaches it.
+        Real bump_travel = 0.10;      // m of compression past rest before the bump stop touches
         Real bump_stop_length = 0.03; // m over which its stiffness rises to bump_stop_rate
         Real bump_stop_rate = 500000; // N/m, its stiffness from then on
     };
