@@ -540,8 +540,9 @@ int main()
     check_run("fw_showcase, unsprung, from its own start", four_wheel_scenario("fw_showcase", {{"vertical", "unsprung"}}),
               0.005);
 
-    // the shipped scenarios, unsprung, never reach a stop, and their struts stay well short of the bump stop
-    for (const char *name : {"fw_brake", "fw_circle", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_showcase"})
+    // the shipped scenarios, unsprung, never reach a stop, and their struts stay short of the 0.10 m default bump gap
+    for (const char *name : {"fw_brake", "fw_circle", "fw_drop", "fw_hairpin", "fw_handbrake", "fw_lane", "fw_launch", "fw_ramp",
+                             "fw_showcase"})
     {
         const four_wheel_run r = four_wheel_scenario(name, {{"vertical", "unsprung"}});
         const four_wheel_params &p = r.params;
@@ -561,8 +562,8 @@ int main()
         std::printf("%s, unsprung: largest stop force %.1f N, largest strut travel past rest %.1f mm\n", name, peak_stop,
                     1000 * peak_travel);
         check_true((std::string(name) + ", unsprung: no stop is ever reached").c_str(), peak_stop == 0);
-        check_true((std::string(name) + ", unsprung: strut travel past rest stays below 0.125 m").c_str(),
-                   peak_travel < 0.125);
+        check_true((std::string(name) + ", unsprung: strut travel past rest stays below 0.095 m").c_str(),
+                   peak_travel < 0.095); // under the 0.10 m gap; the largest is 87.3 mm, on fw_showcase
     }
 
     // a motion ratio of 0.7 with a gain of 2 /m: the strut's energy is taken at its own compression, which moves

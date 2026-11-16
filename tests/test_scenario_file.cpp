@@ -273,6 +273,15 @@ int main()
                         u + "track_rear = 1.4\nroll_centre_rear = 0.72\n", "t.ini:6:",
                         "reaches 0.72 m at the droop stop; it must stay within half the track (0.7 m)");
         check_true("curves: roll centre 0.72 on the front loads", errors_of(u + "roll_centre_front = 0.72\n").empty());
+        // The curve refusals run on the default model too. Catches them running only when the file names vertical.
+        check_one_error_as_given("curves: roll centre 5 m on a file with no vertical line",
+                                 kMinimal + "[car]\nroll_centre_front = 5\n", "t.ini:4:", "the roll centre reaches 5 m");
+        // Droop end with a gain: MR^2 = 1 + 2 * 2 * (-0.10) = 0.6, s = 2 * (-0.10) / (1 + sqrt(0.6)) = -0.112702,
+        // h = 0.5 + 2.3 * 0.112702 = 0.759214. Taking s = -droop / motion_ratio (-0.10, h 0.73) would load it.
+        const std::string dg = u + "motion_ratio_gain_front = 2\nroll_centre_front = 0.5\n";
+        check_one_error("curves: ratio gain 2, roll centre gain -2.3 reaches 0.759214 m at the droop stop (exact travel)",
+                        dg + "roll_centre_gain_front = -2.3\n", "t.ini:7:", "reaches 0.759214 m at the droop stop");
+        check_true("curves: ratio gain 2, roll centre gain -2 loads (0.725)", errors_of(dg + "roll_centre_gain_front = -2\n").empty());
         check_one_error("curves: ratio 0.8, gain 1.6 (strut travel taken as wheel travel)",
                         u + "motion_ratio_front = 0.8\nroll_centre_front = 0.5\nroll_centre_gain_front = 1.6\n", "t.ini:7:",
                         "reaches 0.76 m at the bump stop");
