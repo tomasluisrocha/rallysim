@@ -129,6 +129,14 @@ An unsprung car is refused when a corner's step number reaches 2 at the run's `d
 anti-roll bar, a motion ratio above 1, or strong damping for the step); the message gives the largest `dt`. The number
 screens step stability only, not accuracy.
 
+These unsprung checks apply to any unsprung car, the default included, whether or not the file has a `vertical` line
+(a `vertical` word that does not parse is the only error then). Each is reported at the first of its keys the file
+gives (or `--set`), then at `vertical`, then at `[run]` `dt`, and otherwise for the whole file, as
+`file: the car is unsprung (the default): key: what`. The keys: the four wheel masses against `mass`:
+`unsprung_mass_front`, `unsprung_mass_rear`, `mass`; a wheel's weight against its axle's load: `unsprung_mass_*` of that
+axle, `mass`, `lf`, `lr`; the motion ratio: `motion_ratio_gain_*`, `motion_ratio_*`, `droop_*`, `bump_travel_*`,
+`bump_stop_length_*` of that axle; the step number: `[run]` `dt`, then `vertical`; `ackermann` only when the file gives it.
+
 `rebound_ratio_*` multiplies `damper_*` while the strut extends (1: the same in both directions). `bump_travel_*` is the
 compression past rest where the bump stop starts, and its stiffness rises to `bump_stop_rate_*` over
 `bump_stop_length_*`; `droop_stop_rate_*` is the droop stop's stiffness. The bump-stop defaults are placeholders that no

@@ -50,6 +50,31 @@ namespace
         check_true(what, ok);
     }
 
+    // Like errors_of and check_one_error, but the text is loaded as given: no vertical line means the default model.
+    std::vector<std::string> errors_as_given(const std::string &text)
+    {
+        try
+        {
+            std::istringstream in(text);
+            load_scenario(in, "t.ini", {});
+        }
+        catch (const ini_error &e)
+        {
+            return e.messages;
+        }
+        return {};
+    }
+
+    void check_one_error_as_given(const char *what, const std::string &text, const std::string &at, const std::string &words)
+    {
+        const std::vector<std::string> e = errors_as_given(text);
+        const bool ok = e.size() == 1 && e[0].rfind(at, 0) == 0 && e[0].find(words) != std::string::npos;
+        if (!ok)
+            for (const std::string &m : e)
+                std::printf("  got: %s\n", m.c_str());
+        check_true(what, ok);
+    }
+
     bool same_vec(const vec3 &a, const vec3 &b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
 
     bool same_tables(const tyre_params &a, const tyre_params &b)
@@ -240,6 +265,35 @@ int main()
     // no sprung mass: only the existing error, no screening (and no division by a non-positive mass)
     check_one_error("step: no screening without a sprung mass", kMinimal + "[car]\nvertical = unsprung\nmass = 160\n", "t.ini:",
                     "the four unsprung masses");
+    // the unsprung car is the default: its checks run on a file with no vertical line
+    {
+        const std::string car = kMinimal + "[car]\n";
+        check_true("default: an empty [car] loads", errors_as_given(car).empty());
+        check_one_error_as_given("default: a front wheel heavier than its static load", car + "unsprung_mass_front = 400\n", "t.ini:4:",
+                                 "the wheel's weight (3924 N) must be below the front axle's static load per wheel (2825.28 N)");
+        check_one_error_as_given("default: wheels as heavy as the car", car + "mass = 150\n", "t.ini:4:",
+                                 "the four unsprung masses (160 kg) must add up to less than the mass (150 kg)");
+        check_one_error_as_given("default: the masses error goes to the first key", car + "unsprung_mass_front = 300\nunsprung_mass_rear = 300\n",
+                                 "t.ini:4:", "the four unsprung masses");
+        check_one_error_as_given("default: a motion ratio reaching 0", car + "motion_ratio_gain_front = -4\n", "t.ini:4:",
+                                 "reaches 0 before the bump stop");
+        check_one_error_as_given("default: a steer past the inner wheel's solution", car + "ackermann = 1\nmax_steer = 1.3\n", "t.ini:4:",
+                                 "must be below 1.27934 rad");
+        const std::string stiff = car + "unsprung_mass_front = 2\ntyre_rate_front = 5000000\n";
+        check_one_error_as_given("default: a stiff light wheel with no dt, whole file", stiff,
+                                 "t.ini: the car is unsprung (the default): front wheel: step number 6.601", "");
+        check_one_error_as_given("default: the same with a dt, at the dt line",
+                                 "[run]\nduration = 1 s\ndt = 1 ms\n[car]\nunsprung_mass_front = 2\ntyre_rate_front = 5000000\n",
+                                 "t.ini:3:", "front wheel: step number 6.601");
+        check_one_error_as_given("default: vertical given, the key list still used", kMinimal + "[car]\nvertical = unsprung\nmass = 150\n",
+                                 "t.ini:5:", "the four unsprung masses");
+        check_one_error_as_given("default: lf alone", car + "lf = 17\n", "t.ini:4:",
+                                 "the wheel's weight (392.4 N) must be below the front axle's static load per wheel (388.088 N)");
+        check_one_error_as_given("default: the ratio error goes to the gain, not droop", car + "droop_front = 0.3\nmotion_ratio_gain_front = 2.5\n",
+                                 "t.ini:5:", "reaches 0 before the droop stop");
+        check_one_error_as_given("default: a bad vertical word, one error", car + "vertical = unsprun\nunsprung_mass_front = 400\n", "t.ini:4:",
+                                 "vertical: expected one of");
+    }
     {
         // the default ride height follows the file's cg_height
         const four_wheel_run r = load(kMinimal + "[car]\ncg_height = 520 mm\n");

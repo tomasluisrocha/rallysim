@@ -214,17 +214,43 @@ namespace rallysim
             run.params.front_tyre.curve = tyre_curve_named(name);
         if (rear && !both && word(*rear, curves, name))
             run.params.rear_tyre.curve = tyre_curve_named(name);
-        if (const ini_entry *e = entry_of("car", "vertical"); e && word(*e, {"springs", "planar", "unsprung"}, name))
-        {
+        const ini_entry *vertical_entry = entry_of("car", "vertical");
+        const ini_entry *dt_entry = entry_of("run", "dt");
+        bool vertical_ok = true; // a vertical word that did not parse is the one mistake: no unsprung check on top of it
+        if (vertical_entry && word(*vertical_entry, {"springs", "planar", "unsprung"}, name))
             run.params.vertical = name == "planar"     ? vertical_model::planar
                                   : name == "unsprung" ? vertical_model::unsprung
                                                        : vertical_model::springs;
+        else if (vertical_entry)
+            vertical_ok = false;
+        const bool unsprung = vertical_ok && run.params.vertical == vertical_model::unsprung;
+        // An unsprung check is reported at the first of its keys the file gives, else at vertical, else at [run] dt,
+        // else for the whole file (the car is unsprung by default). The key is shown where it is not the line's own.
+        auto place = [&](const std::vector<std::string> &keys, const std::string &key_text, const std::string &message,
+                         bool show_key, bool use_dt)
+        {
+            for (const std::string &k : keys)
+                if (const ini_entry *at = entry_of("car", k))
+                {
+                    fail(*at, message);
+                    return;
+                }
+            const ini_entry *anchor = use_dt && dt_entry ? dt_entry : vertical_entry;
+            if (anchor)
+                fail(*anchor, (show_key ? key_text + ": " : std::string()) + message);
+            else
+                report(kWholeFile, "the car is unsprung (the default): " + key_text + ": " + message);
+        };
+        if (unsprung)
+        {
             // the body is what is left of the car once the four wheels are taken out
-            if (run.params.vertical == vertical_model::unsprung && !(run.params.sprung_mass() > 0))
-                fail(*e, "the four unsprung masses (" +
-                             number_text(2 * run.params.front_corner.unsprung_mass + 2 * run.params.rear_corner.unsprung_mass) +
-                             " kg) must add up to less than the mass (" + number_text(run.params.chassis.mass) + " kg)");
-            else if (run.params.vertical == vertical_model::unsprung)
+            if (!(run.params.sprung_mass() > 0))
+                place({"unsprung_mass_front", "unsprung_mass_rear", "mass"}, "unsprung_mass_front",
+                      "the four unsprung masses (" +
+                          number_text(2 * run.params.front_corner.unsprung_mass + 2 * run.params.rear_corner.unsprung_mass) +
+                          " kg) must add up to less than the mass (" + number_text(run.params.chassis.mass) + " kg)",
+                      false, false);
+            else
                 // a wheel heavier than the load on its tyre leaves no load for the strut: the car cannot rest
                 for (const std::string axle : {"front", "rear"})
                 {
@@ -233,35 +259,33 @@ namespace rallysim
                     if (weight >= run.params.static_load(i))
                     {
                         const std::string key = "unsprung_mass_" + axle;
-                        const ini_entry *at = entry_of("car", key);
-                        fail(at ? *at : *e, std::string(at ? "" : key + ": ") + "the wheel's weight (" + number_text(weight) +
-                                                " N) must be below the " + axle + " axle's static load per wheel (" +
-                                                number_text(run.params.static_load(i)) + " N)");
+                        place({key, "mass", "lf", "lr"}, key,
+                              "the wheel's weight (" + number_text(weight) + " N) must be below the " + axle +
+                                  " axle's static load per wheel (" + number_text(run.params.static_load(i)) + " N)",
+                              true, false);
                     }
                 }
-            if (run.params.vertical == vertical_model::unsprung)
+            // the strut must keep moving the same way as the wheel between the stops
+            for (const std::string axle : {"front", "rear"})
             {
-                // the strut must keep moving the same way as the wheel between the stops
-                for (const std::string axle : {"front", "rear"})
-                {
-                    const corner_params &c = run.params.corner(axle == "front" ? FL : RL);
-                    const ratio_ends ends = motion_ratio_ends(c);
-                    if (ends.lo2 > 0 && ends.hi2 > 0)
-                        continue;
-                    const ini_entry *at = entry_of("car", "motion_ratio_gain_" + axle);
-                    if (!at)
-                        at = entry_of("car", "motion_ratio_" + axle);
-                    fail(at ? *at : *e, std::string(at ? "" : "motion_ratio_" + axle + ": ") + "the motion ratio reaches 0 before the " +
-                                            (ends.lo2 > 0 ? "bump" : "droop") + " stop; it must stay above 0 between the stops");
-                }
-                // the inner front wheel's angle has a solution only below atan(2 L / t)
-                const Real limit = std::atan(2 * run.params.wheelbase() / run.params.track_front);
-                if (run.params.ackermann != 0 && run.params.max_steer >= limit)
-                    if (const ini_entry *at = entry_of("car", "ackermann"))
-                        fail(*at, "with max_steer " + number_text(run.params.max_steer) +
-                                      " rad the inner wheel's angle has no solution; max_steer must be below " +
-                                      number_text(limit) + " rad");
+                const corner_params &c = run.params.corner(axle == "front" ? FL : RL);
+                const ratio_ends ends = motion_ratio_ends(c);
+                if (ends.lo2 > 0 && ends.hi2 > 0)
+                    continue;
+                place({"motion_ratio_gain_" + axle, "motion_ratio_" + axle, "droop_" + axle, "bump_travel_" + axle,
+                       "bump_stop_length_" + axle},
+                      "motion_ratio_gain_" + axle,
+                      std::string("the motion ratio reaches 0 before the ") + (ends.lo2 > 0 ? "bump" : "droop") +
+                          " stop; it must stay above 0 between the stops",
+                      true, false);
             }
+            // the inner front wheel's angle has a solution only below atan(2 L / t)
+            const Real limit = std::atan(2 * run.params.wheelbase() / run.params.track_front);
+            if (run.params.ackermann != 0 && run.params.max_steer >= limit)
+                if (const ini_entry *at = entry_of("car", "ackermann"))
+                    fail(*at, "with max_steer " + number_text(run.params.max_steer) +
+                                  " rad the inner wheel's angle has no solution; max_steer must be below " +
+                                  number_text(limit) + " rad");
         }
         // a number this car does not use (a spring on the planar car, a peak_slide shape on a tmeasy tyre) would change
         // nothing: refuse it, judged against the words above wherever they are in the file
@@ -298,19 +322,19 @@ namespace rallysim
             }
         }
         // the explicit corner step must be fast enough for the wheels (see corner_step_number)
-        if (run.params.vertical == vertical_model::unsprung && run.params.sprung_mass() > 0 && dt_ok)
+        if (unsprung && run.params.sprung_mass() > 0 && dt_ok)
         {
-            const ini_entry *dt_entry = entry_of("run", "dt");
-            const ini_entry *anchor = dt_entry ? dt_entry : entry_of("car", "vertical");
             for (const std::string axle : {"front", "rear"})
             {
                 const std::size_t i = axle == "front" ? FL : RL;
                 const Real s = corner_step_number(run.params, i, run.dt);
-                if (anchor && s >= kCornerStepLimit)
-                    fail(*anchor, axle + " wheel: step number " + number_text(s) + " at dt " + number_text(run.dt) +
-                                      " s is not below " + number_text(kCornerStepLimit) +
-                                      " (light wheel, stiff tyre or strong damping for this step); the largest dt is about " +
-                                      number_text(corner_step_largest_dt(run.params, i, kCornerStepLimit)) + " s");
+                if (s >= kCornerStepLimit)
+                    place({}, axle + " wheel",
+                          "step number " + number_text(s) + " at dt " + number_text(run.dt) + " s is not below " +
+                              number_text(kCornerStepLimit) +
+                              " (light wheel, stiff tyre or strong damping for this step); the largest dt is about " +
+                              number_text(corner_step_largest_dt(run.params, i, kCornerStepLimit)) + " s",
+                          true, true);
             }
         }
         Real duration = 0;
