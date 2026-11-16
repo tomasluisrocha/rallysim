@@ -125,7 +125,7 @@ rallysim fw_drop                                   # one clean landing
 python tools/rally.py landing out/runs/fw_drop.csv
 python tools/rally.py landing out/runs/fw_showcase.csv
 python tools/rally.py landing out/runs/fw_showcase.csv --window 2
-rallysim fw_showcase --set vertical=unsprung      # with wheel mass and stops: margins are shown
+rallysim fw_showcase                              # an unsprung car: margins are shown
 python tools/rally.py landing out/runs/fw_showcase.csv
 ```
 

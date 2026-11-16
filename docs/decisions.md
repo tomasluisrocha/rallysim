@@ -116,21 +116,21 @@ The four-wheel car finds its vertical loads in one of three ways, chosen with
 - **`planar`**: gravity is cancelled and the body stays flat; the loads come
   from a quasi-static estimate of longitudinal and lateral load transfer. It
   compares directly with the single-track model.
-- **`springs`** (the default): gravity acts and each corner is a massless
+- **`springs`**: gravity acts and each corner is a massless
   vertical spring and damper, so heave, pitch and roll emerge from the
   rigid-body motion. A corner can push the body up but never pulls it down.
-- **`unsprung`**: each corner is a quarter-car. A wheel mass sits on a tyre
-  spring under a vertical strut: a spring, a damper with separate bump and
-  rebound rates (`rebound_ratio_*` times `damper_*`), a progressive bump stop
-  and a droop stop that limits how far the wheel can hang. The tyre only
-  pushes; the strut may also pull, through its damper and the droop stop. The
-  bump stop only pushes. An anti-roll bar per axle (`antiroll_*`, 0 by
+- **`unsprung`** (the default): each corner is a quarter-car. A wheel mass sits
+  on a tyre spring under a vertical strut: a spring, a damper with separate
+  bump and rebound rates (`rebound_ratio_*` times `damper_*`), a progressive
+  bump stop and a droop stop that limits how far the wheel can hang. The tyre
+  only pushes; the strut may also pull, through its damper and the droop stop.
+  The bump stop only pushes. An anti-roll bar per axle (`antiroll_*`, 0 by
   default) puts equal and opposite forces on the axle's two wheels in
-  proportion to the difference of their wheel travel. It resists roll and
-  moves lateral load transfer towards its axle, without changing heave or
-  pitch.
+  proportion to the difference of their wheel travel. It resists roll and moves
+  lateral load transfer towards its axle, without changing heave or pitch.
 
-All three are kept, so each can be compared with the one before it.
+All three are kept, so each can be compared with the one before it. `springs`
+and `planar` stay as the references the tests compare with.
 
 #### Suspension geometry
 
@@ -170,9 +170,12 @@ coupled mass matrix (the wheels as point masses solved together with the body)
 would remove only that, at the cost of replacing the rigid-body step and losing
 the closed forms the model is tested against.
 
-The defaults keep the damper symmetric (rebound ratio 1), and the bump-stop
-values are placeholders that no shipped scenario reaches, not measured values
-for any car. The loader refuses an unsprung car whose corner step number
+The defaults keep the damper symmetric (rebound ratio 1), with no anti-roll bar
+and neutral geometry: none of it is measured for any car. The bump stop's
+defaults (0.10 m past rest, 0.03 m long, 500 kN/m) are provisional too: a 1 m
+drop of the default car reaches the stop and no shipped scenario does. Wheel
+travel past the end of the stop keeps the stop's full rate (there is no tyre
+bottoming). The loader refuses an unsprung car whose corner step number
 reaches 2 at the run's step: a screening rule for the step's stability (a
 light wheel on a stiff tyre needs a small step), not a bound and not a measure
 of accuracy.
@@ -196,6 +199,8 @@ What the tests establish, within the model's own assumptions:
   needs a small step);
 - drops from 0.3 m and 1 m never gain energy and settle back to the static
   loads;
+- the default car's 1 m drop reaches the bump stop after the tyre peaks, so its
+  peak tyre loads are the same as with the stop out of reach;
 - with a bump stop, drops in pure heave match an independent fine-step
   quarter-car within 1 mm of travel and 3% of peak stop force, and the energy
   books balance during the landing, while the stop holds energy, not only at
