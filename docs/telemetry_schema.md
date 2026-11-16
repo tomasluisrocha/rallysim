@@ -285,7 +285,7 @@ work columns add up every step before it, from the start of the run:
 | `energy.residual` | `energy.total` − its value in the first row − (drive − brake − damper − tyre): near zero |
 
 The residual is a first-order integration error, not exactly zero, and halves when dt halves; a residual that does not
-shrink with dt is a physics bug. `tests/test_energy.cpp` bounds it on every four-wheel scenario.
+shrink with dt is a physics bug. The energy tests (`tests/test_energy*.cpp`) bound it on every four-wheel scenario.
 
 ## Tyre rig file
 
