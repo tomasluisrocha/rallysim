@@ -213,7 +213,9 @@ my_run.ini:11: ackermann: with max_steer 1.3 rad the inner wheel's angle has no 
 
 The last two apply to an unsprung car: the motion ratio, linear in wheel travel, must stay above 0 from the droop stop
 to the end of the bump stop, and with `ackermann` other than 0, `max_steer` must be below
-atan(2 (`lf` + `lr`) / `track_front`).
+atan(2 (`lf` + `lr`) / `track_front`). Where the motion ratio stays above 0, the roll centre must stay below half the
+track of its axle, and the camber and toe within 0.2 rad, at both stops (wheel travel found from the exact ratio
+relation); the error goes to the gain's line, else the rest value's.
 
 ## Example
 

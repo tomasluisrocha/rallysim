@@ -169,6 +169,23 @@ namespace rallysim
         return e;
     }
 
+    // The wheel travel at the droop stop (lo, below 0) and at the end of the bump stop (hi). With d the strut travel
+    // from rest at the stop, d = MR s + gain s^2 / 2 and MR^2 = motion_ratio^2 + 2 gain d give
+    // s = 2 d / (motion_ratio + sqrt(MR^2)), exact for any gain. Needs the ratio above 0 at both ends.
+    struct travel_ends
+    {
+        Real lo = 0, hi = 0; // m
+    };
+
+    inline travel_ends wheel_travel_ends(const corner_params &c)
+    {
+        const ratio_ends e = motion_ratio_ends(c);
+        travel_ends t;
+        t.lo = 2 * -c.droop / (c.motion_ratio + std::sqrt(e.lo2));
+        t.hi = 2 * (c.bump_travel + c.bump_stop_length) / (c.motion_ratio + std::sqrt(e.hi2));
+        return t;
+    }
+
     inline corner_step_terms corner_step_coefficients(const four_wheel_params &p, std::size_t i)
     {
         const corner_params &c = p.corner(i);

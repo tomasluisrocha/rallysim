@@ -270,14 +270,42 @@ namespace rallysim
             {
                 const corner_params &c = run.params.corner(axle == "front" ? FL : RL);
                 const ratio_ends ends = motion_ratio_ends(c);
-                if (ends.lo2 > 0 && ends.hi2 > 0)
+                if (!(ends.lo2 > 0 && ends.hi2 > 0))
+                {
+                    place({"motion_ratio_gain_" + axle, "motion_ratio_" + axle, "droop_" + axle, "bump_travel_" + axle,
+                           "bump_stop_length_" + axle},
+                          "motion_ratio_gain_" + axle,
+                          std::string("the motion ratio reaches 0 before the ") + (ends.lo2 > 0 ? "bump" : "droop") +
+                              " stop; it must stay above 0 between the stops",
+                          true, false);
                     continue;
-                place({"motion_ratio_gain_" + axle, "motion_ratio_" + axle, "droop_" + axle, "bump_travel_" + axle,
-                       "bump_stop_length_" + axle},
-                      "motion_ratio_gain_" + axle,
-                      std::string("the motion ratio reaches 0 before the ") + (ends.lo2 > 0 ? "bump" : "droop") +
-                          " stop; it must stay above 0 between the stops",
-                      true, false);
+                }
+                // the roll centre, camber and toe are linear in wheel travel: judge them at the two stops
+                const travel_ends s = wheel_travel_ends(c);
+                const Real half = 0.5 * (axle == "front" ? run.params.track_front : run.params.track_rear);
+                struct curve
+                {
+                    const char *name, *key, *gain_key;
+                    Real rest, gain, bound;
+                    bool roll;
+                };
+                const curve shapes[] = {{"roll centre", "roll_centre_", "roll_centre_gain_", c.roll_centre, c.roll_centre_gain, half, true},
+                                        {"camber", "camber_", "camber_gain_", c.camber, c.camber_gain, 0.2, false},
+                                        {"toe", "toe_", "toe_gain_", c.toe, c.toe_gain, 0.2, false}};
+                for (const curve &k : shapes)
+                    for (int end = 0; end < 2; ++end)
+                    {
+                        const Real v = k.rest + k.gain * (end == 0 ? s.lo : s.hi);
+                        const bool roll = k.roll;
+                        if (roll ? !(std::fabs(v) >= k.bound) : !(std::fabs(v) > k.bound))
+                            continue;
+                        place({k.gain_key + axle, k.key + axle}, k.gain_key + axle,
+                              std::string("the ") + k.name + " reaches " + number_text(v) + (roll ? " m" : " rad") + " at the " +
+                                  (end == 0 ? "droop" : "bump") + " stop; it must stay within " +
+                                  (roll ? "half the track (" + number_text(half) + " m)" : std::string("0.2 rad between the stops")),
+                              true, false);
+                        break;
+                    }
             }
             // the inner front wheel's angle has a solution only below atan(2 L / t)
             const Real limit = std::atan(2 * run.params.wheelbase() / run.params.track_front);

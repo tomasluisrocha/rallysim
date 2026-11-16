@@ -258,6 +258,33 @@ int main()
         check_one_error("geometry: ratio 1, gain -2.5 (MR^2 -0.4)", one + "motion_ratio_gain_front = -2.5\n", "t.ini:8:",
                         "reaches 0 before the bump stop; it must stay above 0 between the stops");
         check_true("geometry: ratio 1, gain -1.7 loads (MR^2 0.048)", errors_of(one + "motion_ratio_gain_front = -1.7\n").empty());
+        // Roll centre, camber and toe are linear in wheel travel, judged at the stops: s from -0.10 to 0.13 m on the
+        // default car. The geometry keys are refused on springs, so these name unsprung.
+        const std::string u = kMinimal + "[car]\nvertical = unsprung\n";
+        const std::string rc = u + "roll_centre_front = 0.5\n";
+        check_one_error("curves: roll centre 5 m (the bound missing)", u + "roll_centre_front = 5\n", "t.ini:5:",
+                        "the roll centre reaches 5 m at the droop stop; it must stay within half the track (0.75 m)");
+        check_one_error("curves: gain 2 reaches 0.76 m at the bump stop, at the gain", rc + "roll_centre_gain_front = 2\n", "t.ini:6:",
+                        "reaches 0.76 m at the bump stop");
+        check_true("curves: gain 1.9 loads (0.747)", errors_of(rc + "roll_centre_gain_front = 1.9\n").empty());
+        check_one_error("curves: gain -2.6 reaches 0.76 m at the droop stop (one end only)", rc + "roll_centre_gain_front = -2.6\n",
+                        "t.ini:6:", "reaches 0.76 m at the droop stop");
+        check_one_error("curves: rear track 1.4, roll centre 0.72 (the front track on the rear)",
+                        u + "track_rear = 1.4\nroll_centre_rear = 0.72\n", "t.ini:6:",
+                        "reaches 0.72 m at the droop stop; it must stay within half the track (0.7 m)");
+        check_true("curves: roll centre 0.72 on the front loads", errors_of(u + "roll_centre_front = 0.72\n").empty());
+        check_one_error("curves: ratio 0.8, gain 1.6 (strut travel taken as wheel travel)",
+                        u + "motion_ratio_front = 0.8\nroll_centre_front = 0.5\nroll_centre_gain_front = 1.6\n", "t.ini:7:",
+                        "reaches 0.76 m at the bump stop");
+        check_true("curves: ratio 1, gain 1.6 loads (0.708)", errors_of(rc + "roll_centre_gain_front = 1.6\n").empty());
+        check_true("curves: ratio gain 1, roll centre gain 2 loads (s 0.122497, 0.745; travel without the exact relation)",
+                   errors_of(rc + "motion_ratio_gain_front = 1\nroll_centre_gain_front = 2\n").empty());
+        check_one_error("curves: camber gain -1.6 reaches -0.208 rad (camber unchecked)", u + "camber_gain_front = -1.6\n", "t.ini:5:",
+                        "the camber reaches -0.208 rad at the bump stop; it must stay within 0.2 rad between the stops");
+        check_true("curves: camber gain -1.5 loads (-0.195)", errors_of(u + "camber_gain_front = -1.5\n").empty());
+        check_one_error("curves: toe gain 1.6 reaches 0.208 rad (toe unchecked)", u + "toe_gain_rear = 1.6\n", "t.ini:5:",
+                        "the toe reaches 0.208 rad at the bump stop; it must stay within 0.2 rad between the stops");
+        check_true("curves: toe gain 1.5 loads (0.195)", errors_of(u + "toe_gain_rear = 1.5\n").empty());
         const std::string an = kMinimal + "[car]\nvertical = unsprung\nackermann = 1\n";
         check_one_error("geometry: a steer past the inner wheel's solution", an + "max_steer = 1.3\n", "t.ini:5:", "no solution");
         check_true("geometry: a smaller steer loads", errors_of(an + "max_steer = 1.2\n").empty());
