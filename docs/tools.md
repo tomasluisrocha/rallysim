@@ -350,8 +350,8 @@ python tools/view3d.py out/runs/fw_circle.csv --chase --perspective  # behind th
 ```
 
 The vertical side of a run, which `topdown.py` cannot show: the body at its real pose (roll, pitch and ride height,
-exaggerated x4 by default, `--exaggerate 1` for true scale; the HUD gives the true angles), wheels that steer and spin
-(a locked wheel's spoke stops), struts coloured by how loaded each corner is. At each contact patch: the vertical load
+exaggerated x4 by default about the car's rest height, `--exaggerate 1` for true scale; the HUD gives the true
+angles), wheels that steer and spin (a locked wheel's spoke stops), struts coloured by how loaded each corner is. At each contact patch: the vertical load
 (blue, standing just outboard of the wheel), the tyre force on the ground (black), and the grip mu(Fz) Fz as a disc
 coloured by the share in use, so the black arrow reaching the disc's edge is the tyre at its limit; at the CG, the
 velocity (green), the sum of the tyre forces (orange) and their yaw moment (purple arc, longer for a larger moment).

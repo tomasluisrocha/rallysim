@@ -77,13 +77,15 @@ def schema5(text):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe")
+    parser.add_argument("--schema5", action="store_true", help="also rewrite four_wheel_schema5.csv from the springs file")
     args = parser.parse_args()
     exe = executable(args.exe)
     for name, command in RUNS:
         write_fixture(name, run_fixture(exe, command))
-    write_fixture("four_wheel_schema5.csv", schema5((FIXTURES / "four_wheel_springs.csv").read_text(
-        encoding="utf-8"
-    )))
+    if args.schema5:
+        write_fixture("four_wheel_schema5.csv", schema5((FIXTURES / "four_wheel_springs.csv").read_text(
+            encoding="utf-8"
+        )))
 
 
 if __name__ == "__main__":

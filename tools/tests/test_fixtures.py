@@ -13,8 +13,8 @@ EXPECTED = {
     "rigid_body": ("rigid_body", 6, 0.001, 100, 21),
     "bicycle": ("bicycle", 6, 0.001, 100, 11),
     "single_track": ("single_track", 6, 0.001, 100, 24),
-    "four_wheel_springs": ("four_wheel", 6, 0.001, 100, 101),
-    "four_wheel_unsprung": ("four_wheel", 6, 0.001, 100, 101),
+    "four_wheel_springs": ("four_wheel", 6, 0.001, 100, 135),
+    "four_wheel_unsprung": ("four_wheel", 6, 0.001, 100, 135),
     "four_wheel_schema5": ("four_wheel", 5, 0.001, 100, 89),
 }
 

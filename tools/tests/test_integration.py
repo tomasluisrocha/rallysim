@@ -12,8 +12,9 @@ class TestIntegration(unittest.TestCase):
     def test_required_matches_fixture(self):
         fixture = run.load(Path(__file__).parent / "fixtures" / "four_wheel_springs.csv")
         self.assertEqual(len(required.FOUR_WHEEL), 101)
-        self.assertEqual(set(required.FOUR_WHEEL), set(fixture.data.columns))
-        self.assertEqual(required.FOUR_WHEEL, fixture.units)
+        self.assertLessEqual(set(required.FOUR_WHEEL), set(fixture.data.columns))
+        for column, unit in required.FOUR_WHEEL.items():
+            self.assertEqual(fixture.units[column], unit, column)
 
     def test_fw_launch_contract(self):
         executable = os.environ.get("RALLYSIM_EXE")

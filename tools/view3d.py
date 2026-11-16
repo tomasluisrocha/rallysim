@@ -3,7 +3,7 @@
 Reads the telemetry only (like topdown.py); it never touches the physics.
 
   body       a translucent box at the run's position, heading, roll, pitch and ride height. Roll, pitch and the
-             ride height's change from the start are exaggerated (--exaggerate, default 4) because 1 degree is
+             ride height's change from its rest height are exaggerated (--exaggerate, default 4) because 1 degree is
              invisible at true scale; the HUD gives the true angles.
   wheels     at their contact patches, turned by the steer, with a spoke that turns with the wheel's spin (a
              locked wheel's spoke stops), coloured by how much grip the tyre uses; a strut from the body to each
@@ -96,14 +96,13 @@ class Run:
                        for k in ("throttle", "brake", "handbrake")]
         self.a_lat = col("a_lat")
 
-        # body pose, exaggerated about where it started
+        # body pose, exaggerated about the rest height
         self.exaggerate = exaggerate
         self.roll_true, self.pitch_true, self.z_true = col("roll"), col("pitch"), col("pos.z")
         self.springs = meta["springs"] > 0.5
         self.cg_height = meta["cg_height"]
-        z0 = self.z_true[0] if self.springs else self.cg_height
         z_true = self.z_true if self.springs else np.full_like(self.t, self.cg_height)  # planar: CG stays put
-        self.z = z0 + exaggerate * (z_true - z0)
+        self.z = self.cg_height + exaggerate * (z_true - self.cg_height)
         self.roll, self.pitch = exaggerate * self.roll_true, exaggerate * self.pitch_true
 
         # geometry (line 1, with topdown's defaults for older files)
