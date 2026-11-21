@@ -43,6 +43,16 @@ namespace
         return fails([&] { parse_timeline(text, si); }, words);
     }
 
+    bool list_fails(const std::string &text, const std::string &si, const std::string &words)
+    {
+        return fails([&] { parse_list(text, si); }, words);
+    }
+
+    bool table_fails(const std::string &text, const std::string &words)
+    {
+        return fails([&] { parse_table(text, "N m", "rad/s"); }, words);
+    }
+
     void check_vector(const char *what, const vec3 &v, Real x, Real y, Real z, Real tol = 0)
     {
         check_near(what, v.x, x, tol);
@@ -71,6 +81,14 @@ int main()
     for (std::size_t i = 0; i < std::size(unit_table); ++i)
         for (std::size_t j = i + 1; j < std::size(unit_table); ++j)
             check_true(unit_table[i].name, std::string(unit_table[i].name) != unit_table[j].name);
+
+    // Expected pressures and areas in SI, independent of unit_table.
+    check_near("units: Pa", parse_number("1 Pa", "Pa"), 1, 0);
+    check_near("units: bar to Pa", parse_number("62.9 bar", "Pa"), 6.29e6, 1e-6);
+    check_near("units: MPa to Pa", parse_number("6.29 MPa", "Pa"), 6.29e6, 1e-6);
+    check_near("units: m^2", parse_number("1 m^2", "m^2"), 1, 0);
+    check_near("units: mm^2 to m^2", parse_number("2036 mm^2", "m^2"), 2.036e-3, 1e-15);
+    check_near("units: cm^2 to m^2", parse_number("20.36 cm^2", "m^2"), 2.036e-3, 1e-15);
 
     // ---- numbers ----------------------------------------------------------------------------------------------
     check_near("number: plain", parse_number("1200", "N"), 1200, 0);
@@ -173,6 +191,51 @@ int main()
     check_true("timeline: bad value", timeline_fails("x @ 0", "-", "point 1: not a number"));
     check_true("timeline: wrong time unit", timeline_fails("1 @ 2 m", "-", "point 1: unit m is not s"));
     check_true("timeline: wrong value unit", timeline_fails("1 m @ 2", "rad", "point 1: unit m is not rad"));
+
+    // ---- lists ------------------------------------------------------------------------------------------------
+    check_true("list: three gear ratios in order",
+               parse_list("3.00, 2.10, 1.62", "-") ==
+                   std::vector<Real>{parse_number("3.00", "-"), parse_number("2.10", "-"), parse_number("1.62", "-")});
+    const std::vector<Real> diameters = parse_list("19.05 mm, 20.6 mm", "m");
+    check_true("list: two diameters", diameters.size() == 2);
+    if (diameters.size() == 2)
+    {
+        check_near("list: first diameter in metres", diameters[0], 0.01905, 1e-15);
+        check_near("list: second diameter in metres", diameters[1], 0.0206, 1e-15);
+    }
+    check_true("list: empty text", list_fails("", "-", "item 1: missing value"));
+    check_true("list: empty item", list_fails("1,,2", "-", "item 2: missing value"));
+    check_true("list: bad number", list_fails("1, x", "-", "item 2: not a number"));
+    check_true("list: wrong unit kind", list_fails("1 rpm", "m", "item 1: unit rpm is not m"));
+
+    // ---- tables -----------------------------------------------------------------------------------------------
+    const table1 torque = parse_table("150 N m @ 1000 rpm, 300 N m @ 2000 rpm", "N m", "rad/s");
+    check_true("table: two arguments and values", torque.x.size() == 2 && torque.y.size() == 2);
+    if (torque.x.size() == 2 && torque.y.size() == 2)
+    {
+        check_near("table: 1000 rpm in rad/s", torque.x[0], 104.71975511965977, 1e-12);
+        check_near("table: 2000 rpm in rad/s", torque.x[1], 209.43951023931953, 1e-12);
+        check_near("table: first value", torque.y[0], 150, 0);
+        check_near("table: second value", torque.y[1], 300, 0);
+        check_near("table: 1500 rpm", lookup(torque, 157.07963267948966), 225, 1e-12);
+        check_near("table: held below", lookup(torque, 0), 150, 0);
+        check_near("table: held above", lookup(torque, 300), 300, 0);
+    }
+    const table1 segments = parse_table("10 @ -2, 30 @ 0, 90 @ 3", "-", "-");
+    check_near("table: signed argument", lookup(segments, -1), 20, 0);
+    check_near("table: interior point", lookup(segments, 0), 30, 0);
+    check_near("table: one third through the second segment", lookup(segments, 1), 50, 1e-12);
+    const table1 wide = parse_table("0 @ -1e308, 2 @ 1e308", "-", "-");
+    check_near("table: midpoint of a wide interval", lookup(wide, 0), 1, 0);
+
+    check_true("table: only one pair", table_fails("150 @ 1000 rpm", "point 2: a table needs at least two points"));
+    check_true("table: out of order", table_fails("300 @ 2000 rpm, 150 @ 1000 rpm", "point 2: argument"));
+    check_true("table: equal arguments", table_fails("150 @ 1000 rpm, 300 @ 1000 rpm", "point 2: argument"));
+    check_true("table: bare number", table_fails("150", "point 1: expected value @ argument"));
+    check_true("table: bare numbers", table_fails("150, 300", "point 1: expected value @ argument"));
+    check_true("table: two '@'", table_fails("150 @ 1000 rpm, 300 @ 2000 @ 3000", "point 2: expected value @ argument"));
+    check_true("table: wrong value unit", table_fails("150 N @ 1000 rpm, 300 @ 2000 rpm", "point 1: unit N is not N m"));
+    check_true("table: wrong argument unit", table_fails("150 @ 1000 rpm, 300 @ 2000 m", "point 2: unit m is not rad/s"));
 
     // ---- words ------------------------------------------------------------------------------------------------
     const std::vector<std::string> curves{"linear", "peak_slide", "tmeasy"};

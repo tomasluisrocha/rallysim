@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <sstream>
@@ -38,6 +40,11 @@ namespace rallysim
         {"cm", "m", 1e-2},
         {"km", "m", 1e3},
 
+        // Area
+        {"m^2", "m^2", 1},
+        {"mm^2", "m^2", 1e-6},
+        {"cm^2", "m^2", 1e-4},
+
         // Speed
         {"m/s", "m/s", 1},
         {"km/h", "m/s", 1.0 / 3.6},
@@ -54,6 +61,11 @@ namespace rallysim
         // Force
         {"N", "N", 1},
         {"kN", "N", 1e3},
+
+        // Pressure
+        {"Pa", "Pa", 1},
+        {"bar", "Pa", 1e5},
+        {"MPa", "Pa", 1e6},
 
         // Torque
         {"N m", "N m", 1},
@@ -211,6 +223,87 @@ namespace rallysim
         std::ostringstream out;
         out << v;
         return out.str();
+    }
+
+    inline std::vector<Real> parse_list(const std::string &text, const std::string &si)
+    {
+        const std::vector<std::string> parts = split(text, ',');
+        std::vector<Real> values;
+        values.reserve(parts.size());
+        for (std::size_t k = 0; k < parts.size(); ++k)
+        {
+            try
+            {
+                values.push_back(parse_number(parts[k], si));
+            }
+            catch (const std::invalid_argument &e)
+            {
+                throw std::invalid_argument("item " + std::to_string(k + 1) + ": " + e.what());
+            }
+        }
+        return values;
+    }
+
+    // At least two argument-value pairs, with strictly increasing arguments.
+    struct table1
+    {
+        std::vector<Real> x, y;
+    };
+
+    // Linear between points, held at the ends.
+    inline Real lookup(const table1 &table, Real x)
+    {
+        assert(table.x.size() >= 2 && table.x.size() == table.y.size());
+        const auto right = std::lower_bound(table.x.begin(), table.x.end(), x);
+        if (right == table.x.begin())
+            return table.y.front();
+        if (right == table.x.end())
+            return table.y.back();
+
+        const std::size_t i = static_cast<std::size_t>(right - table.x.begin());
+        if (*right == x)
+            return table.y[i];
+        const Real left = table.x[i - 1];
+        const Real span = *right - left;
+        // Halve the arguments if the interval is wider than Real can represent.
+        const Real fraction = std::isfinite(span) ? (x - left) / span
+                                                  : (x / 2 - left / 2) / (*right / 2 - left / 2);
+        return lerp(table.y[i - 1], table.y[i], fraction);
+    }
+
+    // "150 N m @ 1000 rpm, 300 N m @ 2000 rpm": comma-separated `value @ argument` points.
+    inline table1 parse_table(const std::string &text, const std::string &value_si, const std::string &arg_si)
+    {
+        const std::vector<std::string> points = split(text, ',');
+        table1 table;
+        table.x.reserve(points.size());
+        table.y.reserve(points.size());
+        for (std::size_t k = 0; k < points.size(); ++k)
+        {
+            const std::string where = "point " + std::to_string(k + 1) + ": ";
+            const std::vector<std::string> sides = split(points[k], '@');
+            if (sides.size() != 2)
+                throw std::invalid_argument(where + "expected value @ argument, got '" + trimmed(points[k]) + "'");
+
+            Real value = 0, argument = 0;
+            try
+            {
+                value = parse_number(sides[0], value_si);
+                argument = parse_number(sides[1], arg_si);
+            }
+            catch (const std::invalid_argument &e)
+            {
+                throw std::invalid_argument(where + e.what());
+            }
+            if (!table.x.empty() && !(argument > table.x.back()))
+                throw std::invalid_argument(where + "argument " + number_text(argument) + " is not greater than " +
+                                            number_text(table.x.back()));
+            table.x.push_back(argument);
+            table.y.push_back(value);
+        }
+        if (points.size() < 2)
+            throw std::invalid_argument("point 2: a table needs at least two points");
+        return table;
     }
 
     // "(12, 7.5, 0) m/s": three numbers in brackets. A unit after the brackets applies to all three; a component may

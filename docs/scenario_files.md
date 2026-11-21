@@ -242,7 +242,8 @@ steer = 0 @ 1 s, 6 deg @ 1.5 s
 
 ## Planned format additions
 
-Lists, tables, car files and the added units below are not yet read by `rallysim`.
+The value parser supports lists, tables, and the pressure and area units below. The scenario keys, `--set`
+assignments and car files shown here are planned.
 
 ### Lists and tables
 
