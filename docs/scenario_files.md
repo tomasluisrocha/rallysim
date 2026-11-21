@@ -239,3 +239,104 @@ mu_rear = 0.75
 hold_speed = 30 km/h
 steer = 0 @ 1 s, 6 deg @ 1.5 s
 ```
+
+## Planned format additions
+
+Lists, tables, car files and the added units below are not yet read by `rallysim`.
+
+### Lists and tables
+
+A list is a series of numbers separated by commas. Each number can carry a unit of the key's kind.
+
+```ini
+gears = 3.00, 2.10, 1.62
+```
+
+A table uses the timeline syntax with comma-separated `value @ argument` pairs. Each side can carry a unit of
+its own kind. A table needs at least two pairs with strictly increasing arguments. The value is linear between
+points and holds at the first or last value outside the range. A single number is invalid for a table.
+
+```ini
+torque_curve = 150 N m @ 1000 rpm, 300 N m @ 2000 rpm
+```
+
+This curve gives 225 N m at 1500 rpm and holds at 150 N m below 1000 rpm and 300 N m above 2000 rpm.
+
+`--set` takes the same text. Quote each assignment on the command line.
+
+```
+rallysim my_run.ini --set "gears=3.00, 2.10, 1.62" --set "torque_curve=150 N m @ 1000 rpm, 300 N m @ 2000 rpm"
+```
+
+Telemetry line 1 writes a list as `name.1` through `name.n`. For table point `k` it writes the argument as
+`name.k.x` and the value as `name.k.y`, counting from 1. For example, `gears.2` is 2.10, `torque_curve.2.x` is
+2000 rpm converted to rad/s, and `torque_curve.2.y` is 300 N m. These are output names. Write the full list or
+table under its unnumbered key in the input.
+
+### Car files
+
+Set `car` in `[scenario]` to load a reusable car. For example, `car = club` loads `cars/club.ini`.
+A value ending in `.ini` is a path relative to the scenario file's folder, for example
+`car = ../cars/club.ini`. A car file cannot contain `car =`.
+
+Values are applied in this order, with each source overriding the one before it.
+
+1. Built-in defaults
+2. The car file
+3. The scenario's `[car]` section
+4. `--set`
+
+If the car file sets `mass = 1300 kg` and the scenario's `[car]` sets `mass = 1250 kg`, the run uses 1250 kg.
+Adding `--set "mass=1200 kg"` makes it use 1200 kg. Telemetry line 1 records the resolved values in SI.
+The tyres are refitted once after all values are resolved if any fit input (`mass`, `lf`, `lr`, `cx_*`,
+`calpha_*` or `fz0_*`) differs from the built-in car's value.
+
+Model choices stay in the scenario. A car file rejects `vertical`, `drive`, `tyre_curve`, `tyre_curve_front`
+and `tyre_curve_rear`. A car file can hold values the run's model does not use. For example, it can set
+`front_transfer_share` for a car used in both planar and unsprung runs. An unsprung run still refuses this key
+in the scenario's `[car]` or `--set`.
+
+Errors in a car file name that file and line, for example `cars/club.ini:2: mass: must be above 0`. Its errors
+appear first in line order, followed by the scenario's errors, `--set` errors and whole-file errors. An unsprung
+check that reports a car key uses the scenario's `[car]` or `--set` if it supplies the key, then the car file if it
+supplies the same key, and otherwise uses the usual location described under `[car]`.
+
+### Car-file sections
+
+A car file uses the same key names as `[car]`, grouped into these sections. A key in the wrong section is an
+error. Each `*` in the table stands for `front` or `rear`.
+
+| Section | Keys |
+|---|---|
+| `[chassis]` | `mass`, `inertia_x`, `inertia_y`, `inertia_z`, `lf`, `lr`, `track_*`, `cg_height`, `front_transfer_share`, `max_steer`, `ackermann`, `wheel_radius`, `wheel_inertia` |
+| `[suspension]` | `unsprung_mass_*`, `tyre_rate_*`, `tyre_damping_*`, `droop_*`, `bump_travel_*`, `bump_stop_length_*`, `bump_stop_rate_*`, `droop_stop_rate_*`, `motion_ratio_*`, `motion_ratio_gain_*`, `roll_centre_*`, `roll_centre_gain_*`, `camber_gain_*`, `toe_gain_*` |
+| `[engine]` | `max_drive_torque`, `max_drive_power` |
+| `[gearbox]` | No keys in the current registry |
+| `[differentials]` | `drive_split_front`, the front axle's share of drive and the centre differential's split on the engine car |
+| `[brakes]` | `max_brake_torque`, `max_handbrake_torque` |
+| `[tyres]` | `mu_*`, `k_*`, `fz0_*`, `cx_*`, `calpha_*`, `relaxation_x_*`, `relaxation_y_*`, `peak_slip_*`, `sliding_slip_*`, `sliding_ratio_*`, `camber_thrust_*` |
+| `[setup]` | `spring_*`, `damper_*`, `rebound_ratio_*`, `antiroll_*`, `camber_*`, `toe_*`, `brake_bias_front` |
+
+`mu_front` and `mu_rear` are the peak grip of their tyres on the reference surface, dry tarmac.
+
+An example `cars/club.ini` uses the built-in values for omitted keys.
+
+```ini
+[chassis]
+mass = 1300 kg
+cg_height = 500 mm
+
+[setup]
+spring_rear = 50 N/mm
+```
+
+### Units for car data
+
+Examples use one unit per key, such as `N/mm` for `spring_rear` and `mm` for `cg_height`. A key accepts any
+supported unit of the same kind. For example, `rpm` measures the argument and `N m` the value in the torque
+table above. Values are converted to SI on load and written in SI on telemetry line 1.
+
+| Measures | SI unit | Added units | Example |
+|---|---|---|---|
+| pressure | `Pa` | `bar`, `MPa` | `60 bar` |
+| area | `m^2` | `mm^2`, `cm^2` | `300 mm^2` |
